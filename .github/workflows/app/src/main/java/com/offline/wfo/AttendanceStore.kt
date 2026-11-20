@@ -444,7 +444,7 @@ class AttendanceStore(private val context: Context) {
             officeDates.groupingBy { it.dayOfWeek }
                 .eachCount()
                 .entries
-                .sortedWith(compareByDescending> { it.value }.thenBy { it.key.value })
+                .sortedWith(compareBy({ -it.value }, { it.key.value }))
                 .take(3)
                 .joinToString(", ") { it.key.getDisplayName(TextStyle.SHORT, Locale.getDefault()) }
         }
