@@ -67,6 +67,7 @@ class MainActivity : AppCompatActivity() {
     private var activeTapMode: DayType = DayType.OFFICE
     private var isEditUnlocked: Boolean = false
     private var isAppAuthenticated: Boolean = false
+    private var isAwaitingSystemIntent: Boolean = false
     private var autoPromptedBgLocation: Boolean = false
     private var isDark: Boolean = false
 
@@ -157,11 +158,12 @@ class MainActivity : AppCompatActivity() {
             showSetupMode()
             requestForegroundAndNotifPermissions()
         } else {
-            showDashboardMode()
             startMonitorServiceIfPermitted()
             if (store.isFullAppLockEnabled() && !isAppAuthenticated) {
                 showAppLockScreen()
                 promptDeviceCredential(REQ_UNLOCK_APP, "Unlock WFO Tracker")
+            } else {
+                showDashboardMode()
             }
         }
         refreshAllViews()
@@ -187,7 +189,7 @@ class MainActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         // Auto-relock edits and full-app lock whenever user leaves or minimizes the app
-        if (store.isSetupComplete()) {
+        if (store.isSetupComplete() && !isAwaitingSystemIntent) {
             isEditUnlocked = false
             if (store.isFullAppLockEnabled()) {
                 isAppAuthenticated = false
@@ -200,12 +202,13 @@ class MainActivity : AppCompatActivity() {
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        isAwaitingSystemIntent = false
 
         when (requestCode) {
             REQ_UNLOCK_EDIT -> {
                 if (resultCode == Activity.RESULT_OK) {
                     isEditUnlocked = true
-                    refreshAllViews()
+                    showDashboardMode()
                     Toast.makeText(this, "Edit mode unlocked", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -218,8 +221,7 @@ class MainActivity : AppCompatActivity() {
             REQ_UNLOCK_APP -> {
                 if (resultCode == Activity.RESULT_OK) {
                     isAppAuthenticated = true
-                    appLockOverlay.visibility = View.GONE
-                    refreshAllViews()
+                    showDashboardMode()
                 }
             }
             REQ_PICK_PHOTO -> {
@@ -316,14 +318,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     @Suppress("DEPRECATION")
+    private fun launchSystemIntentForResult(intent: Intent, requestCode: Int) {
+        isAwaitingSystemIntent = true
+        try {
+            startActivityForResult(intent, requestCode)
+        } catch (e: Exception) {
+            isAwaitingSystemIntent = false
+            Toast.makeText(this, "Unable to open system dialog", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    @Suppress("DEPRECATION")
     private fun promptDeviceCredential(requestCode: Int, title: String) {
         val km = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
         if (!km.isDeviceSecure) {
-            // Fallback if user has no PIN/Fingerprint set on their phone
             isEditUnlocked = true
             isAppAuthenticated = true
-            appLockOverlay.visibility = View.GONE
-            if (requestCode == REQ_UNLOCK_SETUP) showSetupMode() else refreshAllViews()
+            if (requestCode == REQ_UNLOCK_SETUP) showSetupMode() else showDashboardMode()
             Toast.makeText(this, "Unlocked (no device PIN set)", Toast.LENGTH_SHORT).show()
             return
         }
@@ -332,11 +343,11 @@ class MainActivity : AppCompatActivity() {
             "Verify your identity to modify WFO attendance records"
         )
         if (intent != null) {
-            startActivityForResult(intent, requestCode)
+            launchSystemIntentForResult(intent, requestCode)
         } else {
             isEditUnlocked = true
             isAppAuthenticated = true
-            refreshAllViews()
+            if (requestCode == REQ_UNLOCK_SETUP) showSetupMode() else showDashboardMode()
         }
     }
 
@@ -429,8 +440,7 @@ class MainActivity : AppCompatActivity() {
                 addCategory(Intent.CATEGORY_OPENABLE)
                 type = "image/*"
             }
-            @Suppress("DEPRECATION")
-            startActivityForResult(intent, REQ_PICK_PHOTO)
+            launchSystemIntentForResult(intent, REQ_PICK_PHOTO)
         }
         val removePhotoBtn = TextView(this).apply {
             text = "Remove Photo"
@@ -662,6 +672,7 @@ class MainActivity : AppCompatActivity() {
             store.setSetupComplete(true)
 
             isEditUnlocked = false
+            isAppAuthenticated = true
             syncBackgroundAndWidget()
             showDashboardMode()
             Toast.makeText(this, "Settings saved & locked!", Toast.LENGTH_SHORT).show()
@@ -956,7 +967,7 @@ class MainActivity : AppCompatActivity() {
             val report = store.buildMonthlySummaryReport(selectedMonth)
             val intent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
-                putExtra(Intent.EXTRA_SUBJECT, "WFO Attendance Summary - ${selectedMonth}")
+                putExtra(Intent.EXTRA_SUBJECT, "WFO Attendance Summary - $selectedMonth")
                 putExtra(Intent.EXTRA_TEXT, report)
             }
             startActivity(Intent.createChooser(intent, "Share WFO Summary"))
@@ -1410,23 +1421,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    @Suppress("DEPRECATION")
     private fun launchCsvExport() {
         val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "text/csv"
             putExtra(Intent.EXTRA_TITLE, "wfo_attendance_backup.csv")
         }
-        startActivityForResult(intent, REQ_EXPORT_CSV)
+        launchSystemIntentForResult(intent, REQ_EXPORT_CSV)
     }
 
-    @Suppress("DEPRECATION")
     private fun launchCsvImport() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "*/*"
         }
-        startActivityForResult(intent, REQ_IMPORT_CSV)
+        launchSystemIntentForResult(intent, REQ_IMPORT_CSV)
     }
 
     private fun hasLocationPermission(): Boolean {
