@@ -103,13 +103,15 @@ class WifiMonitorService : Service() {
 
         when (intent?.action) {
             ACTION_QUICK_LOG_TODAY -> {
-                val isNew = store.recordOfficePresence()
+                if (shouldShowQuickLogAction()) {
+                    val isNew = store.recordOfficePresence()
+                    if (isNew) {
+                        notifyCheckInSuccess("Manual Quick-Log")
+                    }
+                }
                 updatePersistentNotification()
                 WfoWidgetProvider.updateAllWidgets(this)
                 sendBroadcast(Intent(ACTION_DATA_UPDATED).setPackage(packageName))
-                if (isNew) {
-                    notifyCheckInSuccess("Manual Quick-Log")
-                }
             }
             ACTION_REFRESH_STATUS -> {
                 updatePersistentNotification()
@@ -253,6 +255,19 @@ class WifiMonitorService : Service() {
         }
     }
 
+    private fun shouldShowQuickLogAction(
+        today: LocalDate = LocalDate.now(),
+        now: LocalTime = LocalTime.now()
+    ): Boolean {
+        val isWeekday = today.dayOfWeek != DayOfWeek.SATURDAY && today.dayOfWeek != DayOfWeek.SUNDAY
+        if (!isWeekday) return false
+
+        val inWindow = !now.isBefore(LocalTime.of(10, 0)) && now.isBefore(LocalTime.of(11, 0))
+        if (!inWindow) return false
+
+        return store.getDayType(today) != DayType.OFFICE
+    }
+
     private fun buildPersistentNotification(overrideText: String? = null): Notification {
         val stats = store.getMonthStats()
         val openIntent = PendingIntent.getActivity(
@@ -279,7 +294,7 @@ class WifiMonitorService : Service() {
             .setOngoing(true)
             .setSilent(true)
 
-        if (store.getDayType(LocalDate.now()) != DayType.OFFICE) {
+        if (shouldShowQuickLogAction()) {
             builder.addAction(
                 android.R.drawable.ic_input_add,
                 "Log Today",
@@ -355,6 +370,17 @@ class ReminderReceiver : BroadcastReceiver() {
         evaluateReminders(context)
         scheduleNextCheckpoint(context)
         WfoWidgetProvider.updateAllWidgets(context)
+
+        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (fine == PackageManager.PERMISSION_GRANTED || coarse == PackageManager.PERMISSION_GRANTED) {
+            runCatching {
+                context.startForegroundService(
+                    Intent(context, WifiMonitorService::class.java)
+                        .setAction(WifiMonitorService.ACTION_REFRESH_STATUS)
+                )
+            }
+        }
     }
 
     companion object {
@@ -435,6 +461,8 @@ class ReminderReceiver : BroadcastReceiver() {
             val checkpoints = listOf(
                 LocalTime.of(7, 35),
                 LocalTime.of(8, 35),
+                LocalTime.of(10, 0),
+                LocalTime.of(11, 0),
                 LocalTime.of(11, 35),
                 LocalTime.of(20, 5)
             )
