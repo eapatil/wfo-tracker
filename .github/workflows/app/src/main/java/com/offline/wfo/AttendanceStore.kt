@@ -148,6 +148,14 @@ class AttendanceStore(private val context: Context) {
         setTargetSsids(updated.joinToString(", "))
     }
 
+    // ==================== PERSISTED WI-FI CONNECTION STATE ====================
+
+    fun wasConnectedToOfficeWifi(): Boolean = prefs.getBoolean("was_on_office_wifi", false)
+
+    fun setConnectedToOfficeWifi(connected: Boolean) {
+        prefs.edit().putBoolean("was_on_office_wifi", connected).apply()
+    }
+
     // ==================== DATE, NOTES & ATTENDANCE OPERATIONS ====================
 
     fun getAllMarkedDates(): MutableSet<String> {
@@ -177,8 +185,8 @@ class AttendanceStore(private val context: Context) {
 
     /**
      * Immediately logs the day as OFFICE upon connecting to office Wi-Fi.
-     * Preserves the 1st connect timestamp of the day and updates the last connect timestamp
-     * purely for duration records. Upgrades PLANNED -> OFFICE automatically.
+     * Preserves the 1st connect timestamp of the day and updates the latest timestamp.
+     * Upgrades PLANNED -> OFFICE automatically.
      * Returns true if this is the first confirmed OFFICE check-in today.
      */
     fun recordOfficePresence(
@@ -195,6 +203,7 @@ class AttendanceStore(private val context: Context) {
         val editor = prefs.edit()
             .putStringSet("all_marked_dates", dates)
             .putString("day_type_$key", DayType.OFFICE.name)
+            .putBoolean("was_on_office_wifi", true)
 
         if (isNewOfficeToday) {
             editor.putString("times_$key", "$nowStr|$nowStr")
@@ -208,18 +217,28 @@ class AttendanceStore(private val context: Context) {
         return isNewOfficeToday
     }
 
-    fun updateLastSeenOnly(
+    /**
+     * Captures the exact disconnect timestamp when the device leaves office Wi-Fi.
+     * Updates the end of the `firstConnect|disconnectTime` span for today.
+     */
+    fun recordOfficeDisconnect(
         date: LocalDate = LocalDate.now(),
         time: LocalTime = LocalTime.now()
-    ) {
+    ): Boolean {
+        val wasConnected = wasConnectedToOfficeWifi()
+        setConnectedToOfficeWifi(false)
+
         val key = date.toString()
-        if (getDayType(key) != DayType.OFFICE) return
+        if (getDayType(key) != DayType.OFFICE) return false
+
         val existing = prefs.getString("times_$key", "") ?: ""
+        val nowStr = time.format(timeFmt)
         if (existing.contains("|")) {
             val firstSeen = existing.substringBefore("|")
-            val nowStr = time.format(timeFmt)
             prefs.edit().putString("times_$key", "$firstSeen|$nowStr").apply()
+            return true
         }
+        return wasConnected
     }
 
     /**
@@ -261,14 +280,21 @@ class AttendanceStore(private val context: Context) {
     fun getFormattedDetail(dateStr: String, type: DayType): String {
         val raw = prefs.getString("times_$dateStr", "") ?: ""
         val note = getDayNote(dateStr)
+        val isToday = dateStr == LocalDate.now().toString()
+        val stillConnected = isToday && wasConnectedToOfficeWifi()
+
         val base = when {
             raw.contains("|") -> {
                 val parts = raw.split("|")
-                val dur = formatSpanLabel(parts[0], parts[1])
-                if (parts[0] == parts[1]) {
-                    "1st connect ${parts[0]}"
-                } else {
-                    "${parts[0]} – ${parts[1]} ($dur)"
+                val first = parts[0]
+                val last = parts[1]
+                when {
+                    stillConnected -> "Connected $first (active now)"
+                    first == last -> "Connected $first"
+                    else -> {
+                        val dur = formatSpanLabel(first, last)
+                        "$first – $last ($dur)"
+                    }
                 }
             }
             raw.isNotEmpty() -> raw
@@ -288,8 +314,11 @@ class AttendanceStore(private val context: Context) {
         val type = getDayType(key)
         val raw = prefs.getString("times_$key", "") ?: ""
         val note = getDayNote(key)
+        val isToday = date == LocalDate.now()
+        val stillConnected = isToday && wasConnectedToOfficeWifi()
 
         val statusLabel = when {
+            type == DayType.OFFICE && stillConnected -> "🏢 In Office (Wi-Fi Connected)"
             type == DayType.OFFICE -> "🏢 Confirmed Office"
             type == DayType.PLANNED -> "📅 Planned Office Day"
             type == DayType.LEAVE -> "🌴 Leave"
@@ -303,8 +332,14 @@ class AttendanceStore(private val context: Context) {
                 val parts = raw.split("|")
                 val first = parts[0]
                 val last = parts[1]
-                val span = formatSpanLabel(first, last)
-                "1st Connect: $first  •  Last Connect: $last" to "Recorded Span: $span"
+                if (stillConnected) {
+                    val nowStr = LocalTime.now().format(timeFmt)
+                    val span = formatSpanLabel(first, nowStr)
+                    "Connected: $first  •  Status: Still Connected" to "Elapsed So Far: $span"
+                } else {
+                    val span = formatSpanLabel(first, last)
+                    "Connected: $first  •  Disconnected: $last" to "Recorded Span: $span"
+                }
             }
             raw.isNotEmpty() -> raw to "Manual Entry"
             else -> "No Wi-Fi timestamps recorded" to "—"
@@ -561,7 +596,7 @@ class AttendanceStore(private val context: Context) {
     // ==================== CSV EXPORT, RESTORE & SUMMARY REPORT ====================
 
     fun exportAllCsv(): String {
-        val sb = StringBuilder("Date,Day,Status,First_Connect,Last_Connect,Notes\n")
+        val sb = StringBuilder("Date,Day,Status,Connected_Time,Disconnected_Time,Notes\n")
         val sortedDates = getAllMarkedDates().sorted()
         for (dateStr in sortedDates) {
             val dtype = getDayType(dateStr)
