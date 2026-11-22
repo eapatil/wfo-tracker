@@ -99,7 +99,7 @@ class WifiMonitorService : Service() {
         when (intent?.action) {
             ACTION_QUICK_LOG_TODAY -> {
                 if (shouldShowQuickLogAction()) {
-                    val isNew = store.recordOfficePresence()
+                    val isNew = store.recordOfficePresence("Manual Quick-Log")
                     if (isNew) {
                         notifyCheckInSuccess("Manual Quick-Log")
                     }
@@ -144,7 +144,6 @@ class WifiMonitorService : Service() {
         if (activeCaps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) {
             evaluateConnectedSsid(extractSsid(activeCaps))
         } else if (store.wasConnectedToOfficeWifi()) {
-            // Wi-Fi dropped while service was stopped/restarting; capture disconnect now
             handleWifiDisconnected()
         }
     }
@@ -170,16 +169,16 @@ class WifiMonitorService : Service() {
         val matched = targets.any { it.equals(connectedSsid, ignoreCase = true) }
 
         if (matched) {
-            val isNewToday = store.recordOfficePresence()
+            val isNewToday = store.recordOfficePresence(connectedSsid)
             updatePersistentNotification()
             WfoWidgetProvider.updateAllWidgets(this)
             sendBroadcast(Intent(ACTION_DATA_UPDATED).setPackage(packageName))
 
+            // Pop up a high-priority confirmation alert once on the first Wi-Fi connect of the day
             if (isNewToday) {
                 notifyCheckInSuccess(connectedSsid)
             }
         } else if (store.wasConnectedToOfficeWifi()) {
-            // Switched directly from office Wi-Fi to another Wi-Fi network
             handleWifiDisconnected()
         }
     }
@@ -198,13 +197,13 @@ class WifiMonitorService : Service() {
         val stats = store.getMonthStats(ym, today)
 
         val checkInBody = if (stats.remainingDays == 0) {
-            "Office logged (${stats.attendedDays}/${stats.requiredDays} days). ${stats.targetPercent}% monthly target met!"
+            "Today is confirmed as an Office day (${stats.attendedDays}/${stats.requiredDays} days). ${stats.targetPercent}% monthly target met!"
         } else {
-            "Office logged (${stats.attendedDays}/${stats.requiredDays} days). Need ${stats.remainingDays} more day(s) • ${maxOf(0, stats.bufferDays)} WFH buffer day(s) left."
+            "Today is confirmed as an Office day (${stats.attendedDays}/${stats.requiredDays} days). Need ${stats.remainingDays} more day(s) • ${maxOf(0, stats.bufferDays)} WFH buffer left."
         }
 
         if (store.claimOnceFlag("notif_checkin_$today")) {
-            sendAlertNotification(this, "WFO Checked In ($sourceLabel)", checkInBody)
+            sendAlertNotification(this, "✅ Office Day Logged ($sourceLabel)", checkInBody)
         }
 
         if (stats.remainingDays == 0 && store.claimOnceFlag("notif_target_met_$ym")) {
@@ -247,7 +246,19 @@ class WifiMonitorService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        val defaultSummary = if (stats.remainingDays == 0) {
+        val isConnected = store.wasConnectedToOfficeWifi()
+        val activeSsid = store.getActiveOfficeSsid()
+
+        val titleText = if (isConnected) {
+            val netName = if (activeSsid.isNotEmpty()) activeSsid else "Office Wi-Fi"
+            "🟢 Connected to $netName"
+        } else {
+            "WFO Wi-Fi Monitor Active"
+        }
+
+        val defaultSummary = if (isConnected) {
+            "Today logged • ${stats.attendedDays}/${stats.requiredDays} days (${stats.actualPercent}%)"
+        } else if (stats.remainingDays == 0) {
             "${stats.monthLabel}: ${stats.attendedDays}/${stats.requiredDays} days • Target Met!"
         } else {
             "${stats.monthLabel}: ${stats.attendedDays}/${stats.requiredDays} days • ${maxOf(0, stats.bufferDays)} buffer day(s) left"
@@ -255,7 +266,7 @@ class WifiMonitorService : Service() {
 
         val builder = NotificationCompat.Builder(this, CHANNEL_MONITOR)
             .setSmallIcon(android.R.drawable.ic_menu_my_calendar)
-            .setContentTitle("WFO Wi-Fi Monitor Active")
+            .setContentTitle(titleText)
             .setContentText(overrideText ?: defaultSummary)
             .setContentIntent(openIntent)
             .setOngoing(true)
