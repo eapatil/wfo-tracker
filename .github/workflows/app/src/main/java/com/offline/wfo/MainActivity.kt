@@ -23,6 +23,9 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.location.Address
+import android.location.Geocoder
+import android.location.Location
 import android.location.LocationManager
 import android.net.Uri
 import android.net.wifi.WifiManager
@@ -111,12 +114,17 @@ class MainActivity : AppCompatActivity() {
     private lateinit var setupBatteryStatusView: TextView
     private lateinit var setupLiveWifiView: TextView
     private lateinit var setupSsidInput: EditText
+    private lateinit var setupLocationSummaryView: TextView
     private lateinit var setupTargetPctView: TextView
     private lateinit var setupRoundUpSwitch: Switch
     private lateinit var setupExclHolidaySwitch: Switch
     private lateinit var setupExclLeaveSwitch: Switch
+    private lateinit var setupConnectAlertSwitch: Switch
+    private lateinit var setupDisconnectAlertSwitch: Switch
     private lateinit var setupPlanReminderSwitch: Switch
     private lateinit var setupMorningNudgeSwitch: Switch
+    private lateinit var setupTargetBufferAlertSwitch: Switch
+    private lateinit var setupQuarterAlertSwitch: Switch
     private lateinit var setupBackupFolderStatusView: TextView
 
     // Persistent Header Views (Top of Main Scaffold)
@@ -124,6 +132,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var dashGreetingView: TextView
     private lateinit var dashServiceStatusView: TextView
     private lateinit var lockToggleBtn: TextView
+    private lateinit var checkNowBtn: TextView
     private lateinit var todayLiveStripView: TextView
     private lateinit var undoBannerRow: LinearLayout
     private lateinit var undoBannerText: TextView
@@ -162,9 +171,27 @@ class MainActivity : AppCompatActivity() {
     private lateinit var simResultView: TextView
 
     // Tab 3: Settings & Data Views
+    private lateinit var modeWifiOnlyBtn: TextView
+    private lateinit var modeLocOnlyBtn: TextView
+    private lateinit var modeBothBtn: TextView
+    private lateinit var trackingModeHintView: TextView
+    private lateinit var wifiSectionCard: LinearLayout
+    private lateinit var locationSectionCard: LinearLayout
     private lateinit var currentWifiView: TextView
     private lateinit var wifiChipsContainer: LinearLayout
     private lateinit var ssidInput: EditText
+    private lateinit var selectedOfficeView: TextView
+    private lateinit var officeDistanceView: TextView
+    private lateinit var radius250Btn: TextView
+    private lateinit var radius500Btn: TextView
+    private lateinit var radius1000Btn: TextView
+    private lateinit var radius1500Btn: TextView
+    private lateinit var notifConnectSwitch: Switch
+    private lateinit var notifDisconnectSwitch: Switch
+    private lateinit var notifPlannedSwitch: Switch
+    private lateinit var notifMorningSwitch: Switch
+    private lateinit var notifTargetBufferSwitch: Switch
+    private lateinit var notifQuarterSwitch: Switch
     private lateinit var autoBackupStatusView: TextView
 
     private val updateReceiver = object : BroadcastReceiver() {
@@ -379,8 +406,12 @@ class MainActivity : AppCompatActivity() {
         setupRoundUpSwitch.isChecked = store.isRoundUpEnabled()
         setupExclHolidaySwitch.isChecked = store.isExcludeHolidaysEnabled()
         setupExclLeaveSwitch.isChecked = store.isExcludeLeavesEnabled()
+        setupConnectAlertSwitch.isChecked = store.isConnectAlertEnabled()
+        setupDisconnectAlertSwitch.isChecked = store.isDisconnectAlertEnabled()
         setupPlanReminderSwitch.isChecked = store.isPlannedRemindersEnabled()
         setupMorningNudgeSwitch.isChecked = store.isMorningNudgeEnabled()
+        setupTargetBufferAlertSwitch.isChecked = store.isTargetBufferAlertEnabled()
+        setupQuarterAlertSwitch.isChecked = store.isQuarterPaceAlertEnabled()
         setupScroll.visibility = View.VISIBLE
         mainScaffold.visibility = View.GONE
         refreshAllViews()
@@ -510,7 +541,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(cTextPrimary())
         }
         val subtitle = TextView(this).apply {
-            text = "Personalize your profile, enable background permissions, and configure your 40% mandate rules."
+            text = "Personalize your profile, enable background permissions, and configure Wi-Fi or 500m–1500m location tracking."
             textSize = 13f
             setTextColor(cTextSecondary())
             setPadding(0, 6, 0, 20)
@@ -583,7 +614,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(profileCard)
         addSpacer(root, 20)
 
-        // Card B: 4 System Permissions Checklist
+        // Card B: System Permissions Checklist
         val permCard = makeCardContainer()
         permCard.addView(makeSectionTitle("2. Required System Permissions"))
         addSpacer(permCard, 12)
@@ -621,9 +652,9 @@ class MainActivity : AppCompatActivity() {
         root.addView(permCard)
         addSpacer(root, 20)
 
-        // Card C: Office Wi-Fi Setup
-        val wifiCard = makeCardContainer()
-        wifiCard.addView(makeSectionTitle("3. Office Wi-Fi Networks"))
+        // Card C: Office Wi-Fi & Geofence Location
+        val trackingCard = makeCardContainer()
+        trackingCard.addView(makeSectionTitle("3. Office Wi-Fi & Geofence Location"))
         setupLiveWifiView = TextView(this).apply {
             textSize = 13f
             setTextColor(cTextSecondary())
@@ -655,24 +686,28 @@ class MainActivity : AppCompatActivity() {
             setPadding(24, 20, 24, 20)
             background = roundedBox(cInputBg(), cBorder(), 16f, 2)
         }
-        val wifiNote = TextView(this).apply {
-            text = "Logs the day immediately when office Wi-Fi connects; connect and disconnect times are recorded for your reference."
-            textSize = 11f
-            setTextColor(cTextSecondary())
-            setPadding(0, 10, 0, 0)
+
+        setupLocationSummaryView = TextView(this).apply {
+            textSize = 13f
+            setTextColor(cTextPrimary())
+            setPadding(0, 14, 0, 8)
+        }
+        val btnSelectLocSetup = makePillButton("📍 Select Location (Maps / GPS / 500m List)", "#0284C7", "#FFFFFF") {
+            showSelectLocationDialog()
         }
 
-        wifiCard.addView(setupLiveWifiView)
-        wifiCard.addView(btnAddLive)
-        addSpacer(wifiCard, 12)
-        wifiCard.addView(setupSsidInput)
-        wifiCard.addView(wifiNote)
-        root.addView(wifiCard)
+        trackingCard.addView(setupLiveWifiView)
+        trackingCard.addView(btnAddLive)
+        addSpacer(trackingCard, 10)
+        trackingCard.addView(setupSsidInput)
+        trackingCard.addView(setupLocationSummaryView)
+        trackingCard.addView(btnSelectLocSetup)
+        root.addView(trackingCard)
         addSpacer(root, 20)
 
-        // Card D: Mandate Policy & Alerts
+        // Card D: Mandate Policy & Notification Preferences
         val policyCard = makeCardContainer()
-        policyCard.addView(makeSectionTitle("4. Policy Rules & Smart Alerts"))
+        policyCard.addView(makeSectionTitle("4. Policy Rules & Notification Options"))
 
         val pctRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -720,8 +755,22 @@ class MainActivity : AppCompatActivity() {
             isChecked = store.isExcludeLeavesEnabled()
             setPadding(0, 8, 0, 8)
         }
+        setupConnectAlertSwitch = Switch(this).apply {
+            text = "Office Connected Alert (Wi-Fi / Geofence Entry)"
+            textSize = 14f
+            setTextColor(cTextPrimary())
+            isChecked = store.isConnectAlertEnabled()
+            setPadding(0, 8, 0, 8)
+        }
+        setupDisconnectAlertSwitch = Switch(this).apply {
+            text = "Office Disconnected Alert (Wi-Fi / Geofence Exit)"
+            textSize = 14f
+            setTextColor(cTextPrimary())
+            isChecked = store.isDisconnectAlertEnabled()
+            setPadding(0, 8, 0, 8)
+        }
         setupPlanReminderSwitch = Switch(this).apply {
-            text = "Planned Office Day Alerts (Eve, Morning, Rollover)"
+            text = "Planned Office Day Alerts (Eve, Morning, Missed)"
             textSize = 14f
             setTextColor(cTextPrimary())
             isChecked = store.isPlannedRemindersEnabled()
@@ -732,14 +781,32 @@ class MainActivity : AppCompatActivity() {
             textSize = 14f
             setTextColor(cTextPrimary())
             isChecked = store.isMorningNudgeEnabled()
+            setPadding(0, 8, 0, 8)
+        }
+        setupTargetBufferAlertSwitch = Switch(this).apply {
+            text = "Monthly Target Met & Zero Buffer Alerts"
+            textSize = 14f
+            setTextColor(cTextPrimary())
+            isChecked = store.isTargetBufferAlertEnabled()
+            setPadding(0, 8, 0, 8)
+        }
+        setupQuarterAlertSwitch = Switch(this).apply {
+            text = "Quarter-End Pace Alert"
+            textSize = 14f
+            setTextColor(cTextPrimary())
+            isChecked = store.isQuarterPaceAlertEnabled()
             setPadding(0, 8, 0, 4)
         }
 
         policyCard.addView(setupRoundUpSwitch)
         policyCard.addView(setupExclHolidaySwitch)
         policyCard.addView(setupExclLeaveSwitch)
+        policyCard.addView(setupConnectAlertSwitch)
+        policyCard.addView(setupDisconnectAlertSwitch)
         policyCard.addView(setupPlanReminderSwitch)
         policyCard.addView(setupMorningNudgeSwitch)
+        policyCard.addView(setupTargetBufferAlertSwitch)
+        policyCard.addView(setupQuarterAlertSwitch)
         root.addView(policyCard)
         addSpacer(root, 20)
 
@@ -766,8 +833,12 @@ class MainActivity : AppCompatActivity() {
             store.setRoundUpEnabled(setupRoundUpSwitch.isChecked)
             store.setExcludeHolidaysEnabled(setupExclHolidaySwitch.isChecked)
             store.setExcludeLeavesEnabled(setupExclLeaveSwitch.isChecked)
+            store.setConnectAlertEnabled(setupConnectAlertSwitch.isChecked)
+            store.setDisconnectAlertEnabled(setupDisconnectAlertSwitch.isChecked)
             store.setPlannedRemindersEnabled(setupPlanReminderSwitch.isChecked)
             store.setMorningNudgeEnabled(setupMorningNudgeSwitch.isChecked)
+            store.setTargetBufferAlertEnabled(setupTargetBufferAlertSwitch.isChecked)
+            store.setQuarterPaceAlertEnabled(setupQuarterAlertSwitch.isChecked)
             store.setSetupComplete(true)
 
             isEditUnlocked = false
@@ -792,7 +863,7 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
-        // Top Persistent Header + Live Strip + Undo Banner
+        // Top Persistent Header + Check Now + Live Strip + Undo Banner
         val topBar = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(28, 20, 28, 12)
@@ -809,7 +880,7 @@ class MainActivity : AppCompatActivity() {
         }
         val greetingCol = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(18, 0, 12, 0)
+            setPadding(16, 0, 8, 0)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         dashGreetingView = TextView(this).apply {
@@ -824,6 +895,9 @@ class MainActivity : AppCompatActivity() {
         greetingCol.addView(dashGreetingView)
         greetingCol.addView(dashServiceStatusView)
 
+        checkNowBtn = makeSmallChipButton("🔄") {
+            triggerManualCheckNow()
+        }
         lockToggleBtn = makeSmallChipButton("🔒") {
             if (isEditUnlocked) {
                 isEditUnlocked = false
@@ -836,6 +910,8 @@ class MainActivity : AppCompatActivity() {
 
         profileHeader.addView(dashAvatarView)
         profileHeader.addView(greetingCol)
+        profileHeader.addView(checkNowBtn)
+        addHorizontalGap(profileHeader, 6)
         profileHeader.addView(lockToggleBtn)
         topBar.addView(profileHeader)
 
@@ -1127,7 +1203,6 @@ class MainActivity : AppCompatActivity() {
         }
         calCard.addView(calendarContainer)
 
-        // Subtle 4-Color Legend
         val legendView = TextView(this).apply {
             text = "🟢 Office   •   🔵 Dashed Planned   •   🟠 Leave   •   🟣 Holiday"
             textSize = 11f
@@ -1183,7 +1258,6 @@ class MainActivity : AppCompatActivity() {
         }
         scroll.addView(root)
 
-        // 1. 6-Month Attendance Trend Chart
         val trendCard = makeCardContainer()
         trendCard.addView(makeSectionTitle("6-Month Attendance Trend"))
         val trendSub = TextView(this).apply {
@@ -1204,7 +1278,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(trendCard)
         addSpacer(root, 16)
 
-        // 2. Quarter-to-Date (QTD), Leaves/Holidays & Rhythm
         val qtdCard = makeCardContainer()
         qtdTitleView = makeSectionTitle("Quarter-to-Date Rollup")
         qtdDetailView = TextView(this).apply {
@@ -1229,7 +1302,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(qtdCard)
         addSpacer(root, 16)
 
-        // 3. Interactive "What-If" Scenario Simulator
         val simCard = makeCardContainer()
         simCard.addView(makeSectionTitle("What-If Leave & Holiday Simulator"))
         val simSub = TextView(this).apply {
@@ -1240,7 +1312,6 @@ class MainActivity : AppCompatActivity() {
         }
         simCard.addView(simSub)
 
-        // Leaves Row
         val simLeaveRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -1266,7 +1337,6 @@ class MainActivity : AppCompatActivity() {
         simLeaveRow.addView(leavePlus)
         simCard.addView(simLeaveRow)
 
-        // Holidays Row
         val simHolRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -1301,7 +1371,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(simCard)
         addSpacer(root, 18)
 
-        // 4. Share Reports (Monthly & Full-Year)
         val shareMonthBtn = makePillButton("📋 Share Monthly Summary Report", "#4F46E5", "#FFFFFF") {
             val report = store.buildMonthlySummaryReport(selectedMonth)
             val intent = Intent(Intent.ACTION_SEND).apply {
@@ -1338,21 +1407,113 @@ class MainActivity : AppCompatActivity() {
         }
         scroll.addView(root)
 
-        // 1. Office Wi-Fi Management
-        val wifiCard = makeCardContainer()
-        wifiCard.addView(makeSectionTitle("Office Wi-Fi Auto-Detection"))
+        // 1. Tracking Mode Selector (Wi-Fi Only / Location Only / Both)
+        val modeCard = makeCardContainer()
+        modeCard.addView(makeSectionTitle("Tracking Mode"))
+        val modeSelectorRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 12, 0, 8)
+        }
+        modeWifiOnlyBtn = makeModeChip("📶 Wi-Fi") {
+            if (!ensureEditUnlocked()) return@makeModeChip
+            store.setTrackingMode(TrackingMode.WIFI_ONLY)
+            syncBackgroundAndWidget()
+            refreshAllViews()
+        }
+        modeLocOnlyBtn = makeModeChip("📍 Location") {
+            if (!ensureEditUnlocked()) return@makeModeChip
+            store.setTrackingMode(TrackingMode.LOCATION_ONLY)
+            syncBackgroundAndWidget()
+            refreshAllViews()
+        }
+        modeBothBtn = makeModeChip("📶+📍 Both") {
+            if (!ensureEditUnlocked()) return@makeModeChip
+            store.setTrackingMode(TrackingMode.BOTH)
+            syncBackgroundAndWidget()
+            refreshAllViews()
+        }
+        modeSelectorRow.addView(modeWifiOnlyBtn)
+        addHorizontalGap(modeSelectorRow, 6)
+        modeSelectorRow.addView(modeLocOnlyBtn)
+        addHorizontalGap(modeSelectorRow, 6)
+        modeSelectorRow.addView(modeBothBtn)
+        modeCard.addView(modeSelectorRow)
+
+        trackingModeHintView = TextView(this).apply {
+            textSize = 12f
+            setTextColor(cTextSecondary())
+            setPadding(0, 4, 0, 0)
+        }
+        modeCard.addView(trackingModeHintView)
+        root.addView(modeCard)
+        addSpacer(root, 16)
+
+        // 2. Office Location & Radius (Up to 1500m + Select Location)
+        locationSectionCard = makeCardContainer()
+        locationSectionCard.addView(makeSectionTitle("Office Geofence Location"))
+        selectedOfficeView = TextView(this).apply {
+            textSize = 14f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(cTextPrimary())
+            setPadding(0, 8, 0, 4)
+        }
+        officeDistanceView = TextView(this).apply {
+            textSize = 12f
+            setTextColor(cTextSecondary())
+            setPadding(0, 0, 0, 12)
+        }
+        locationSectionCard.addView(selectedOfficeView)
+        locationSectionCard.addView(officeDistanceView)
+
+        val selectLocBtn = makePillButton("🗺️ Select Location (Maps / GPS / 500m List)", "#0284C7", "#FFFFFF") {
+            if (!ensureEditUnlocked()) return@makePillButton
+            showSelectLocationDialog()
+        }
+        locationSectionCard.addView(selectLocBtn)
+
+        val radiusLabel = TextView(this).apply {
+            text = "Geofence Radius (up to 1500m):"
+            textSize = 12f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(cTextSecondary())
+            setPadding(0, 14, 0, 8)
+        }
+        locationSectionCard.addView(radiusLabel)
+
+        val radiusRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        radius250Btn = makeModeChip("250m") { applyRadiusSelection(250) }
+        radius500Btn = makeModeChip("500m") { applyRadiusSelection(500) }
+        radius1000Btn = makeModeChip("1000m") { applyRadiusSelection(1000) }
+        radius1500Btn = makeModeChip("1500m") { applyRadiusSelection(1500) }
+        radiusRow.addView(radius250Btn)
+        addHorizontalGap(radiusRow, 6)
+        radiusRow.addView(radius500Btn)
+        addHorizontalGap(radiusRow, 6)
+        radiusRow.addView(radius1000Btn)
+        addHorizontalGap(radiusRow, 6)
+        radiusRow.addView(radius1500Btn)
+        locationSectionCard.addView(radiusRow)
+
+        root.addView(locationSectionCard)
+        addSpacer(root, 16)
+
+        // 3. Office Wi-Fi Networks
+        wifiSectionCard = makeCardContainer()
+        wifiSectionCard.addView(makeSectionTitle("Office Wi-Fi Auto-Detection"))
         currentWifiView = TextView(this).apply {
             textSize = 13f
             setTextColor(cTextSecondary())
             setPadding(0, 6, 0, 12)
         }
-        wifiCard.addView(currentWifiView)
+        wifiSectionCard.addView(currentWifiView)
 
         wifiChipsContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
         }
-        wifiCard.addView(wifiChipsContainer)
-        addSpacer(wifiCard, 10)
+        wifiSectionCard.addView(wifiChipsContainer)
+        addSpacer(wifiSectionCard, 10)
 
         val addCurrentWifiBtn = makePillButton("➕ Add Connected Wi-Fi", "#E0E7FF", "#3730A3") {
             if (!ensureEditUnlocked()) return@makePillButton
@@ -1371,8 +1532,8 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
             }
         }
-        wifiCard.addView(addCurrentWifiBtn)
-        addSpacer(wifiCard, 10)
+        wifiSectionCard.addView(addCurrentWifiBtn)
+        addSpacer(wifiSectionCard, 10)
 
         val manualWifiRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1401,11 +1562,50 @@ class MainActivity : AppCompatActivity() {
         manualWifiRow.addView(ssidInput)
         addHorizontalGap(manualWifiRow, 10)
         manualWifiRow.addView(addManualSsidBtn)
-        wifiCard.addView(manualWifiRow)
-        root.addView(wifiCard)
+        wifiSectionCard.addView(manualWifiRow)
+        root.addView(wifiSectionCard)
         addSpacer(root, 16)
 
-        // 2. Bulk Holiday Importer (.ics or CSV)
+        // 4. Granular Notification Controls
+        val notifCard = makeCardContainer()
+        notifCard.addView(makeSectionTitle("Notification Preferences"))
+        addSpacer(notifCard, 6)
+
+        notifConnectSwitch = makeSettingsSwitch("Connect Alert (Day Captured)") { checked ->
+            if (!ensureEditUnlocked()) return@makeSettingsSwitch
+            store.setConnectAlertEnabled(checked)
+        }
+        notifDisconnectSwitch = makeSettingsSwitch("Disconnect Alert (Left Wi-Fi / Zone)") { checked ->
+            if (!ensureEditUnlocked()) return@makeSettingsSwitch
+            store.setDisconnectAlertEnabled(checked)
+        }
+        notifPlannedSwitch = makeSettingsSwitch("Planned Day Alerts (Eve, Morning, Missed)") { checked ->
+            if (!ensureEditUnlocked()) return@makeSettingsSwitch
+            store.setPlannedRemindersEnabled(checked)
+        }
+        notifMorningSwitch = makeSettingsSwitch("Morning Pace Nudge on WFH Days") { checked ->
+            if (!ensureEditUnlocked()) return@makeSettingsSwitch
+            store.setMorningNudgeEnabled(checked)
+        }
+        notifTargetBufferSwitch = makeSettingsSwitch("Monthly Target Met & Zero Buffer Alerts") { checked ->
+            if (!ensureEditUnlocked()) return@makeSettingsSwitch
+            store.setTargetBufferAlertEnabled(checked)
+        }
+        notifQuarterSwitch = makeSettingsSwitch("Quarter-End Pace Alert") { checked ->
+            if (!ensureEditUnlocked()) return@makeSettingsSwitch
+            store.setQuarterPaceAlertEnabled(checked)
+        }
+
+        notifCard.addView(notifConnectSwitch)
+        notifCard.addView(notifDisconnectSwitch)
+        notifCard.addView(notifPlannedSwitch)
+        notifCard.addView(notifMorningSwitch)
+        notifCard.addView(notifTargetBufferSwitch)
+        notifCard.addView(notifQuarterSwitch)
+        root.addView(notifCard)
+        addSpacer(root, 16)
+
+        // 5. Bulk Holiday Importer (.ics or CSV)
         val holidayCard = makeCardContainer()
         holidayCard.addView(makeSectionTitle("Bulk Holiday Importer"))
         val holHint = TextView(this).apply {
@@ -1423,7 +1623,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(holidayCard)
         addSpacer(root, 16)
 
-        // 3. Silent Auto-Backup & Manual CSV Backup
+        // 6. Silent Auto-Backup & Manual CSV Backup
         val backupCard = makeCardContainer()
         backupCard.addView(makeSectionTitle("Backup & Data Portability"))
         autoBackupStatusView = TextView(this).apply {
@@ -1462,7 +1662,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(backupCard)
         addSpacer(root, 16)
 
-        // 4. Policy, Permissions & Profile Wizard Button
+        // 7. Policy, Permissions & Profile Wizard Button
         val setupWizardBtn = makePillButton("🛠️ Edit Policy Rules, Profile & Permissions", "#4F46E5", "#FFFFFF") {
             if (isEditUnlocked) {
                 showSetupMode()
@@ -1475,6 +1675,199 @@ class MainActivity : AppCompatActivity() {
         return scroll
     }
 
+    private fun makeSettingsSwitch(label: String, onToggle: (Boolean) -> Unit): Switch {
+        return Switch(this).apply {
+            text = label
+            textSize = 13f
+            setTextColor(cTextPrimary())
+            setPadding(0, 8, 0, 8)
+            setOnCheckedChangeListener { _, checked ->
+                onToggle(checked)
+                refreshAllViews()
+            }
+        }
+    }
+
+    private fun applyRadiusSelection(meters: Int) {
+        if (!ensureEditUnlocked()) return
+        store.setGeofenceRadiusMeters(meters)
+        syncBackgroundAndWidget()
+        refreshAllViews()
+        Toast.makeText(this, "Geofence radius set to ${meters}m", Toast.LENGTH_SHORT).show()
+    }
+
+    // ==================== SELECT LOCATION (MAPS / GPS / 500M LIST) ====================
+
+    private fun showSelectLocationDialog() {
+        var dialogRef: AlertDialog? = null
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(44, 24, 44, 16)
+        }
+
+        val searchInput = EditText(this).apply {
+            hint = "Search landmark in Google Maps (e.g., Deloitte Towers, Hyderabad)"
+            setText(store.getOfficeLocationName().ifEmpty { "Deloitte Towers, Hyderabad" })
+            setPadding(20, 14, 20, 14)
+        }
+        container.addView(searchInput)
+        addSpacer(container, 10)
+
+        val openMapsBtn = makePillButton("🗺️ Open Google Maps to Search", "#0284C7", "#FFFFFF") {
+            val query = searchInput.text.toString().trim().ifEmpty { "Deloitte Towers, Hyderabad" }
+            val geoUri = Uri.parse("geo:0,0?q=${Uri.encode(query)}")
+            val mapIntent = Intent(Intent.ACTION_VIEW, geoUri).apply {
+                setPackage("com.google.android.apps.maps")
+            }
+            isAwaitingSystemIntent = true
+            try {
+                startActivity(mapIntent)
+            } catch (_: Exception) {
+                runCatching {
+                    startActivity(Intent(Intent.ACTION_VIEW, geoUri))
+                }.onFailure {
+                    isAwaitingSystemIntent = false
+                    Toast.makeText(this, "No map app found", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        container.addView(openMapsBtn)
+        addSpacer(container, 10)
+
+        val useCurrentGpsBtn = makePillButton("📍 Use Current Location + Auto Name", "#10B981", "#FFFFFF") {
+            captureCurrentLocationWithGeocoder()
+            dialogRef?.dismiss()
+        }
+        container.addView(useCurrentGpsBtn)
+        addSpacer(container, 14)
+
+        val presetsHeader = TextView(this).apply {
+            text = "Offices & Campus Points (within 500m):"
+            textSize = 13f
+            setTypeface(null, Typeface.BOLD)
+            setPadding(0, 0, 0, 8)
+        }
+        container.addView(presetsHeader)
+
+        val presets = store.getNearbyOfficePresets()
+        presets.forEach { preset ->
+            val presetBtn = makeSmallChipButton(
+                "🏢 ${preset.name} (${preset.radiusMeters}m)"
+            ) {
+                store.setOfficeLocation(preset.name, preset.lat, preset.lng, preset.radiusMeters)
+                syncBackgroundAndWidget()
+                refreshAllViews()
+                dialogRef?.dismiss()
+                Toast.makeText(this, "Selected ${preset.name}", Toast.LENGTH_SHORT).show()
+            }.apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(0, 0, 0, 8) }
+            }
+            container.addView(presetBtn)
+        }
+
+        dialogRef = AlertDialog.Builder(this)
+            .setTitle("Select Office Location")
+            .setView(container)
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun captureCurrentLocationWithGeocoder() {
+        if (!hasLocationPermission()) {
+            requestForegroundAndNotifPermissions()
+            Toast.makeText(this, "Grant Location permission first", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val loc = getBestLastKnownLocation()
+        if (loc == null) {
+            Toast.makeText(
+                this,
+                "No GPS fix yet — open Google Maps or turn ON Location and try again",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+
+        val resolvedName = resolvePlaceNameFromCoordinates(loc.latitude, loc.longitude)
+        val currentRadius = maxOf(500, store.getGeofenceRadiusMeters())
+        store.setOfficeLocation(resolvedName, loc.latitude, loc.longitude, currentRadius)
+        syncBackgroundAndWidget()
+        refreshAllViews()
+        Toast.makeText(this, "Set office to: $resolvedName", Toast.LENGTH_SHORT).show()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun resolvePlaceNameFromCoordinates(lat: Double, lng: Double): String {
+        return runCatching {
+            val geocoder = Geocoder(this, Locale.getDefault())
+            val list: List<Address>? = geocoder.getFromLocation(lat, lng, 1)
+            val addr = list?.firstOrNull()
+            val candidate = addr?.featureName
+                ?.takeIf { it.isNotBlank() && it != addr.subThoroughfare && !it.all { ch -> ch.isDigit() } }
+                ?: addr?.subLocality
+                ?: addr?.locality
+            candidate ?: "Current Office (${String.format(Locale.US, "%.4f, %.4f", lat, lng)})"
+        }.getOrDefault("Current Office (${String.format(Locale.US, "%.4f, %.4f", lat, lng)})")
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun getBestLastKnownLocation(): Location? {
+        if (!hasLocationPermission()) return null
+        val lm = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val providers = listOf(
+            LocationManager.GPS_PROVIDER,
+            LocationManager.NETWORK_PROVIDER,
+            LocationManager.PASSIVE_PROVIDER
+        )
+        var best: Location? = null
+        for (p in providers) {
+            runCatching { lm.getLastKnownLocation(p) }.getOrNull()?.let { loc ->
+                if (best == null || loc.time > best!!.time) {
+                    best = loc
+                }
+            }
+        }
+        return best
+    }
+
+    private fun triggerManualCheckNow() {
+        checkNowBtn.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        val loc = getBestLastKnownLocation()
+        if (loc != null) {
+            store.setLastKnownLocation(loc.latitude, loc.longitude)
+        }
+        val liveSsid = getConnectedWifiSsid()
+        val mode = store.getTrackingMode()
+
+        if ((mode == TrackingMode.WIFI_ONLY || mode == TrackingMode.BOTH) && liveSsid.isNotEmpty()) {
+            val targets = store.getTargetSsids()
+            if (targets.any { it.equals(liveSsid, ignoreCase = true) }) {
+                val isNew = store.recordOfficePresence(liveSsid)
+                if (isNew && store.isConnectAlertEnabled() && store.claimOnceFlag("notif_checkin_${LocalDate.now()}")) {
+                    sendAlertNotification(this, "✅ Office Day Logged ($liveSsid)", "Connected to office Wi-Fi.")
+                }
+            }
+        }
+
+        if ((mode == TrackingMode.LOCATION_ONLY || mode == TrackingMode.BOTH) && loc != null && store.hasOfficeLocationConfigured()) {
+            val dist = store.distanceToOfficeMeters(loc.latitude, loc.longitude)
+            if (dist != null && dist <= store.getGeofenceRadiusMeters()) {
+                val label = store.getOfficeLocationName().ifEmpty { "Office Geofence" }
+                val isNew = store.recordOfficePresence(label)
+                if (isNew && store.isConnectAlertEnabled() && store.claimOnceFlag("notif_checkin_${LocalDate.now()}")) {
+                    sendAlertNotification(this, "✅ Office Day Logged ($label)", "Within ${store.getGeofenceRadiusMeters()}m office zone.")
+                }
+            }
+        }
+
+        syncBackgroundAndWidget()
+        refreshAllViews()
+        Toast.makeText(this, "Status refreshed", Toast.LENGTH_SHORT).show()
+    }
+
     // ==================== 4. REFRESH LOGIC ====================
 
     private fun refreshAllViews() {
@@ -1485,6 +1878,7 @@ class MainActivity : AppCompatActivity() {
         val batOk = isBatteryUnrestricted()
         val liveSsid = getConnectedWifiSsid()
         val targetPct = store.getTargetPercent()
+        val mode = store.getTrackingMode()
 
         // Update Avatars
         val avatarBmp = loadCircularAvatarBitmap()
@@ -1525,6 +1919,8 @@ class MainActivity : AppCompatActivity() {
         } else {
             "Detected Wi-Fi: $liveSsid"
         }
+        setupLocationSummaryView.text =
+            "Office Zone: ${store.getOfficeLocationName()} (${store.getGeofenceRadiusMeters()}m radius)"
         setupTargetPctView.text = "Mandate Target: $targetPct%"
 
         val health = store.getBackupHealthInfo()
@@ -1542,9 +1938,13 @@ class MainActivity : AppCompatActivity() {
         val uName = store.getUserName()
         dashGreetingView.text = if (uName.isNotEmpty()) "Hi, $uName" else "Hi there"
 
-        val trackingReady = locOk && gpsOk && store.getTargetSsids().isNotEmpty()
+        val trackingReady = locOk && gpsOk && when (mode) {
+            TrackingMode.WIFI_ONLY -> store.getTargetSsids().isNotEmpty()
+            TrackingMode.LOCATION_ONLY -> store.hasOfficeLocationConfigured()
+            TrackingMode.BOTH -> store.getTargetSsids().isNotEmpty() || store.hasOfficeLocationConfigured()
+        }
         if (trackingReady) {
-            dashServiceStatusView.text = "🟢 Auto-WiFi Tracking Active"
+            dashServiceStatusView.text = "🟢 Auto-Tracking Active"
             dashServiceStatusView.setTextColor(Color.parseColor("#10B981"))
         } else {
             dashServiceStatusView.text = "🟠 Setup Incomplete (Tap Settings)"
@@ -1562,16 +1962,22 @@ class MainActivity : AppCompatActivity() {
             if (isEditUnlocked) Color.parseColor("#065F46") else cTextPrimary()
         )
 
-        // Today's Live Status Strip (connection status only — no timeframe)
+        // Today's Live Status Strip (Mode-aware: Wi-Fi vs Office Location)
         val today = LocalDate.now()
         val todayType = store.getDayType(today)
-        val isOnOfficeWifi = store.wasConnectedToOfficeWifi()
-        val activeSsid = store.getActiveOfficeSsid()
+        val isOnOfficePresence = store.wasConnectedToOfficeWifi()
+        val activeSource = store.getActiveOfficeSsid()
+
+        val disconnectedLabel = when (mode) {
+            TrackingMode.LOCATION_ONLY -> "Not at office location"
+            TrackingMode.WIFI_ONLY -> "Not connected to office Wi-Fi"
+            TrackingMode.BOTH -> "Not connected to office Wi-Fi or at office location"
+        }
 
         when {
-            isOnOfficeWifi -> {
-                val netLabel = if (activeSsid.isNotEmpty()) " ($activeSsid)" else ""
-                todayLiveStripView.text = "🟢 Connected to Office Wi-Fi$netLabel"
+            isOnOfficePresence -> {
+                val srcTag = if (activeSource.isNotEmpty()) " ($activeSource)" else ""
+                todayLiveStripView.text = "🟢 Connected / At Office$srcTag"
                 todayLiveStripView.setTextColor(Color.parseColor("#065F46"))
                 todayLiveStripView.background = roundedBox("#D1FAE5", "#10B981", 16f, 2)
             }
@@ -1586,7 +1992,7 @@ class MainActivity : AppCompatActivity() {
                 )
             }
             todayType == DayType.PLANNED -> {
-                todayLiveStripView.text = "📅 Planned Office Day Today (Waiting for Wi-Fi)"
+                todayLiveStripView.text = "📅 Planned Office Day Today"
                 todayLiveStripView.setTextColor(if (isDark) Color.parseColor("#C7D2FE") else Color.parseColor("#3730A3"))
                 todayLiveStripView.background = roundedBox(
                     if (isDark) "#1E1B4B" else "#EEF2FF",
@@ -1611,7 +2017,7 @@ class MainActivity : AppCompatActivity() {
                 )
             }
             else -> {
-                todayLiveStripView.text = "🏠 WFH Today • Not Connected to Office Wi-Fi"
+                todayLiveStripView.text = "🏠 WFH Today • $disconnectedLabel"
                 todayLiveStripView.setTextColor(cTextSecondary())
                 todayLiveStripView.background = roundedBox(cCardHex(), cBorder(), 16f, 1)
             }
@@ -1688,7 +2094,6 @@ class MainActivity : AppCompatActivity() {
         kpiRemainingView.text = "${s.remainingDays}\nStill Needed"
         kpiBufferView.text = "${maxOf(0, s.bufferDays)}\nWFH Buffer"
 
-        // Calendar Tap Mode Chips
         styleModeChip(modeOfficeBtn, activeTapMode == DayType.OFFICE, "#10B981")
         styleModeChip(modePlannedBtn, activeTapMode == DayType.PLANNED, "#4F46E5")
         styleModeChip(modeLeaveBtn, activeTapMode == DayType.LEAVE, "#F59E0B")
@@ -1696,7 +2101,6 @@ class MainActivity : AppCompatActivity() {
 
         renderCalendarGrid(s)
 
-        // Monthly Audit Log Filter Pills & Output
         styleModeChip(filterAllBtn, activeLogFilter == LogFilter.ALL, "#334155")
         styleModeChip(filterOfficeBtn, activeLogFilter == LogFilter.OFFICE, "#10B981")
         styleModeChip(filterPlannedBtn, activeLogFilter == LogFilter.PLANNED, "#4F46E5")
@@ -1737,7 +2141,6 @@ class MainActivity : AppCompatActivity() {
         qtdLeaveHolView.text = "🌴 Quarterly Leaves: ${q.leaveDays}   •   🎉 Quarterly Holidays: ${q.holidayDays}"
         rhythmView.text = "🔥 ${r.weeklyStreak}-week streak   •   📍 Top days: ${r.topDaysLabel}"
 
-        // What-If Simulator Refresh
         simLeaveCountView.text = "Simulated Extra Leaves: +$simLeaves"
         simHolidayCountView.text = "Simulated Extra Holidays: +$simHolidays"
         val simStats = store.getMonthStats(
@@ -1765,6 +2168,55 @@ class MainActivity : AppCompatActivity() {
             "Simulated Target: ${simStats.requiredDays} days (${simStats.effectiveWorkingDays} working days) • Still Needed: ${simStats.remainingDays} • Buffer: ${maxOf(0, simStats.bufferDays)}$exclNote"
 
         // Settings Tab Refresh
+        styleModeChip(modeWifiOnlyBtn, mode == TrackingMode.WIFI_ONLY, "#4F46E5")
+        styleModeChip(modeLocOnlyBtn, mode == TrackingMode.LOCATION_ONLY, "#0284C7")
+        styleModeChip(modeBothBtn, mode == TrackingMode.BOTH, "#10B981")
+
+        trackingModeHintView.text = when (mode) {
+            TrackingMode.WIFI_ONLY -> "Checks office Wi-Fi SSIDs only. Disconnected label: \"Not connected to office Wi-Fi\"."
+            TrackingMode.LOCATION_ONLY -> "Checks GPS geofence radius only. Disconnected label: \"Not at office location\"."
+            TrackingMode.BOTH -> "Checks both office Wi-Fi SSIDs and GPS geofence radius automatically."
+        }
+
+        locationSectionCard.visibility =
+            if (mode == TrackingMode.LOCATION_ONLY || mode == TrackingMode.BOTH) View.VISIBLE else View.GONE
+        wifiSectionCard.visibility =
+            if (mode == TrackingMode.WIFI_ONLY || mode == TrackingMode.BOTH) View.VISIBLE else View.GONE
+
+        val radius = store.getGeofenceRadiusMeters()
+        selectedOfficeView.text = "📍 ${store.getOfficeLocationName()} (${radius}m radius)"
+
+        val lastLoc = getBestLastKnownLocation()
+        if (lastLoc != null) {
+            store.setLastKnownLocation(lastLoc.latitude, lastLoc.longitude)
+        }
+        val distMeters = store.distanceToOfficeMeters(
+            lastLoc?.latitude ?: store.getLastKnownLat(),
+            lastLoc?.longitude ?: store.getLastKnownLng()
+        )
+        officeDistanceView.text = if (distMeters != null && (lastLoc != null || store.hasLastKnownLocation())) {
+            val dInt = distMeters.toInt()
+            if (dInt <= radius) {
+                "✅ Inside ${radius}m office zone (~${dInt}m away)"
+            } else {
+                "ℹ️ Outside ${radius}m office zone (~${dInt}m away)"
+            }
+        } else {
+            "Coordinates: ${String.format(Locale.US, "%.4f, %.4f", store.getOfficeLat(), store.getOfficeLng())}"
+        }
+
+        styleModeChip(radius250Btn, radius == 250, "#0284C7")
+        styleModeChip(radius500Btn, radius == 500, "#0284C7")
+        styleModeChip(radius1000Btn, radius == 1000, "#0284C7")
+        styleModeChip(radius1500Btn, radius == 1500, "#0284C7")
+
+        notifConnectSwitch.isChecked = store.isConnectAlertEnabled()
+        notifDisconnectSwitch.isChecked = store.isDisconnectAlertEnabled()
+        notifPlannedSwitch.isChecked = store.isPlannedRemindersEnabled()
+        notifMorningSwitch.isChecked = store.isMorningNudgeEnabled()
+        notifTargetBufferSwitch.isChecked = store.isTargetBufferAlertEnabled()
+        notifQuarterSwitch.isChecked = store.isQuarterPaceAlertEnabled()
+
         currentWifiView.text = if (liveSsid.isEmpty()) {
             "Current Wi-Fi: Not connected (or Location OFF)"
         } else {
@@ -1982,7 +2434,6 @@ class MainActivity : AppCompatActivity() {
         container.addView(windowTv)
         container.addView(spanTv)
 
-        // Quick Status Switcher (when unlocked)
         if (isEditUnlocked) {
             val switchLabel = TextView(this).apply {
                 text = "Quick Status Change:"
@@ -2025,7 +2476,6 @@ class MainActivity : AppCompatActivity() {
         }
         container.addView(noteInput)
 
-        // One-Tap Quick-Note Presets (when unlocked)
         if (isEditUnlocked) {
             val presetsRow1 = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -2564,7 +3014,6 @@ class MainActivity : AppCompatActivity() {
             val maxPct = maxOf(100, items.maxOf { it.actualPercent })
             val targetPct = items.first().targetPercent
 
-            // Dashed Target Line
             val targetY = topMargin + chartHeight * (1f - (targetPct / maxPct.toFloat()))
             targetLinePaint.color = Color.parseColor("#F59E0B")
             canvas.drawLine(16f, targetY, width - 16f, targetY, targetLinePaint)
