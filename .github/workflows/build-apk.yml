@@ -23,10 +23,13 @@ jobs:
           gradle-version: '8.9'
 
       - name: Decode Signing Keystore
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/wfo-signing.jks"
-          echo "KEYSTORE_FILE=$RUNNER_TEMP/wfo-signing.jks" >> $GITHUB_ENV
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/wfo-signing.jks"
+            echo "KEYSTORE_FILE=$RUNNER_TEMP/wfo-signing.jks" >> $GITHUB_ENV
+          fi
 
       - name: Build Debug APK
         env:
