@@ -11,6 +11,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -19,6 +21,7 @@ import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import java.time.DayOfWeek
@@ -44,27 +47,38 @@ class WifiMonitorService : Service() {
     }
 
     private lateinit var connectivityManager: ConnectivityManager
+    private lateinit var locationManager: LocationManager
     private lateinit var store: AttendanceStore
     private var callbackRegistered = false
+    private var locationUpdatesRegistered = false
+    private var lastPresenceSourceType: String = "" // "WIFI" or "LOCATION"
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) FLAG_INCLUDE_LOCATION_INFO else 0
     ) {
         override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
-            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) && store.usesWifi()) {
                 evaluateConnectedSsid(extractSsid(caps))
             }
         }
 
         override fun onAvailable(network: Network) {
             val caps = connectivityManager.getNetworkCapabilities(network)
-            if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) {
+            if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true && store.usesWifi()) {
                 evaluateConnectedSsid(extractSsid(caps))
             }
         }
 
         override fun onLost(network: Network) {
-            handleWifiDisconnected()
+            if (lastPresenceSourceType == "WIFI" || (!store.usesLocation() && store.isAtOfficeNow())) {
+                handleOfficeDisconnected("Wi-Fi")
+            }
+        }
+    }
+
+    private val locationListener = object : android.location.LocationListener {
+        override fun onLocationChanged(location: Location) {
+            evaluateLocationFix(location)
         }
     }
 
@@ -77,6 +91,7 @@ class WifiMonitorService : Service() {
 
         store = AttendanceStore(this)
         connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
         createNotificationChannels()
 
         try {
@@ -92,6 +107,7 @@ class WifiMonitorService : Service() {
         connectivityManager.registerNetworkCallback(request, networkCallback)
         callbackRegistered = true
 
+        registerLocationChecks()
         ReminderReceiver.scheduleNextCheckpoint(this)
     }
 
@@ -101,12 +117,14 @@ class WifiMonitorService : Service() {
             return START_NOT_STICKY
         }
 
+        registerLocationChecks()
+
         when (intent?.action) {
             ACTION_QUICK_LOG_TODAY -> {
                 if (shouldShowQuickLogAction()) {
                     val isNew = store.recordOfficePresence("Manual Quick-Log")
                     if (isNew) {
-                        notifyCheckInSuccess("Manual Quick-Log")
+                        notifyCheckInMilestone("Manual Quick-Log")
                     }
                 }
                 updatePersistentNotification()
@@ -114,11 +132,13 @@ class WifiMonitorService : Service() {
                 sendBroadcast(Intent(ACTION_DATA_UPDATED).setPackage(packageName))
             }
             ACTION_REFRESH_STATUS -> {
+                performPresenceCheck()
                 updatePersistentNotification()
                 WfoWidgetProvider.updateAllWidgets(this)
+                sendBroadcast(Intent(ACTION_DATA_UPDATED).setPackage(packageName))
             }
             else -> {
-                checkCurrentActiveWifi()
+                performPresenceCheck()
                 updatePersistentNotification()
                 WfoWidgetProvider.updateAllWidgets(this)
             }
@@ -133,6 +153,9 @@ class WifiMonitorService : Service() {
         if (callbackRegistered) {
             runCatching { connectivityManager.unregisterNetworkCallback(networkCallback) }
         }
+        if (locationUpdatesRegistered) {
+            runCatching { locationManager.removeUpdates(locationListener) }
+        }
         super.onDestroy()
     }
 
@@ -144,12 +167,97 @@ class WifiMonitorService : Service() {
         return fine == PackageManager.PERMISSION_GRANTED || coarse == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun checkCurrentActiveWifi() {
-        val activeCaps = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
-        if (activeCaps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) {
-            evaluateConnectedSsid(extractSsid(activeCaps))
-        } else if (store.wasConnectedToOfficeWifi()) {
-            handleWifiDisconnected()
+    private fun registerLocationChecks() {
+        if (!hasLocationPermission() || locationUpdatesRegistered) return
+        runCatching {
+            val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+            for (provider in providers) {
+                if (locationManager.isProviderEnabled(provider)) {
+                    locationManager.requestLocationUpdates(
+                        provider,
+                        15 * 60 * 1000L, // 15 minutes
+                        50f,
+                        locationListener,
+                        Looper.getMainLooper()
+                    )
+                    locationUpdatesRegistered = true
+                }
+            }
+        }
+    }
+
+    private fun performPresenceCheck() {
+        var wifiMatched = false
+        if (store.usesWifi()) {
+            val activeCaps = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
+            if (activeCaps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) {
+                wifiMatched = evaluateConnectedSsid(extractSsid(activeCaps))
+            }
+        }
+
+        var locMatched = false
+        if (store.usesLocation() && !wifiMatched) {
+            locMatched = checkLastOrCurrentLocation()
+        }
+
+        if (!wifiMatched && !locMatched && store.isAtOfficeNow()) {
+            val wasWifi = lastPresenceSourceType == "WIFI"
+            val shouldDisconnect = when (store.getTrackingMode()) {
+                TrackingMode.WIFI_ONLY -> wasWifi || !store.usesWifi()
+                TrackingMode.LOCATION_ONLY -> !wasWifi || !store.usesLocation()
+                TrackingMode.BOTH -> true
+            }
+            if (shouldDisconnect) {
+                handleOfficeDisconnected(if (wasWifi) "Wi-Fi" else "Office Location")
+            }
+        }
+    }
+
+    private fun checkLastOrCurrentLocation(): Boolean {
+        if (!hasLocationPermission()) return false
+        val bestLoc = runCatching {
+            val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+            providers.mapNotNull { p ->
+                if (locationManager.isProviderEnabled(p)) locationManager.getLastKnownLocation(p) else null
+            }.maxByOrNull { it.time }
+        }.getOrNull()
+
+        if (bestLoc != null) {
+            return evaluateLocationFix(bestLoc)
+        }
+        return false
+    }
+
+    private fun evaluateLocationFix(location: Location): Boolean {
+        store.cacheLastKnownDeviceLocation(location.latitude, location.longitude)
+        if (!store.usesLocation()) return false
+
+        val match = store.findMatchingOffice(location.latitude, location.longitude)
+        return if (match != null) {
+            val (officeLoc, distMeters) = match
+            lastPresenceSourceType = "LOCATION"
+            val label = "${officeLoc.name} (${distMeters.toInt()}m)"
+            val isNewToday = store.recordOfficePresence(label)
+            updatePersistentNotification()
+            WfoWidgetProvider.updateAllWidgets(this)
+            sendBroadcast(Intent(ACTION_DATA_UPDATED).setPackage(packageName))
+
+            if (isNewToday) {
+                if (store.isConnectAlertEnabled()) {
+                    sendAlertNotification(
+                        this,
+                        "📍 Entered Office Zone (${officeLoc.name})",
+                        "Within ${distMeters.toInt()}m of ${officeLoc.name} (${officeLoc.radiusMeters}m radius). Today logged as Office."
+                    )
+                }
+                notifyCheckInMilestone(label)
+            }
+            true
+        } else {
+            if (lastPresenceSourceType == "LOCATION" && store.isAtOfficeNow()) {
+                handleOfficeDisconnected("Office Location")
+            }
+            false
         }
     }
 
@@ -167,54 +275,65 @@ class WifiMonitorService : Service() {
         return rawSsid?.removePrefix("\"")?.removeSuffix("\"") ?: ""
     }
 
-    private fun evaluateConnectedSsid(connectedSsid: String) {
-        if (connectedSsid.isEmpty() || connectedSsid == "<unknown ssid>") return
+    private fun evaluateConnectedSsid(connectedSsid: String): Boolean {
+        if (!store.usesWifi()) return false
+        if (connectedSsid.isEmpty() || connectedSsid == "<unknown ssid>") return false
 
         val targets = store.getTargetSsids()
         val matched = targets.any { it.equals(connectedSsid, ignoreCase = true) }
 
         if (matched) {
+            lastPresenceSourceType = "WIFI"
             val isNewToday = store.recordOfficePresence(connectedSsid)
             updatePersistentNotification()
             WfoWidgetProvider.updateAllWidgets(this)
             sendBroadcast(Intent(ACTION_DATA_UPDATED).setPackage(packageName))
 
             if (isNewToday) {
-                notifyCheckInSuccess(connectedSsid)
+                if (store.isConnectAlertEnabled()) {
+                    sendAlertNotification(
+                        this,
+                        "📶 Connected to Office Wi-Fi ($connectedSsid)",
+                        "Office Wi-Fi detected. Today is logged as an Office day."
+                    )
+                }
+                notifyCheckInMilestone(connectedSsid)
             }
-        } else if (store.wasConnectedToOfficeWifi()) {
-            handleWifiDisconnected()
+            return true
+        } else if (lastPresenceSourceType == "WIFI" && store.isAtOfficeNow()) {
+            handleOfficeDisconnected("Wi-Fi")
         }
+        return false
     }
 
-    private fun handleWifiDisconnected() {
+    private fun handleOfficeDisconnected(sourceKind: String) {
+        val wasConnected = store.isAtOfficeNow()
         val updated = store.recordOfficeDisconnect()
-        if (updated) {
+        lastPresenceSourceType = ""
+        if (wasConnected && store.isDisconnectAlertEnabled()) {
+            sendAlertNotification(
+                this,
+                "🔌 Disconnected from $sourceKind",
+                "Departure / disconnect time recorded for your WFO log."
+            )
+        }
+        if (updated || wasConnected) {
             sendBroadcast(Intent(ACTION_DATA_UPDATED).setPackage(packageName))
         }
         updatePersistentNotification()
     }
 
-    private fun notifyCheckInSuccess(sourceLabel: String) {
+    private fun notifyCheckInMilestone(sourceLabel: String) {
+        if (!store.isMilestoneAlertEnabled()) return
         val today = LocalDate.now()
         val ym = YearMonth.from(today)
         val stats = store.getMonthStats(ym, today)
-
-        val checkInBody = if (stats.remainingDays == 0) {
-            "Today is confirmed as an Office day (${stats.attendedDays}/${stats.requiredDays} days). ${stats.targetPercent}% monthly target met!"
-        } else {
-            "Today is confirmed as an Office day (${stats.attendedDays}/${stats.requiredDays} days). Need ${stats.remainingDays} more day(s) • ${maxOf(0, stats.bufferDays)} WFH buffer left."
-        }
-
-        if (store.claimOnceFlag("notif_checkin_$today")) {
-            sendAlertNotification(this, "✅ Office Day Logged ($sourceLabel)", checkInBody)
-        }
 
         if (stats.remainingDays == 0 && store.claimOnceFlag("notif_target_met_$ym")) {
             sendAlertNotification(
                 this,
                 "🎉 ${stats.targetPercent}% Monthly Target Completed!",
-                "You've reached ${stats.attendedDays}/${stats.requiredDays} office days for ${stats.monthLabel}. Safe to WFH for the rest of the month."
+                "You've reached ${stats.attendedDays}/${stats.requiredDays} office days for ${stats.monthLabel} ($sourceLabel). Safe to WFH for the rest of the month."
             )
         } else if (stats.remainingDays > 0 && stats.bufferDays == 0 && store.claimOnceFlag("notif_zero_buffer_$today")) {
             sendAlertNotification(
@@ -250,14 +369,18 @@ class WifiMonitorService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        val isConnected = store.wasConnectedToOfficeWifi()
-        val activeSsid = store.getActiveOfficeSsid()
+        val isConnected = store.isAtOfficeNow()
+        val activeLabel = store.getActiveOfficeLabel()
 
         val titleText = if (isConnected) {
-            val netName = if (activeSsid.isNotEmpty()) activeSsid else "Office Wi-Fi"
-            "🟢 Connected to $netName"
+            val netName = if (activeLabel.isNotEmpty()) activeLabel else "Office"
+            "🟢 At Office • $netName"
         } else {
-            "WFO Wi-Fi Monitor Active"
+            when (store.getTrackingMode()) {
+                TrackingMode.WIFI_ONLY -> "WFO Monitor • Not connected to office Wi-Fi"
+                TrackingMode.LOCATION_ONLY -> "WFO Monitor • Not at office location"
+                TrackingMode.BOTH -> "WFO Monitor • Standby"
+            }
         }
 
         val defaultSummary = if (isConnected) {
@@ -295,7 +418,7 @@ class WifiMonitorService : Service() {
     private fun createNotificationChannels() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_MONITOR, "Background Wi-Fi Monitor", NotificationManager.IMPORTANCE_LOW)
+            NotificationChannel(CHANNEL_MONITOR, "Background Presence Monitor", NotificationManager.IMPORTANCE_LOW)
         )
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_ALERTS, "Attendance & Plan Alerts", NotificationManager.IMPORTANCE_HIGH)
@@ -359,7 +482,6 @@ class ReminderReceiver : BroadcastReceiver() {
         val store = AttendanceStore(context)
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        // Handle Actionable Missed-Plan Notification Buttons directly from lock screen
         when (intent?.action) {
             WifiMonitorService.ACTION_PLAN_MARK_LEAVE -> {
                 val dateStr = intent.getStringExtra(WifiMonitorService.EXTRA_DATE_STR) ?: LocalDate.now().toString()
@@ -426,7 +548,7 @@ class ReminderReceiver : BroadcastReceiver() {
                 sendAlertNotification(
                     context,
                     "📅 Planned Office Day Today",
-                    "Today is marked as a Planned Office day. Connect to office Wi-Fi upon arrival to auto-confirm."
+                    "Today is marked as a Planned Office day. Arrive at the office to auto-confirm."
                 )
             }
 
@@ -484,7 +606,7 @@ class ReminderReceiver : BroadcastReceiver() {
                 sendAlertNotification(
                     context,
                     "⚠️ Planned Office Visit Not Detected",
-                    "No office Wi-Fi detected yet for today's planned visit. Update directly below:",
+                    "Office presence not detected yet for today's planned visit. Update directly below:",
                     notifId = notifId,
                     actions = actions
                 )
@@ -505,8 +627,7 @@ class ReminderReceiver : BroadcastReceiver() {
                 )
             }
 
-            // Quarter-End Pace Alert (within last 21 days of quarter if QTD trails target)
-            if (!now.isBefore(LocalTime.of(20, 0)) && now.isBefore(LocalTime.of(22, 0))) {
+            if (store.isQuarterEndAlertEnabled() && !now.isBefore(LocalTime.of(20, 0)) && now.isBefore(LocalTime.of(22, 0))) {
                 val qIndex = (today.monthValue - 1) / 3
                 val qEndMonth = YearMonth.of(today.year, qIndex * 3 + 3)
                 val qEndDate = qEndMonth.atEndOfMonth()
@@ -526,7 +647,7 @@ class ReminderReceiver : BroadcastReceiver() {
             }
 
             // 5. Auto-End-of-Day Disconnect Safety Net (23:50 - 23:59)
-            if (!now.isBefore(LocalTime.of(23, 50)) && store.wasConnectedToOfficeWifi()) {
+            if (!now.isBefore(LocalTime.of(23, 50)) && store.isAtOfficeNow()) {
                 store.recordOfficeDisconnect(today, now)
                 context.sendBroadcast(Intent(WifiMonitorService.ACTION_DATA_UPDATED).setPackage(context.packageName))
             }
