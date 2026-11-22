@@ -1,8 +1,15 @@
 package com.offline.wfo
 
 import android.Manifest
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
+import android.animation.PropertyValuesHolder
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.AlarmManager
 import android.app.AlertDialog
 import android.app.KeyguardManager
 import android.content.BroadcastReceiver
@@ -38,6 +45,9 @@ import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.DecelerateInterpolator
+import android.view.animation.OvershootInterpolator
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -90,11 +100,20 @@ class MainActivity : AppCompatActivity() {
     private var isAwaitingSystemIntent: Boolean = false
     private var autoPromptedBgLocation: Boolean = false
     private var isDark: Boolean = false
+    private var hasPlayedOpenEntrance: Boolean = false
+
+    // Lock Screen Live Animation State
+    private lateinit var lockIconView: TextView
+    private lateinit var lockPulseRingView: View
+    private var lockRunningAnimSet: AnimatorSet? = null
 
     // Root Containers
     private lateinit var appLockOverlay: LinearLayout
     private lateinit var setupScroll: ScrollView
     private lateinit var mainScaffold: LinearLayout
+    private lateinit var topHeaderBar: LinearLayout
+    private lateinit var heroCardContainer: LinearLayout
+    private lateinit var calendarCardContainer: LinearLayout
     private lateinit var homeTabScroll: ScrollView
     private lateinit var analyticsTabScroll: ScrollView
     private lateinit var settingsTabScroll: ScrollView
@@ -111,6 +130,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var setupPermStatusView: TextView
     private lateinit var setupBgLocStatusView: TextView
     private lateinit var setupGpsStatusView: TextView
+    private lateinit var setupExactAlarmStatusView: TextView
     private lateinit var setupBatteryStatusView: TextView
     private lateinit var setupLiveWifiView: TextView
     private lateinit var setupSsidInput: EditText
@@ -186,17 +206,21 @@ class MainActivity : AppCompatActivity() {
     private lateinit var radius500Btn: TextView
     private lateinit var radius1000Btn: TextView
     private lateinit var radius1500Btn: TextView
+    private lateinit var priorityWeekdaysContainer: LinearLayout
+    private lateinit var settingsExactAlarmStatusView: TextView
     private lateinit var notifConnectSwitch: Switch
     private lateinit var notifDisconnectSwitch: Switch
     private lateinit var notifPlannedSwitch: Switch
     private lateinit var notifMorningSwitch: Switch
     private lateinit var notifTargetBufferSwitch: Switch
     private lateinit var notifQuarterSwitch: Switch
+    private lateinit var upcomingHolLeaveSummaryView: TextView
+    private lateinit var upcomingHolLeaveListView: LinearLayout
     private lateinit var autoBackupStatusView: TextView
 
     private val updateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            refreshAllViews()
+            refreshAllViews(animateCharts = false)
         }
     }
 
@@ -241,16 +265,19 @@ class MainActivity : AppCompatActivity() {
                 showAppLockScreen()
                 promptDeviceCredential(REQ_UNLOCK_APP, "Unlock WFO Tracker")
             } else {
-                showDashboardMode()
+                showDashboardMode(playEntrance = true)
             }
         }
-        refreshAllViews()
+        refreshAllViews(animateCharts = true)
     }
 
     override fun onResume() {
         super.onResume()
         startMonitorServiceIfPermitted()
-        refreshAllViews()
+        refreshAllViews(animateCharts = false)
+        if (appLockOverlay.visibility == View.VISIBLE) {
+            startLockScreenRunningAnimation()
+        }
         ContextCompat.registerReceiver(
             this,
             updateReceiver,
@@ -261,18 +288,20 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+        stopLockScreenRunningAnimation()
         runCatching { unregisterReceiver(updateReceiver) }
     }
 
     override fun onStop() {
         super.onStop()
+        stopLockScreenRunningAnimation()
         if (store.isSetupComplete() && !isAwaitingSystemIntent) {
             isEditUnlocked = false
             if (store.isFullAppLockEnabled()) {
                 isAppAuthenticated = false
                 showAppLockScreen()
             }
-            refreshAllViews()
+            refreshAllViews(animateCharts = false)
         }
     }
 
@@ -285,7 +314,7 @@ class MainActivity : AppCompatActivity() {
             REQ_UNLOCK_EDIT -> {
                 if (resultCode == Activity.RESULT_OK) {
                     isEditUnlocked = true
-                    showDashboardMode()
+                    showDashboardMode(playEntrance = false)
                     showStatusPopup(true, "Edit mode unlocked")
                 } else {
                     showStatusPopup(false, "Authentication cancelled or failed")
@@ -302,15 +331,16 @@ class MainActivity : AppCompatActivity() {
             REQ_UNLOCK_APP -> {
                 if (resultCode == Activity.RESULT_OK) {
                     isAppAuthenticated = true
-                    showDashboardMode()
+                    playUnlockTransitionThenDashboard()
                 } else {
+                    showAppLockScreen()
                     showStatusPopup(false, "Authentication required to open app")
                 }
             }
             REQ_PICK_PHOTO -> {
                 if (resultCode == Activity.RESULT_OK && data?.data != null) {
                     saveCompressedAvatar(data.data!!)
-                    refreshAllViews()
+                    refreshAllViews(animateCharts = false)
                 } else {
                     showStatusPopup(false, "Profile photo selection cancelled")
                 }
@@ -330,11 +360,11 @@ class MainActivity : AppCompatActivity() {
                     if (importedCount > 0) {
                         activeLogFilter = LogFilter.ALL
                         syncBackgroundAndWidget()
-                        refreshAllViews()
+                        refreshAllViews(animateCharts = true)
                         showStatusPopup(true, "Found existing backup — restored $importedCount date(s)")
                     } else {
                         val synced = store.triggerSilentAutoBackup()
-                        refreshAllViews()
+                        refreshAllViews(animateCharts = false)
                         if (synced) {
                             showStatusPopup(
                                 true,
@@ -361,7 +391,7 @@ class MainActivity : AppCompatActivity() {
                             showStatusPopup(false, "No new holiday dates found in file")
                         }
                         syncBackgroundAndWidget()
-                        refreshAllViews()
+                        refreshAllViews(animateCharts = true)
                     }.onFailure {
                         showStatusPopup(false, "Could not read holiday file")
                     }
@@ -389,7 +419,7 @@ class MainActivity : AppCompatActivity() {
                         val count = store.importFromUri(data.data!!, autoBackupAfter = true)
                         activeLogFilter = LogFilter.ALL
                         syncBackgroundAndWidget()
-                        refreshAllViews()
+                        refreshAllViews(animateCharts = true)
                         if (count > 0) {
                             showStatusPopup(true, "Restored $count date(s) from CSV")
                         } else {
@@ -412,7 +442,7 @@ class MainActivity : AppCompatActivity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         startMonitorServiceIfPermitted()
-        refreshAllViews()
+        refreshAllViews(animateCharts = false)
 
         if (requestCode == 10 &&
             !autoPromptedBgLocation &&
@@ -427,15 +457,176 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ==================== ANIMATIONS (LOCK, UNLOCK, ENTRANCE & MOTION) ====================
+
+    private fun startLockScreenRunningAnimation() {
+        if (!::lockIconView.isInitialized || !::lockPulseRingView.isInitialized) return
+        stopLockScreenRunningAnimation()
+
+        lockIconView.text = "🔒"
+        lockIconView.rotation = 0f
+
+        val pulseScaleX = ObjectAnimator.ofPropertyValuesHolder(
+            lockPulseRingView,
+            PropertyValuesHolder.ofFloat(View.SCALE_X, 0.88f, 1.24f, 0.88f),
+            PropertyValuesHolder.ofFloat(View.SCALE_Y, 0.88f, 1.24f, 0.88f),
+            PropertyValuesHolder.ofFloat(View.ALPHA, 0.55f, 0.12f, 0.55f)
+        ).apply {
+            duration = 2200L
+            repeatCount = ValueAnimator.INFINITE
+            interpolator = AccelerateDecelerateInterpolator()
+        }
+
+        val iconFloat = ObjectAnimator.ofPropertyValuesHolder(
+            lockIconView,
+            PropertyValuesHolder.ofFloat(View.TRANSLATION_Y, 0f, -8f, 0f),
+            PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.06f, 1f),
+            PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.06f, 1f)
+        ).apply {
+            duration = 2200L
+            repeatCount = ValueAnimator.INFINITE
+            interpolator = AccelerateDecelerateInterpolator()
+        }
+
+        lockRunningAnimSet = AnimatorSet().apply {
+            playTogether(pulseScaleX, iconFloat)
+            start()
+        }
+    }
+
+    private fun stopLockScreenRunningAnimation() {
+        lockRunningAnimSet?.cancel()
+        lockRunningAnimSet = null
+        if (::lockPulseRingView.isInitialized) {
+            lockPulseRingView.scaleX = 1f
+            lockPulseRingView.scaleY = 1f
+            lockPulseRingView.alpha = 0.35f
+        }
+        if (::lockIconView.isInitialized) {
+            lockIconView.translationY = 0f
+            lockIconView.scaleX = 1f
+            lockIconView.scaleY = 1f
+            lockIconView.rotation = 0f
+        }
+    }
+
+    private fun playUnlockTransitionThenDashboard() {
+        if (!::lockIconView.isInitialized) {
+            showDashboardMode(playEntrance = true)
+            return
+        }
+        stopLockScreenRunningAnimation()
+        lockIconView.text = "🔓"
+
+        val pop = ObjectAnimator.ofPropertyValuesHolder(
+            lockIconView,
+            PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.32f, 1.1f),
+            PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.32f, 1.1f),
+            PropertyValuesHolder.ofFloat(View.ROTATION, 0f, -18f, 12f, 0f)
+        ).apply {
+            duration = 360L
+            interpolator = OvershootInterpolator()
+        }
+
+        val fadeOverlay = ObjectAnimator.ofFloat(appLockOverlay, View.ALPHA, 1f, 0f).apply {
+            duration = 220L
+            startDelay = 160L
+        }
+
+        AnimatorSet().apply {
+            playTogether(pop, fadeOverlay)
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    appLockOverlay.alpha = 1f
+                    showDashboardMode(playEntrance = true)
+                }
+            })
+            start()
+        }
+    }
+
+    private fun playAppOpenEntranceAnimation() {
+        if (hasPlayedOpenEntrance) return
+        hasPlayedOpenEntrance = true
+
+        val targets = listOfNotNull(
+            if (::topHeaderBar.isInitialized) topHeaderBar to 0L else null,
+            if (::heroCardContainer.isInitialized) heroCardContainer to 65L else null,
+            if (::calendarCardContainer.isInitialized) calendarCardContainer to 130L else null
+        )
+
+        targets.forEach { (view, delay) ->
+            view.alpha = 0f
+            view.translationY = 18f
+            view.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setStartDelay(delay)
+                .setDuration(240L)
+                .setInterpolator(DecelerateInterpolator())
+                .start()
+        }
+    }
+
+    private fun animateTabReveal(target: View) {
+        target.alpha = 0f
+        target.translationY = 12f
+        target.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(180L)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
+    }
+
+    private fun animateCalendarGlide(direction: Int) {
+        if (!::calendarContainer.isInitialized) return
+        val offset = (28f * direction)
+        calendarContainer.alpha = 0.25f
+        calendarContainer.translationX = offset
+        calendarContainer.animate()
+            .alpha(1f)
+            .translationX(0f)
+            .setDuration(190L)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
+    }
+
+    private fun animateCellPop(view: View) {
+        view.animate()
+            .scaleX(0.9f)
+            .scaleY(0.9f)
+            .setDuration(75L)
+            .withEndAction {
+                view.animate()
+                    .scaleX(1.06f)
+                    .scaleY(1.06f)
+                    .setDuration(90L)
+                    .setInterpolator(OvershootInterpolator())
+                    .withEndAction {
+                        view.animate()
+                            .scaleX(1f)
+                            .scaleY(1f)
+                            .setDuration(80L)
+                            .start()
+                    }
+                    .start()
+            }
+            .start()
+    }
+
     // ==================== VIEW SWITCHERS, TABS & UNDO ====================
 
     private fun showAppLockScreen() {
+        appLockOverlay.alpha = 1f
         appLockOverlay.visibility = View.VISIBLE
         setupScroll.visibility = View.GONE
         mainScaffold.visibility = View.GONE
+        startLockScreenRunningAnimation()
     }
 
     private fun showSetupMode() {
+        stopLockScreenRunningAnimation()
         appLockOverlay.visibility = View.GONE
         setupNameInput.setText(store.getUserName())
         setupSsidInput.setText(store.getTargetSsids().joinToString(", "))
@@ -451,18 +642,22 @@ class MainActivity : AppCompatActivity() {
         setupQuarterAlertSwitch.isChecked = store.isQuarterPaceAlertEnabled()
         setupScroll.visibility = View.VISIBLE
         mainScaffold.visibility = View.GONE
-        refreshAllViews()
+        refreshAllViews(animateCharts = false)
     }
 
-    private fun showDashboardMode() {
+    private fun showDashboardMode(playEntrance: Boolean = false) {
+        stopLockScreenRunningAnimation()
         appLockOverlay.visibility = View.GONE
         setupScroll.visibility = View.GONE
         mainScaffold.visibility = View.VISIBLE
-        switchTab(activeTab)
-        refreshAllViews()
+        switchTab(activeTab, animate = false)
+        refreshAllViews(animateCharts = playEntrance)
+        if (playEntrance) {
+            playAppOpenEntranceAnimation()
+        }
     }
 
-    private fun switchTab(tab: ActiveTab) {
+    private fun switchTab(tab: ActiveTab, animate: Boolean = true) {
         activeTab = tab
         homeTabScroll.visibility = if (tab == ActiveTab.HOME) View.VISIBLE else View.GONE
         analyticsTabScroll.visibility = if (tab == ActiveTab.ANALYTICS) View.VISIBLE else View.GONE
@@ -471,13 +666,30 @@ class MainActivity : AppCompatActivity() {
         styleNavTab(navHomeBtn, tab == ActiveTab.HOME)
         styleNavTab(navAnalyticsBtn, tab == ActiveTab.ANALYTICS)
         styleNavTab(navSettingsBtn, tab == ActiveTab.SETTINGS)
-        refreshAllViews()
+
+        val activeScroll = when (tab) {
+            ActiveTab.HOME -> homeTabScroll
+            ActiveTab.ANALYTICS -> analyticsTabScroll
+            ActiveTab.SETTINGS -> settingsTabScroll
+        }
+        if (animate) {
+            animateTabReveal(activeScroll)
+        }
+        refreshAllViews(animateCharts = tab == ActiveTab.ANALYTICS)
     }
 
     private fun showUndoBanner(message: String, batch: Map<LocalDate, DayType>) {
         lastUndoBatch = batch
         undoBannerText.text = message
+        undoBannerRow.alpha = 0f
+        undoBannerRow.translationY = -12f
         undoBannerRow.visibility = View.VISIBLE
+        undoBannerRow.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(200L)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
     }
 
     private fun ensureEditUnlocked(): Boolean {
@@ -503,7 +715,7 @@ class MainActivity : AppCompatActivity() {
         if (!km.isDeviceSecure) {
             isEditUnlocked = true
             isAppAuthenticated = true
-            if (requestCode == REQ_UNLOCK_SETUP) showSetupMode() else showDashboardMode()
+            if (requestCode == REQ_UNLOCK_SETUP) showSetupMode() else showDashboardMode(playEntrance = true)
             showStatusPopup(true, "Unlocked (no device PIN/biometric set)")
             return
         }
@@ -516,11 +728,11 @@ class MainActivity : AppCompatActivity() {
         } else {
             isEditUnlocked = true
             isAppAuthenticated = true
-            if (requestCode == REQ_UNLOCK_SETUP) showSetupMode() else showDashboardMode()
+            if (requestCode == REQ_UNLOCK_SETUP) showSetupMode() else showDashboardMode(playEntrance = true)
         }
     }
 
-    // ==================== 1. FULL-APP LOCK OVERLAY ====================
+    // ==================== 1. FULL-APP LOCK OVERLAY WITH LIVE ANIMATION ====================
 
     private fun buildAppLockOverlay(): LinearLayout {
         return LinearLayout(this).apply {
@@ -530,11 +742,39 @@ class MainActivity : AppCompatActivity() {
             setPadding(48, 48, 48, 48)
             visibility = View.GONE
 
-            val lockIcon = TextView(this@MainActivity).apply {
+            val animStage = FrameLayout(this@MainActivity).apply {
+                layoutParams = LinearLayout.LayoutParams(190, 190).apply {
+                    gravity = Gravity.CENTER_HORIZONTAL
+                }
+            }
+
+            lockPulseRingView = View(this@MainActivity).apply {
+                layoutParams = FrameLayout.LayoutParams(156, 156).apply {
+                    gravity = Gravity.CENTER
+                }
+                background = roundedBox(
+                    if (isDark) "#312E81" else "#E0E7FF",
+                    "#4F46E5",
+                    999f,
+                    3
+                )
+                alpha = 0.35f
+            }
+
+            lockIconView = TextView(this@MainActivity).apply {
                 text = "🔒"
                 textSize = 48f
                 gravity = Gravity.CENTER
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    Gravity.CENTER
+                )
             }
+
+            animStage.addView(lockPulseRingView)
+            animStage.addView(lockIconView)
+
             val title = TextView(this@MainActivity).apply {
                 text = "WFO Tracker Locked"
                 textSize = 22f
@@ -554,7 +794,7 @@ class MainActivity : AppCompatActivity() {
                 promptDeviceCredential(REQ_UNLOCK_APP, "Unlock WFO Tracker")
             }
 
-            addView(lockIcon)
+            addView(animStage)
             addView(title)
             addView(sub)
             addView(unlockBtn)
@@ -567,7 +807,7 @@ class MainActivity : AppCompatActivity() {
         val scroll = ScrollView(this)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(36, 28, 36, 64)
+            setPadding(32, 24, 32, 64)
         }
         scroll.addView(root)
 
@@ -581,7 +821,7 @@ class MainActivity : AppCompatActivity() {
             text = "Personalize your profile, enable background permissions, and configure Wi-Fi or location tracking."
             textSize = 13f
             setTextColor(cTextSecondary())
-            setPadding(0, 6, 0, 20)
+            setPadding(0, 6, 0, 18)
         }
         root.addView(title)
         root.addView(subtitle)
@@ -617,7 +857,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(8, 10, 8, 4)
             setOnClickListener {
                 store.deleteProfilePhoto()
-                refreshAllViews()
+                refreshAllViews(animateCharts = false)
                 showStatusPopup(true, "Profile photo removed")
             }
         }
@@ -634,7 +874,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(cTextPrimary())
             setHintTextColor(cTextSecondary())
             setPadding(24, 20, 24, 20)
-            background = roundedBox(cInputBg(), cBorder(), 16f, 2)
+            background = roundedBox(cInputBg(), cBorder(), 16f, 1)
         }
         profileCard.addView(setupNameInput)
         addSpacer(profileCard, 12)
@@ -648,10 +888,10 @@ class MainActivity : AppCompatActivity() {
         }
         profileCard.addView(setupFullLockSwitch)
         root.addView(profileCard)
-        addSpacer(root, 20)
+        addSpacer(root, 16)
 
         val permCard = makeCardContainer()
-        permCard.addView(makeSectionTitle("2. Required System Permissions"))
+        permCard.addView(makeSectionTitle("2. Required System Permissions & Alarms"))
         addSpacer(permCard, 12)
 
         setupPermStatusView = TextView(this).apply { textSize = 13f; setPadding(0, 0, 0, 6) }
@@ -660,7 +900,7 @@ class MainActivity : AppCompatActivity() {
         }
         permCard.addView(setupPermStatusView)
         permCard.addView(btnGrantPerm)
-        addSpacer(permCard, 16)
+        addSpacer(permCard, 14)
 
         setupBgLocStatusView = TextView(this).apply { textSize = 13f; setPadding(0, 0, 0, 6) }
         val btnBgLoc = makePillButton("Set Location: \"Allow all the time\"", "#4F46E5", "#FFFFFF") {
@@ -668,7 +908,7 @@ class MainActivity : AppCompatActivity() {
         }
         permCard.addView(setupBgLocStatusView)
         permCard.addView(btnBgLoc)
-        addSpacer(permCard, 16)
+        addSpacer(permCard, 14)
 
         setupGpsStatusView = TextView(this).apply { textSize = 13f; setPadding(0, 0, 0, 6) }
         val btnGps = makePillButton("Turn ON Phone Location (GPS)", "#0284C7", "#FFFFFF") {
@@ -676,7 +916,15 @@ class MainActivity : AppCompatActivity() {
         }
         permCard.addView(setupGpsStatusView)
         permCard.addView(btnGps)
-        addSpacer(permCard, 16)
+        addSpacer(permCard, 14)
+
+        setupExactAlarmStatusView = TextView(this).apply { textSize = 13f; setPadding(0, 0, 0, 6) }
+        val btnExactAlarm = makePillButton("Check / Enable Exact Alarms", "#0284C7", "#FFFFFF") {
+            openExactAlarmSettings()
+        }
+        permCard.addView(setupExactAlarmStatusView)
+        permCard.addView(btnExactAlarm)
+        addSpacer(permCard, 14)
 
         setupBatteryStatusView = TextView(this).apply { textSize = 13f; setPadding(0, 0, 0, 6) }
         val btnBattery = makePillButton("Allow Unrestricted Battery", "#0284C7", "#FFFFFF") {
@@ -685,7 +933,7 @@ class MainActivity : AppCompatActivity() {
         permCard.addView(setupBatteryStatusView)
         permCard.addView(btnBattery)
         root.addView(permCard)
-        addSpacer(root, 20)
+        addSpacer(root, 16)
 
         val trackingCard = makeCardContainer()
         trackingCard.addView(makeSectionTitle("3. Office Wi-Fi & Geofence Location"))
@@ -714,7 +962,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(cTextPrimary())
             setHintTextColor(cTextSecondary())
             setPadding(24, 20, 24, 20)
-            background = roundedBox(cInputBg(), cBorder(), 16f, 2)
+            background = roundedBox(cInputBg(), cBorder(), 16f, 1)
         }
 
         setupLocationSummaryView = TextView(this).apply {
@@ -733,7 +981,7 @@ class MainActivity : AppCompatActivity() {
         trackingCard.addView(setupLocationSummaryView)
         trackingCard.addView(btnSelectLocSetup)
         root.addView(trackingCard)
-        addSpacer(root, 20)
+        addSpacer(root, 16)
 
         val policyCard = makeCardContainer()
         policyCard.addView(makeSectionTitle("4. Policy Rules & Notification Options"))
@@ -751,12 +999,12 @@ class MainActivity : AppCompatActivity() {
         }
         val minusBtn = makeSmallChipButton("− 5%") {
             store.setTargetPercent(store.getTargetPercent() - 5)
-            refreshAllViews()
+            refreshAllViews(animateCharts = false)
             showStatusPopup(true, "Mandate target set to ${store.getTargetPercent()}%")
         }
         val plusBtn = makeSmallChipButton("+ 5%") {
             store.setTargetPercent(store.getTargetPercent() + 5)
-            refreshAllViews()
+            refreshAllViews(animateCharts = false)
             showStatusPopup(true, "Mandate target set to ${store.getTargetPercent()}%")
         }
         pctRow.addView(setupTargetPctView)
@@ -839,7 +1087,7 @@ class MainActivity : AppCompatActivity() {
         policyCard.addView(setupTargetBufferAlertSwitch)
         policyCard.addView(setupQuarterAlertSwitch)
         root.addView(policyCard)
-        addSpacer(root, 20)
+        addSpacer(root, 16)
 
         val backupSetupCard = makeCardContainer()
         backupSetupCard.addView(makeSectionTitle("5. Auto-Backup Folder (Local or Drive)"))
@@ -854,7 +1102,7 @@ class MainActivity : AppCompatActivity() {
         backupSetupCard.addView(setupBackupFolderStatusView)
         backupSetupCard.addView(pickFolderBtn)
         root.addView(backupSetupCard)
-        addSpacer(root, 24)
+        addSpacer(root, 20)
 
         val saveFinishBtn = makePillButton("✅ Save Settings & Start Auto-Tracker", "#10B981", "#FFFFFF") {
             store.setUserName(setupNameInput.text.toString())
@@ -874,7 +1122,7 @@ class MainActivity : AppCompatActivity() {
             isEditUnlocked = false
             isAppAuthenticated = true
             syncBackgroundAndWidget()
-            showDashboardMode()
+            showDashboardMode(playEntrance = true)
             showStatusPopup(true, "Settings saved & dashboard locked")
         }
         root.addView(saveFinishBtn)
@@ -893,7 +1141,7 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
-        val topBar = LinearLayout(this).apply {
+        topHeaderBar = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(28, 20, 28, 12)
         }
@@ -925,12 +1173,13 @@ class MainActivity : AppCompatActivity() {
         greetingCol.addView(dashServiceStatusView)
 
         checkNowBtn = makeSmallChipButton("🔄") {
+            checkNowBtn.animate().rotationBy(360f).setDuration(450L).setInterpolator(DecelerateInterpolator()).start()
             triggerManualCheckNow()
         }
         lockToggleBtn = makeSmallChipButton("🔒") {
             if (isEditUnlocked) {
                 isEditUnlocked = false
-                refreshAllViews()
+                refreshAllViews(animateCharts = false)
                 showStatusPopup(true, "Dashboard locked")
             } else {
                 promptDeviceCredential(REQ_UNLOCK_EDIT, "Unlock Edit Mode")
@@ -942,20 +1191,20 @@ class MainActivity : AppCompatActivity() {
         profileHeader.addView(checkNowBtn)
         addHorizontalGap(profileHeader, 6)
         profileHeader.addView(lockToggleBtn)
-        topBar.addView(profileHeader)
+        topHeaderBar.addView(profileHeader)
 
         todayLiveStripView = TextView(this).apply {
             textSize = 13f
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
-            setPadding(18, 12, 18, 12)
+            setPadding(18, 14, 18, 14)
         }
-        topBar.addView(todayLiveStripView)
+        topHeaderBar.addView(todayLiveStripView)
 
         undoBannerRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = roundedBox("#1E293B", "#4F46E5", 14f, 2)
+            background = roundedBox("#1E293B", "#4F46E5", 16f, 2)
             setPadding(20, 12, 16, 12)
             visibility = View.GONE
             layoutParams = LinearLayout.LayoutParams(
@@ -981,7 +1230,7 @@ class MainActivity : AppCompatActivity() {
                     lastUndoBatch = emptyMap()
                     undoBannerRow.visibility = View.GONE
                     syncBackgroundAndWidget()
-                    refreshAllViews()
+                    refreshAllViews(animateCharts = true)
                     showStatusPopup(true, "Action undone")
                 }
             }
@@ -999,9 +1248,9 @@ class MainActivity : AppCompatActivity() {
         undoBannerRow.addView(undoBannerText)
         undoBannerRow.addView(undoActionBtn)
         undoBannerRow.addView(dismissUndoBtn)
-        topBar.addView(undoBannerRow)
+        topHeaderBar.addView(undoBannerRow)
 
-        scaffold.addView(topBar)
+        scaffold.addView(topHeaderBar)
 
         val tabContentHost = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(
@@ -1021,7 +1270,7 @@ class MainActivity : AppCompatActivity() {
 
         val bottomNav = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            background = roundedBox(cCardHex(), cBorder(), 0f, 2)
+            background = roundedBox(cCardHex(), cBorder(), 0f, 1)
             setPadding(16, 12, 16, 12)
         }
         navHomeBtn = makeNavTabButton("📅 Home") { switchTab(ActiveTab.HOME) }
@@ -1056,7 +1305,8 @@ class MainActivity : AppCompatActivity() {
         }
         val prevBtn = makeSmallChipButton("◀") {
             selectedMonth = selectedMonth.minusMonths(1)
-            refreshAllViews()
+            refreshAllViews(animateCharts = true)
+            animateCalendarGlide(-1)
         }
         monthTitleView = TextView(this).apply {
             textSize = 19f
@@ -1067,11 +1317,13 @@ class MainActivity : AppCompatActivity() {
         }
         todayJumpBtn = makeSmallChipButton("Today") {
             selectedMonth = YearMonth.now()
-            refreshAllViews()
+            refreshAllViews(animateCharts = true)
+            animateCalendarGlide(1)
         }
         val nextBtn = makeSmallChipButton("▶") {
             selectedMonth = selectedMonth.plusMonths(1)
-            refreshAllViews()
+            refreshAllViews(animateCharts = true)
+            animateCalendarGlide(1)
         }
         navRow.addView(prevBtn)
         navRow.addView(monthTitleView)
@@ -1098,7 +1350,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(weeklyPacePillView)
         addSpacer(root, 16)
 
-        val heroCard = makeCardContainer()
+        heroCardContainer = makeCardContainer()
         circularRingView = CircularProgressRingView(this).apply {
             layoutParams = LinearLayout.LayoutParams(340, 340).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
@@ -1117,10 +1369,10 @@ class MainActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             setPadding(0, 0, 0, 12)
         }
-        heroCard.addView(circularRingView)
-        heroCard.addView(heroSubView)
-        heroCard.addView(heroProjectedView)
-        addSpacer(heroCard, 12)
+        heroCardContainer.addView(circularRingView)
+        heroCardContainer.addView(heroSubView)
+        heroCardContainer.addView(heroProjectedView)
+        addSpacer(heroCardContainer, 12)
 
         val kpiRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1133,11 +1385,11 @@ class MainActivity : AppCompatActivity() {
         kpiRow.addView(kpiWorkingView)
         kpiRow.addView(kpiRemainingView)
         kpiRow.addView(kpiBufferView)
-        heroCard.addView(kpiRow)
-        root.addView(heroCard)
+        heroCardContainer.addView(kpiRow)
+        root.addView(heroCardContainer)
         addSpacer(root, 16)
 
-        val calCard = makeCardContainer()
+        calendarCardContainer = makeCardContainer()
         val calHeaderRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -1148,9 +1400,10 @@ class MainActivity : AppCompatActivity() {
         autoPlanBtn = makeSmallChipButton("✨ Auto-Plan") {
             if (!ensureEditUnlocked()) return@makeSmallChipButton
             autoPlanBtn.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            animateCellPop(autoPlanBtn)
             val modified = store.autoPlanRemainingDaysForMonth(selectedMonth)
             syncBackgroundAndWidget()
-            refreshAllViews()
+            refreshAllViews(animateCharts = true)
             if (modified.isNotEmpty()) {
                 showUndoBanner("Auto-planned ${modified.size} office day(s)", modified)
                 showStatusPopup(true, "Auto-planned ${modified.size} office day(s)")
@@ -1160,7 +1413,7 @@ class MainActivity : AppCompatActivity() {
         }
         calHeaderRow.addView(calTitle)
         calHeaderRow.addView(autoPlanBtn)
-        calCard.addView(calHeaderRow)
+        calendarCardContainer.addView(calHeaderRow)
 
         val calHint = TextView(this).apply {
             text = "Swipe left/right for months • Tap when locked to inspect • Unlock 🔒 to mark:"
@@ -1168,16 +1421,16 @@ class MainActivity : AppCompatActivity() {
             setTextColor(cTextSecondary())
             setPadding(0, 6, 0, 12)
         }
-        calCard.addView(calHint)
+        calendarCardContainer.addView(calHint)
 
         val modeRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, 0, 0, 14)
         }
-        modeOfficeBtn = makeModeChip("🏢 Office") { activeTapMode = DayType.OFFICE; refreshAllViews() }
-        modePlannedBtn = makeModeChip("📅 Plan") { activeTapMode = DayType.PLANNED; refreshAllViews() }
-        modeLeaveBtn = makeModeChip("🌴 Leave") { activeTapMode = DayType.LEAVE; refreshAllViews() }
-        modeHolidayBtn = makeModeChip("🎉 Holiday") { activeTapMode = DayType.HOLIDAY; refreshAllViews() }
+        modeOfficeBtn = makeModeChip("🏢 Office") { activeTapMode = DayType.OFFICE; refreshAllViews(animateCharts = false) }
+        modePlannedBtn = makeModeChip("📅 Plan") { activeTapMode = DayType.PLANNED; refreshAllViews(animateCharts = false) }
+        modeLeaveBtn = makeModeChip("🌴 Leave") { activeTapMode = DayType.LEAVE; refreshAllViews(animateCharts = false) }
+        modeHolidayBtn = makeModeChip("🎉 Holiday") { activeTapMode = DayType.HOLIDAY; refreshAllViews(animateCharts = false) }
 
         modeRow.addView(modeOfficeBtn)
         addHorizontalGap(modeRow, 6)
@@ -1186,7 +1439,7 @@ class MainActivity : AppCompatActivity() {
         modeRow.addView(modeLeaveBtn)
         addHorizontalGap(modeRow, 6)
         modeRow.addView(modeHolidayBtn)
-        calCard.addView(modeRow)
+        calendarCardContainer.addView(modeRow)
 
         val swipeDetector = GestureDetector(
             this,
@@ -1201,8 +1454,10 @@ class MainActivity : AppCompatActivity() {
                     val dx = e2.x - e1.x
                     val dy = e2.y - e1.y
                     if (abs(dx) > abs(dy) && abs(dx) > 100 && abs(velocityX) > 100) {
+                        val dir = if (dx < 0) 1 else -1
                         selectedMonth = if (dx < 0) selectedMonth.plusMonths(1) else selectedMonth.minusMonths(1)
-                        refreshAllViews()
+                        refreshAllViews(animateCharts = true)
+                        animateCalendarGlide(dir)
                         return true
                     }
                     return false
@@ -1221,7 +1476,7 @@ class MainActivity : AppCompatActivity() {
         }.apply {
             orientation = LinearLayout.VERTICAL
         }
-        calCard.addView(calendarContainer)
+        calendarCardContainer.addView(calendarContainer)
 
         val legendView = TextView(this).apply {
             text = "🟢 Office   •   🔵 Dashed Planned   •   🟠 Leave   •   🟣 Holiday"
@@ -1230,8 +1485,8 @@ class MainActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             setPadding(0, 12, 0, 0)
         }
-        calCard.addView(legendView)
-        root.addView(calCard)
+        calendarCardContainer.addView(legendView)
+        root.addView(calendarCardContainer)
         addSpacer(root, 16)
 
         val logCard = makeCardContainer()
@@ -1242,10 +1497,10 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, 0, 0, 10)
         }
-        filterAllBtn = makeModeChip("All") { activeLogFilter = LogFilter.ALL; refreshAllViews() }
-        filterOfficeBtn = makeModeChip("Office") { activeLogFilter = LogFilter.OFFICE; refreshAllViews() }
-        filterPlannedBtn = makeModeChip("Planned") { activeLogFilter = LogFilter.PLANNED; refreshAllViews() }
-        filterLeaveHolBtn = makeModeChip("Leave/Hol") { activeLogFilter = LogFilter.LEAVE_HOLIDAY; refreshAllViews() }
+        filterAllBtn = makeModeChip("All") { activeLogFilter = LogFilter.ALL; refreshAllViews(animateCharts = false) }
+        filterOfficeBtn = makeModeChip("Office") { activeLogFilter = LogFilter.OFFICE; refreshAllViews(animateCharts = false) }
+        filterPlannedBtn = makeModeChip("Planned") { activeLogFilter = LogFilter.PLANNED; refreshAllViews(animateCharts = false) }
+        filterLeaveHolBtn = makeModeChip("Leave/Hol") { activeLogFilter = LogFilter.LEAVE_HOLIDAY; refreshAllViews(animateCharts = false) }
 
         filterRow.addView(filterAllBtn)
         addHorizontalGap(filterRow, 6)
@@ -1344,11 +1599,11 @@ class MainActivity : AppCompatActivity() {
         }
         val leaveMinus = makeSmallChipButton("−") {
             simLeaves = maxOf(0, simLeaves - 1)
-            refreshAllViews()
+            refreshAllViews(animateCharts = false)
         }
         val leavePlus = makeSmallChipButton("+") {
             simLeaves = minOf(15, simLeaves + 1)
-            refreshAllViews()
+            refreshAllViews(animateCharts = false)
         }
         simLeaveRow.addView(simLeaveCountView)
         simLeaveRow.addView(leaveMinus)
@@ -1369,11 +1624,11 @@ class MainActivity : AppCompatActivity() {
         }
         val holMinus = makeSmallChipButton("−") {
             simHolidays = maxOf(0, simHolidays - 1)
-            refreshAllViews()
+            refreshAllViews(animateCharts = false)
         }
         val holPlus = makeSmallChipButton("+") {
             simHolidays = minOf(15, simHolidays + 1)
-            refreshAllViews()
+            refreshAllViews(animateCharts = false)
         }
         simHolRow.addView(simHolidayCountView)
         simHolRow.addView(holMinus)
@@ -1436,21 +1691,21 @@ class MainActivity : AppCompatActivity() {
             if (!ensureEditUnlocked()) return@makeModeChip
             store.setTrackingMode(TrackingMode.WIFI_ONLY)
             syncBackgroundAndWidget()
-            refreshAllViews()
+            refreshAllViews(animateCharts = false)
             showStatusPopup(true, "Tracking mode set to Wi-Fi Only")
         }
         modeLocOnlyBtn = makeModeChip("📍 Location") {
             if (!ensureEditUnlocked()) return@makeModeChip
             store.setTrackingMode(TrackingMode.LOCATION_ONLY)
             syncBackgroundAndWidget()
-            refreshAllViews()
+            refreshAllViews(animateCharts = false)
             showStatusPopup(true, "Tracking mode set to Location Only")
         }
         modeBothBtn = makeModeChip("📶+📍 Both") {
             if (!ensureEditUnlocked()) return@makeModeChip
             store.setTrackingMode(TrackingMode.BOTH)
             syncBackgroundAndWidget()
-            refreshAllViews()
+            refreshAllViews(animateCharts = false)
             showStatusPopup(true, "Tracking mode set to Wi-Fi + Location")
         }
         modeSelectorRow.addView(modeWifiOnlyBtn)
@@ -1504,6 +1759,23 @@ class MainActivity : AppCompatActivity() {
         root.addView(locationSectionCard)
         addSpacer(root, 16)
 
+        // Priority-Ordered Preferred Weekdays Card
+        val priorityCard = makeCardContainer()
+        priorityCard.addView(makeSectionTitle("Auto-Plan Preferred Weekdays (Priority Order)"))
+        val prioHint = TextView(this).apply {
+            text = "Tap a weekday to assign/cycle its priority badge (1, 2, 3...) for ✨ Auto-Plan:"
+            textSize = 12f
+            setTextColor(cTextSecondary())
+            setPadding(0, 6, 0, 10)
+        }
+        priorityCard.addView(prioHint)
+        priorityWeekdaysContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        priorityCard.addView(priorityWeekdaysContainer)
+        root.addView(priorityCard)
+        addSpacer(root, 16)
+
         wifiSectionCard = makeCardContainer()
         wifiSectionCard.addView(makeSectionTitle("Office Wi-Fi Auto-Detection"))
         currentWifiView = TextView(this).apply {
@@ -1527,7 +1799,7 @@ class MainActivity : AppCompatActivity() {
             } else {
                 val added = store.addTargetSsid(liveSsid)
                 syncBackgroundAndWidget()
-                refreshAllViews()
+                refreshAllViews(animateCharts = false)
                 if (added) {
                     showStatusPopup(true, "Added '$liveSsid' to office Wi-Fi list")
                 } else {
@@ -1548,7 +1820,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(cTextPrimary())
             setHintTextColor(cTextSecondary())
             setPadding(20, 18, 20, 18)
-            background = roundedBox(cInputBg(), cBorder(), 16f, 2)
+            background = roundedBox(cInputBg(), cBorder(), 16f, 1)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         val addManualSsidBtn = makeSmallChipButton("+ Add") {
@@ -1561,7 +1833,7 @@ class MainActivity : AppCompatActivity() {
             typed.split(",").forEach { store.addTargetSsid(it) }
             ssidInput.setText("")
             syncBackgroundAndWidget()
-            refreshAllViews()
+            refreshAllViews(animateCharts = false)
             showStatusPopup(true, "Saved Wi-Fi SSID")
         }
         manualWifiRow.addView(ssidInput)
@@ -1572,8 +1844,22 @@ class MainActivity : AppCompatActivity() {
         addSpacer(root, 16)
 
         val notifCard = makeCardContainer()
-        notifCard.addView(makeSectionTitle("Notification Preferences"))
-        addSpacer(notifCard, 6)
+        notifCard.addView(makeSectionTitle("Notifications & Exact Alarm Status"))
+        addSpacer(notifCard, 8)
+
+        settingsExactAlarmStatusView = TextView(this).apply {
+            textSize = 12f
+            setTypeface(null, Typeface.BOLD)
+            setPadding(16, 12, 16, 12)
+        }
+        notifCard.addView(settingsExactAlarmStatusView)
+        addSpacer(notifCard, 8)
+
+        val openAlarmBtn = makeSmallChipButton("⏰ Check / Open Exact Alarm Settings") {
+            openExactAlarmSettings()
+        }
+        notifCard.addView(openAlarmBtn)
+        addSpacer(notifCard, 8)
 
         notifConnectSwitch = makeSettingsSwitch("Connect Alert (Day Captured)") { checked ->
             store.setConnectAlertEnabled(checked)
@@ -1609,13 +1895,53 @@ class MainActivity : AppCompatActivity() {
         root.addView(notifCard)
         addSpacer(root, 16)
 
+        // Upcoming Holidays & Leaves Manager + Bulk Importer
         val holidayCard = makeCardContainer()
-        holidayCard.addView(makeSectionTitle("Bulk Holiday Importer"))
+        val holHeaderRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val holTitle = makeSectionTitle("Upcoming Holidays & Leaves").apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val clearUpcomingBtn = makeSmallChipButton("Clear Upcoming") {
+            if (!ensureEditUnlocked()) return@makeSmallChipButton
+            val removedBatch = store.clearUpcomingHolidaysAndLeaves()
+            if (removedBatch.isNotEmpty()) {
+                syncBackgroundAndWidget()
+                refreshAllViews(animateCharts = true)
+                showUndoBanner("Cleared ${removedBatch.size} upcoming entry(s)", removedBatch)
+                showStatusPopup(true, "Cleared ${removedBatch.size} upcoming holiday/leave entry(s)")
+            } else {
+                showStatusPopup(false, "No upcoming holidays or leaves to clear")
+            }
+        }
+        holHeaderRow.addView(holTitle)
+        holHeaderRow.addView(clearUpcomingBtn)
+        holidayCard.addView(holHeaderRow)
+
+        upcomingHolLeaveSummaryView = TextView(this).apply {
+            textSize = 12f
+            setTypeface(null, Typeface.BOLD)
+            setPadding(14, 8, 14, 8)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 8, 0, 10) }
+        }
+        holidayCard.addView(upcomingHolLeaveSummaryView)
+
+        upcomingHolLeaveListView = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        holidayCard.addView(upcomingHolLeaveListView)
+        addSpacer(holidayCard, 10)
+
         val holHint = TextView(this).apply {
             text = "Import an .ics calendar file or CSV (YYYY-MM-DD,Holiday Name) to mark holidays across the year."
             textSize = 12f
             setTextColor(cTextSecondary())
-            setPadding(0, 6, 0, 12)
+            setPadding(0, 2, 0, 10)
         }
         val importHolBtn = makePillButton("🎉 Import Holidays (.ics / CSV)", "#8B5CF6", "#FFFFFF") {
             if (!ensureEditUnlocked()) return@makePillButton
@@ -1701,6 +2027,119 @@ class MainActivity : AppCompatActivity() {
         if (::radius1500Btn.isInitialized) styleModeChip(radius1500Btn, radius == 1500, "#0284C7")
     }
 
+    private fun renderPriorityWeekdays() {
+        if (!::priorityWeekdaysContainer.isInitialized) return
+        priorityWeekdaysContainer.removeAllViews()
+        val ordered = store.getPreferredWeekdaysPriority()
+        val weekdays = listOf(
+            DayOfWeek.MONDAY to "Mon",
+            DayOfWeek.TUESDAY to "Tue",
+            DayOfWeek.WEDNESDAY to "Wed",
+            DayOfWeek.THURSDAY to "Thu",
+            DayOfWeek.FRIDAY to "Fri"
+        )
+        weekdays.forEachIndexed { idx, (dow, shortLabel) ->
+            val rankIndex = ordered.indexOf(dow)
+            val label = if (rankIndex >= 0) "${rankIndex + 1} • $shortLabel" else shortLabel
+            val chip = makeModeChip(label) {
+                if (!ensureEditUnlocked()) return@makeModeChip
+                store.cycleWeekdayPriority(dow)
+                refreshAllViews(animateCharts = false)
+                val updatedOrder = store.getPreferredWeekdaysPriority()
+                val newIdx = updatedOrder.indexOf(dow)
+                if (newIdx >= 0) {
+                    showStatusPopup(true, "$shortLabel set to priority #${newIdx + 1}")
+                } else {
+                    showStatusPopup(true, "$shortLabel removed from priority list")
+                }
+            }
+            styleModeChip(chip, rankIndex >= 0, "#4F46E5")
+            priorityWeekdaysContainer.addView(chip)
+            if (idx < weekdays.lastIndex) addHorizontalGap(priorityWeekdaysContainer, 5)
+        }
+    }
+
+    private fun renderUpcomingHolidaysAndLeaves() {
+        if (!::upcomingHolLeaveSummaryView.isInitialized || !::upcomingHolLeaveListView.isInitialized) return
+        val items = store.getUpcomingHolidaysAndLeaves()
+        val holCount = items.count { it.type == DayType.HOLIDAY }
+        val leaveCount = items.count { it.type == DayType.LEAVE }
+
+        upcomingHolLeaveSummaryView.text = "🎉 $holCount Upcoming Holiday(s)   •   🌴 $leaveCount Upcoming Leave(s)"
+        upcomingHolLeaveSummaryView.setTextColor(
+            if (isDark) Color.parseColor("#E2E8F0") else Color.parseColor("#1E293B")
+        )
+        upcomingHolLeaveSummaryView.background = roundedBox(
+            if (isDark) "#0F172A" else "#F8FAFC",
+            cBorder(),
+            12f,
+            1
+        )
+
+        upcomingHolLeaveListView.removeAllViews()
+        if (items.isEmpty()) {
+            val emptyTv = TextView(this).apply {
+                text = "No upcoming holidays or leaves marked."
+                textSize = 12f
+                setTextColor(cTextSecondary())
+                setPadding(4, 2, 4, 8)
+            }
+            upcomingHolLeaveListView.addView(emptyTv)
+            return
+        }
+
+        val capped = items.take(8)
+        capped.forEach { entry ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                background = roundedBox(cInputBg(), cBorder(), 14f, 1)
+                setPadding(16, 10, 12, 10)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(0, 0, 0, 6) }
+            }
+            val icon = if (entry.type == DayType.HOLIDAY) "🎉" else "🌴"
+            val labelTv = TextView(this).apply {
+                text = "$icon ${entry.dateStr} (${entry.dayOfWeekShort}) • ${entry.detail}"
+                textSize = 12f
+                setTextColor(cTextPrimary())
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            val delBtn = TextView(this).apply {
+                text = "✕"
+                textSize = 14f
+                setTypeface(null, Typeface.BOLD)
+                setTextColor(Color.parseColor("#EF4444"))
+                setPadding(14, 4, 6, 4)
+                setOnClickListener {
+                    if (!ensureEditUnlocked()) return@setOnClickListener
+                    val parsedDate = runCatching { LocalDate.parse(entry.dateStr) }.getOrNull() ?: return@setOnClickListener
+                    val prevType = store.getDayType(parsedDate)
+                    store.setExplicitDayType(parsedDate, DayType.NONE)
+                    syncBackgroundAndWidget()
+                    refreshAllViews(animateCharts = true)
+                    showUndoBanner("Removed ${entry.dateStr}", mapOf(parsedDate to prevType))
+                    showStatusPopup(true, "Removed ${entry.dateStr}")
+                }
+            }
+            row.addView(labelTv)
+            row.addView(delBtn)
+            upcomingHolLeaveListView.addView(row)
+        }
+
+        if (items.size > capped.size) {
+            val moreTv = TextView(this).apply {
+                text = "+ ${items.size - capped.size} more upcoming entry(s) in calendar"
+                textSize = 11f
+                setTextColor(cTextSecondary())
+                setPadding(4, 2, 4, 6)
+            }
+            upcomingHolLeaveListView.addView(moreTv)
+        }
+    }
+
     private fun makeSettingsSwitch(label: String, onToggle: (Boolean) -> Unit): Switch {
         return Switch(this).apply {
             text = label
@@ -1715,7 +2154,7 @@ class MainActivity : AppCompatActivity() {
                     return@setOnCheckedChangeListener
                 }
                 onToggle(checked)
-                refreshAllViews()
+                refreshAllViews(animateCharts = false)
             }
         }
     }
@@ -1724,7 +2163,7 @@ class MainActivity : AppCompatActivity() {
         if (!ensureEditUnlocked()) return
         store.setGeofenceRadiusMeters(meters)
         syncBackgroundAndWidget()
-        refreshAllViews()
+        refreshAllViews(animateCharts = false)
         showStatusPopup(true, "Geofence radius updated to ${meters}m")
     }
 
@@ -1782,7 +2221,7 @@ class MainActivity : AppCompatActivity() {
             if (matches.isEmpty()) {
                 showStatusPopup(false, "No matching location found for '$query'")
             } else {
-                matches.forEach { addr: Address ->
+                matches.forEachIndexed { i, addr: Address ->
                     val titleText = addr.featureName
                         ?.takeIf { it.isNotBlank() && !it.all { ch -> ch.isDigit() } }
                         ?: addr.locality
@@ -1792,7 +2231,7 @@ class MainActivity : AppCompatActivity() {
                         .joinToString(", ")
                         .ifEmpty { String.format(Locale.US, "%.5f, %.5f", addr.latitude, addr.longitude) }
 
-                    val resultBtn = makeSmallChipButton("📌 $titleText — $lineAddr") {
+                    val resultBtn = makeSmallChipButton("📌 $lineAddr") {
                         val chosenRadius = store.getGeofenceRadiusMeters()
                         store.setOfficeLocation(titleText, addr.latitude, addr.longitude, chosenRadius)
                         nameInput.setText(titleText)
@@ -1800,17 +2239,27 @@ class MainActivity : AppCompatActivity() {
                             String.format(Locale.US, "%.6f, %.6f", addr.latitude, addr.longitude)
                         )
                         syncBackgroundAndWidget()
-                        refreshAllViews()
-                        showStatusPopup(true, "Selected '$titleText' (${chosenRadius}m)")
+                        refreshAllViews(animateCharts = false)
+                        showStatusPopup(true, "Saved '$titleText' (${chosenRadius}m)")
                     }.apply {
+                        gravity = Gravity.START
+                        setLineSpacing(4f, 1.0f)
+                        alpha = 0f
+                        translationY = 10f
                         layoutParams = LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.MATCH_PARENT,
                             LinearLayout.LayoutParams.WRAP_CONTENT
                         ).apply { setMargins(0, 0, 0, 8) }
+                        animate()
+                            .alpha(1f)
+                            .translationY(0f)
+                            .setStartDelay((i * 45).toLong())
+                            .setDuration(180L)
+                            .start()
                     }
                     searchResultsBox.addView(resultBtn)
                 }
-                showStatusPopup(true, "Found ${matches.size} match(es) — tap one to apply")
+                showStatusPopup(true, "Found ${matches.size} match(es) — tap one to save")
             }
         }
         container.addView(searchByNameBtn)
@@ -1832,11 +2281,17 @@ class MainActivity : AppCompatActivity() {
         val saveManualBtn = makePillButton("💾 Save Name & Coordinates", "#0284C7", "#FFFFFF") {
             val rawCoord = coordOrLinkInput.text.toString().trim()
             val parsed = parseLatLng(rawCoord)
-            if (parsed == null) {
-                showStatusPopup(false, "Enter valid 'lat, lng' or paste a Maps link with coordinates")
+            val coords = parsed ?: if (rawCoord.isEmpty() && store.hasOfficeLocationConfigured()) {
+                store.getOfficeLat() to store.getOfficeLng()
+            } else {
+                null
+            }
+
+            if (coords == null) {
+                showStatusPopup(false, "Tap a search result above, use GPS, or enter 'lat, lng'")
                 return@makePillButton
             }
-            val (lat, lng) = parsed
+            val (lat, lng) = coords
             val enteredName = nameInput.text.toString().trim()
             val finalName = if (enteredName.isNotEmpty()) {
                 enteredName
@@ -1844,8 +2299,9 @@ class MainActivity : AppCompatActivity() {
                 resolvePlaceNameFromCoordinates(lat, lng)
             }
             store.setOfficeLocation(finalName, lat, lng, store.getGeofenceRadiusMeters())
+            coordOrLinkInput.setText(String.format(Locale.US, "%.6f, %.6f", lat, lng))
             syncBackgroundAndWidget()
-            refreshAllViews()
+            refreshAllViews(animateCharts = false)
             showStatusPopup(true, "Saved location '$finalName'")
         }
         container.addView(saveManualBtn)
@@ -1901,7 +2357,7 @@ class MainActivity : AppCompatActivity() {
                 store.setGeofenceRadiusMeters(meters)
                 refreshDialogRadiusChips()
                 syncBackgroundAndWidget()
-                refreshAllViews()
+                refreshAllViews(animateCharts = false)
                 showStatusPopup(true, "Geofence range set to ${meters}m")
             }
         }
@@ -1956,7 +2412,7 @@ class MainActivity : AppCompatActivity() {
         val currentRadius = store.getGeofenceRadiusMeters()
         store.setOfficeLocation(resolvedName, loc.latitude, loc.longitude, currentRadius)
         syncBackgroundAndWidget()
-        refreshAllViews()
+        refreshAllViews(animateCharts = false)
         showStatusPopup(true, "Location set to '$resolvedName' (${currentRadius}m)")
         return true
     }
@@ -2029,7 +2485,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         syncBackgroundAndWidget()
-        refreshAllViews()
+        refreshAllViews(animateCharts = true)
         if (logged) {
             showStatusPopup(true, "Office presence verified & refreshed")
         } else {
@@ -2039,11 +2495,12 @@ class MainActivity : AppCompatActivity() {
 
     // ==================== 4. REFRESH LOGIC ====================
 
-    private fun refreshAllViews() {
+    private fun refreshAllViews(animateCharts: Boolean = false) {
         val locOk = hasLocationPermission()
         val notifOk = hasNotificationPermission()
         val bgLocOk = hasBackgroundLocationPermission()
         val gpsOk = isSystemLocationEnabled()
+        val alarmOk = canScheduleExactAlarms()
         val batOk = isBatteryUnrestricted()
         val liveSsid = getConnectedWifiSsid()
         val targetPct = store.getTargetPercent()
@@ -2073,6 +2530,26 @@ class MainActivity : AppCompatActivity() {
             "⚠️ Phone Location (GPS) Switch: OFF (Android hides Wi-Fi if OFF)"
         }
         setupGpsStatusView.setTextColor(Color.parseColor(if (gpsOk) "#10B981" else "#EF4444"))
+
+        val alarmLabel = if (alarmOk) {
+            "✅ Exact Alarms: Ready (On-Time Reminders)"
+        } else {
+            "⚠️ Exact Alarms: Action Required (May Be Delayed)"
+        }
+        val alarmColor = Color.parseColor(if (alarmOk) "#10B981" else "#F59E0B")
+        setupExactAlarmStatusView.text = alarmLabel
+        setupExactAlarmStatusView.setTextColor(alarmColor)
+
+        if (::settingsExactAlarmStatusView.isInitialized) {
+            settingsExactAlarmStatusView.text = alarmLabel
+            settingsExactAlarmStatusView.setTextColor(alarmColor)
+            settingsExactAlarmStatusView.background = roundedBox(
+                if (alarmOk) (if (isDark) "#064E3B" else "#ECFDF5") else (if (isDark) "#451A03" else "#FFFBEB"),
+                if (alarmOk) "#10B981" else "#F59E0B",
+                12f,
+                1
+            )
+        }
 
         setupBatteryStatusView.text = if (batOk) {
             "✅ Background Battery: Unrestricted"
@@ -2203,25 +2680,25 @@ class MainActivity : AppCompatActivity() {
             s.remainingDays == 0 -> {
                 paceBannerView.text = "🎉 ${s.targetPercent}% Target Met! (${s.attendedDays}/${s.requiredDays} days) — Safe to WFH"
                 paceBannerView.setTextColor(Color.parseColor("#065F46"))
-                paceBannerView.background = roundedBox("#D1FAE5", "#6EE7B7", 18f)
+                paceBannerView.background = roundedBox("#D1FAE5", "#6EE7B7", 18f, 1)
                 progressColorHex = "#10B981"
             }
             s.bufferDays < 0 -> {
                 paceBannerView.text = "⚠️ Shortfall: Need ${s.remainingDays} day(s), only ${s.availableWeekdaysLeft} working day(s) left"
                 paceBannerView.setTextColor(Color.parseColor("#991B1B"))
-                paceBannerView.background = roundedBox("#FEE2E2", "#FCA5A5", 18f)
+                paceBannerView.background = roundedBox("#FEE2E2", "#FCA5A5", 18f, 1)
                 progressColorHex = "#EF4444"
             }
             s.bufferDays == 0 -> {
                 paceBannerView.text = "🚨 Zero Buffer: Attend all ${s.availableWeekdaysLeft} remaining working day(s)!"
                 paceBannerView.setTextColor(Color.parseColor("#991B1B"))
-                paceBannerView.background = roundedBox("#FEE2E2", "#FCA5A5", 18f)
+                paceBannerView.background = roundedBox("#FEE2E2", "#FCA5A5", 18f, 1)
                 progressColorHex = "#EF4444"
             }
             else -> {
                 paceBannerView.text = "On Track • ${s.bufferDays} WFH buffer day(s) left this month"
                 paceBannerView.setTextColor(Color.parseColor("#92400E"))
-                paceBannerView.background = roundedBox("#FEF3C7", "#FCD34D", 18f)
+                paceBannerView.background = roundedBox("#FEF3C7", "#FCD34D", 18f, 1)
                 progressColorHex = "#4F46E5"
             }
         }
@@ -2245,7 +2722,8 @@ class MainActivity : AppCompatActivity() {
             required = s.requiredDays,
             actualPct = s.actualPercent,
             accentColorHex = progressColorHex,
-            isDark = isDark
+            isDark = isDark,
+            animate = animateCharts
         )
         heroSubView.text = "${s.actualPercent}% of ${s.effectiveWorkingDays} working days (${s.targetPercent}% mandate)"
 
@@ -2299,7 +2777,7 @@ class MainActivity : AppCompatActivity() {
         val q = store.getQuarterStats(selectedMonth)
         val r = store.getRhythmStats()
         val trends = store.getMultiMonthTrend(selectedMonth, 6)
-        trendChartView.setData(trends, isDark)
+        trendChartView.setData(trends, isDark, animate = animateCharts)
 
         qtdTitleView.text = "${q.quarterLabel} Rollup"
         qtdDetailView.text =
@@ -2375,6 +2853,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         syncRadiusChipHighlights()
+        renderPriorityWeekdays()
+        renderUpcomingHolidaysAndLeaves()
 
         notifConnectSwitch.isChecked = store.isConnectAlertEnabled()
         notifDisconnectSwitch.isChecked = store.isDisconnectAlertEnabled()
@@ -2413,7 +2893,7 @@ class MainActivity : AppCompatActivity() {
                     if (isDark) "#1E293B" else "#EFF6FF",
                     if (isDark) "#334155" else "#BFDBFE",
                     16f,
-                    2
+                    1
                 )
                 setPadding(22, 14, 18, 14)
                 layoutParams = LinearLayout.LayoutParams(
@@ -2438,7 +2918,7 @@ class MainActivity : AppCompatActivity() {
                     if (!ensureEditUnlocked()) return@setOnClickListener
                     store.removeTargetSsid(ssid)
                     syncBackgroundAndWidget()
-                    refreshAllViews()
+                    refreshAllViews(animateCharts = false)
                     showStatusPopup(true, "Removed '$ssid'")
                 }
             }
@@ -2544,9 +3024,10 @@ class MainActivity : AppCompatActivity() {
                             return@setOnClickListener
                         }
                         view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        animateCellPop(view)
                         val resulting = store.applyManualDayType(date, activeTapMode)
                         syncBackgroundAndWidget()
-                        refreshAllViews()
+                        refreshAllViews(animateCharts = false)
                         val msg = if (resulting == DayType.NONE) {
                             "Cleared $dateStr"
                         } else {
@@ -2624,9 +3105,9 @@ class MainActivity : AppCompatActivity() {
                 val chip = makeModeChip(lbl) {
                     store.setExplicitDayType(date, targetType)
                     syncBackgroundAndWidget()
-                    refreshAllViews()
+                    refreshAllViews(animateCharts = false)
                     dialogRef?.dismiss()
-                    showStatusPopup(true, "Updated ${date.toString()}")
+                    showStatusPopup(true, "Updated ${date}")
                 }
                 styleModeChip(chip, info.type == targetType, "#4F46E5")
                 quickStatusRow.addView(chip)
@@ -2680,7 +3161,7 @@ class MainActivity : AppCompatActivity() {
         if (isEditUnlocked) {
             builder.setPositiveButton("Save Note") { _, _ ->
                 store.setDayNote(date, noteInput.text.toString())
-                refreshAllViews()
+                refreshAllViews(animateCharts = false)
                 showStatusPopup(true, "Note saved")
             }
         }
@@ -2747,6 +3228,33 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ==================== 6. SYSTEM & SERVICE HELPERS ====================
+
+    private fun canScheduleExactAlarms(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            am.canScheduleExactAlarms()
+        } else {
+            true
+        }
+    }
+
+    private fun openExactAlarmSettings() {
+        if (canScheduleExactAlarms()) {
+            showStatusPopup(true, "Exact alarms are already permitted")
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            runCatching {
+                startActivity(
+                    Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                )
+            }.onFailure {
+                showStatusPopup(false, "Unable to open Exact Alarm settings")
+            }
+        }
+    }
 
     private fun syncBackgroundAndWidget() {
         WfoWidgetProvider.updateAllWidgets(this)
@@ -2916,16 +3424,16 @@ class MainActivity : AppCompatActivity() {
     private fun cBg(): Int = Color.parseColor(if (isDark) "#0F172A" else "#F1F5F9")
     private fun cCardHex(): String = if (isDark) "#1E293B" else "#FFFFFF"
     private fun cInputBg(): String = if (isDark) "#0F172A" else "#F8FAFC"
-    private fun cBorder(): String = if (isDark) "#334155" else "#CBD5E1"
+    private fun cBorder(): String = if (isDark) "#2E3D52" else "#CBD5E1"
     private fun cTextPrimary(): Int = Color.parseColor(if (isDark) "#F8FAFC" else "#0F172A")
     private fun cTextSecondary(): Int = Color.parseColor(if (isDark) "#94A3B8" else "#64748B")
 
     private fun makeCardContainer(): LinearLayout {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            elevation = 4f
-            setPadding(26, 22, 26, 22)
-            background = roundedBox(cCardHex(), cBorder(), 22f, 2)
+            elevation = 3f
+            setPadding(24, 20, 24, 20)
+            background = roundedBox(cCardHex(), cBorder(), 22f, 1)
         }
     }
 
@@ -2952,9 +3460,12 @@ class MainActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             isClickable = true
             isFocusable = true
-            setPadding(24, 20, 24, 20)
+            setPadding(24, 18, 24, 18)
             background = roundedBox(bgHex, bgHex, 18f, 0)
-            setOnClickListener { onClick() }
+            setOnClickListener {
+                animateCellPop(it)
+                onClick()
+            }
         }
     }
 
@@ -2968,7 +3479,7 @@ class MainActivity : AppCompatActivity() {
             isClickable = true
             isFocusable = true
             setPadding(18, 12, 18, 12)
-            background = roundedBox(cInputBg(), cBorder(), 14f, 2)
+            background = roundedBox(cInputBg(), cBorder(), 14f, 1)
             setOnClickListener { onClick() }
         }
     }
@@ -3027,7 +3538,7 @@ class MainActivity : AppCompatActivity() {
             setTypeface(null, Typeface.BOLD)
             setTextColor(cTextPrimary())
             gravity = Gravity.CENTER
-            setLineSpacing(6f, 1.0f)
+            setLineSpacing(5f, 1.0f)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
     }
@@ -3068,15 +3579,17 @@ class MainActivity : AppCompatActivity() {
         parent.addView(gap)
     }
 
-    // ==================== 8. CUSTOM CANVAS VISUALIZATIONS ====================
+    // ==================== 8. CUSTOM ANIMATED CANVAS VISUALIZATIONS ====================
 
     private class CircularProgressRingView(context: Context) : View(context) {
-        private var attended = 0
-        private var projected = 0
+        private var targetAttended = 0
+        private var targetProjected = 0
         private var required = 9
-        private var actualPct = 0
+        private var targetPct = 0
+        private var animFraction = 1f
         private var accentColor = Color.parseColor("#4F46E5")
         private var dark = false
+        private var ringAnimator: ValueAnimator? = null
 
         private val trackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
@@ -3109,15 +3622,31 @@ class MainActivity : AppCompatActivity() {
             required: Int,
             actualPct: Int,
             accentColorHex: String,
-            isDark: Boolean
+            isDark: Boolean,
+            animate: Boolean = true
         ) {
-            this.attended = attended
-            this.projected = projected
+            this.targetAttended = attended
+            this.targetProjected = projected
             this.required = required
-            this.actualPct = actualPct
+            this.targetPct = actualPct
             this.accentColor = Color.parseColor(accentColorHex)
             this.dark = isDark
-            invalidate()
+
+            ringAnimator?.cancel()
+            if (animate) {
+                ringAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+                    duration = 460L
+                    interpolator = DecelerateInterpolator()
+                    addUpdateListener { va ->
+                        animFraction = va.animatedValue as Float
+                        invalidate()
+                    }
+                    start()
+                }
+            } else {
+                animFraction = 1f
+                invalidate()
+            }
         }
 
         override fun onDraw(canvas: Canvas) {
@@ -3134,8 +3663,8 @@ class MainActivity : AppCompatActivity() {
             canvas.drawArc(rect, 0f, 360f, false, trackPaint)
 
             val denom = maxOf(1, required).toFloat()
-            val projSweep = ((projected / denom) * 360f).coerceIn(0f, 360f)
-            val actualSweep = ((attended / denom) * 360f).coerceIn(0f, 360f)
+            val projSweep = (((targetProjected / denom) * 360f) * animFraction).coerceIn(0f, 360f)
+            val actualSweep = (((targetAttended / denom) * 360f) * animFraction).coerceIn(0f, 360f)
 
             if (projSweep > actualSweep) {
                 canvas.drawArc(rect, -90f, projSweep, false, projectedPaint)
@@ -3146,14 +3675,17 @@ class MainActivity : AppCompatActivity() {
 
             val cx = width / 2f
             val cy = height / 2f
-            canvas.drawText("$attended / $required", cx, cy + 8f, mainTextPaint)
-            canvas.drawText("days ($actualPct%)", cx, cy + 48f, subTextPaint)
+            val displayPct = (targetPct * animFraction).roundToInt()
+            canvas.drawText("$targetAttended / $required", cx, cy + 8f, mainTextPaint)
+            canvas.drawText("days ($displayPct%)", cx, cy + 48f, subTextPaint)
         }
     }
 
     private class TrendBarChartView(context: Context) : View(context) {
         private var items: List<MonthlyTrendPoint> = emptyList()
         private var dark = false
+        private var barFraction = 1f
+        private var barAnimator: ValueAnimator? = null
 
         private val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
         private val targetLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -3171,10 +3703,25 @@ class MainActivity : AppCompatActivity() {
             textSize = 24f
         }
 
-        fun setData(points: List<MonthlyTrendPoint>, isDark: Boolean) {
+        fun setData(points: List<MonthlyTrendPoint>, isDark: Boolean, animate: Boolean = true) {
             this.items = points
             this.dark = isDark
-            invalidate()
+
+            barAnimator?.cancel()
+            if (animate) {
+                barAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+                    duration = 420L
+                    interpolator = DecelerateInterpolator()
+                    addUpdateListener { va ->
+                        barFraction = va.animatedValue as Float
+                        invalidate()
+                    }
+                    start()
+                }
+            } else {
+                barFraction = 1f
+                invalidate()
+            }
         }
 
         override fun onDraw(canvas: Canvas) {
@@ -3199,7 +3746,7 @@ class MainActivity : AppCompatActivity() {
             items.forEachIndexed { idx, pt ->
                 val cx = colWidth * idx + colWidth / 2f
                 val barHalfW = (colWidth * 0.26f).coerceAtMost(32f)
-                val ratio = (pt.actualPercent / maxPct.toFloat()).coerceIn(0f, 1f)
+                val ratio = ((pt.actualPercent / maxPct.toFloat()) * barFraction).coerceIn(0f, 1f)
                 val barTop = topMargin + chartHeight * (1f - ratio)
                 val barBottom = topMargin + chartHeight
 
@@ -3209,7 +3756,8 @@ class MainActivity : AppCompatActivity() {
                 val barRect = RectF(cx - barHalfW, barTop.coerceAtMost(barBottom - 6f), cx + barHalfW, barBottom)
                 canvas.drawRoundRect(barRect, 10f, 10f, barPaint)
 
-                canvas.drawText("${pt.actualPercent}%", cx, barTop - 10f, valuePaint)
+                val shownPct = (pt.actualPercent * barFraction).roundToInt()
+                canvas.drawText("${shownPct}%", cx, barTop - 10f, valuePaint)
                 canvas.drawText(pt.shortMonth, cx, height - 12f, labelPaint)
             }
         }
