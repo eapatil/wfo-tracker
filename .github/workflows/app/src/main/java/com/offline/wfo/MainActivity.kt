@@ -3,6 +3,7 @@ package com.offline.wfo
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.AlertDialog
 import android.app.KeyguardManager
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -50,6 +51,9 @@ import java.io.FileOutputStream
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
@@ -90,7 +94,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var setupRoundUpSwitch: Switch
     private lateinit var setupExclHolidaySwitch: Switch
     private lateinit var setupExclLeaveSwitch: Switch
-    private lateinit var setupMinStayLabel: TextView
     private lateinit var setupPlanReminderSwitch: Switch
     private lateinit var setupMorningNudgeSwitch: Switch
 
@@ -101,6 +104,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var lockToggleBtn: TextView
     private lateinit var monthTitleView: TextView
     private lateinit var paceBannerView: TextView
+    private lateinit var weeklyPacePillView: TextView
     private lateinit var heroCountView: TextView
     private lateinit var heroSubView: TextView
     private lateinit var heroProjectedView: TextView
@@ -188,7 +192,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
-        // Auto-relock edits and full-app lock whenever user leaves or minimizes the app
         if (store.isSetupComplete() && !isAwaitingSystemIntent) {
             isEditUnlocked = false
             if (store.isFullAppLockEnabled()) {
@@ -520,9 +523,9 @@ class MainActivity : AppCompatActivity() {
         root.addView(permCard)
         addSpacer(root, 20)
 
-        // Card C: Office Wi-Fi & Stay Filter
+        // Card C: Office Wi-Fi Setup
         val wifiCard = makeCardContainer()
-        wifiCard.addView(makeSectionTitle("3. Office Wi-Fi & Minimum Stay"))
+        wifiCard.addView(makeSectionTitle("3. Office Wi-Fi Networks"))
         setupLiveWifiView = TextView(this).apply {
             textSize = 13f
             setTextColor(cTextSecondary())
@@ -554,36 +557,18 @@ class MainActivity : AppCompatActivity() {
             setPadding(24, 20, 24, 20)
             background = roundedBox(cInputBg(), cBorder(), 16f, 2)
         }
-
-        val stayRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 16, 0, 4)
+        val wifiNote = TextView(this).apply {
+            text = "Logs the day immediately when office Wi-Fi connects; 1st and last connect times are recorded for your reference."
+            textSize = 11f
+            setTextColor(cTextSecondary())
+            setPadding(0, 10, 0, 0)
         }
-        setupMinStayLabel = TextView(this).apply {
-            textSize = 14f
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(cTextPrimary())
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        }
-        val cycleStayBtn = makeSmallChipButton("Change") {
-            val next = when (store.getMinStayMinutes()) {
-                0 -> 30
-                30 -> 60
-                60 -> 120
-                else -> 0
-            }
-            store.setMinStayMinutes(next)
-            refreshAllViews()
-        }
-        stayRow.addView(setupMinStayLabel)
-        stayRow.addView(cycleStayBtn)
 
         wifiCard.addView(setupLiveWifiView)
         wifiCard.addView(btnAddLive)
         addSpacer(wifiCard, 12)
         wifiCard.addView(setupSsidInput)
-        wifiCard.addView(stayRow)
+        wifiCard.addView(wifiNote)
         root.addView(wifiCard)
         addSpacer(root, 20)
 
@@ -777,6 +762,16 @@ class MainActivity : AppCompatActivity() {
             setPadding(24, 22, 24, 22)
         }
         root.addView(paceBannerView)
+        addSpacer(root, 10)
+
+        // Weekly Pace Planner Pill
+        weeklyPacePillView = TextView(this).apply {
+            textSize = 12f
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            setPadding(20, 14, 20, 14)
+        }
+        root.addView(weeklyPacePillView)
         addSpacer(root, 18)
 
         // 4. Hero Progress Card
@@ -848,7 +843,7 @@ class MainActivity : AppCompatActivity() {
         val calCard = makeCardContainer()
         calCard.addView(makeSectionTitle("Attendance & Leave Calendar"))
         val calHint = TextView(this).apply {
-            text = "Unlock 🔒 to mark dates • Choose tap mode below:"
+            text = "Tap date when locked (or long-press anytime) to inspect & add notes • Unlock 🔒 to mark:"
             textSize = 12f
             setTextColor(cTextSecondary())
             setPadding(0, 4, 0, 12)
@@ -1049,12 +1044,6 @@ class MainActivity : AppCompatActivity() {
         } else {
             "Detected Wi-Fi: $liveSsid"
         }
-        val stayMins = store.getMinStayMinutes()
-        setupMinStayLabel.text = if (stayMins == 0) {
-            "Minimum Stay Filter: Instant (0 min)"
-        } else {
-            "Minimum Stay Filter: $stayMins mins"
-        }
         setupTargetPctView.text = "Mandate Target: $targetPct%"
 
         // Dashboard Header Refresh
@@ -1081,10 +1070,11 @@ class MainActivity : AppCompatActivity() {
             if (isEditUnlocked) Color.parseColor("#065F46") else cTextPrimary()
         )
 
-        // Monthly & Quarterly Stats Refresh
+        // Monthly, Weekly Pace & Quarterly Stats Refresh
         val s = store.getMonthStats(selectedMonth)
         val q = store.getQuarterStats(selectedMonth)
         val r = store.getRhythmStats()
+        val w = store.getWeeklyPaceStats()
 
         monthTitleView.text = s.monthLabel
 
@@ -1114,6 +1104,20 @@ class MainActivity : AppCompatActivity() {
                 paceBannerView.background = roundedBox("#FEF3C7", "#FCD34D", 18f)
                 progressColorHex = "#4F46E5"
             }
+        }
+
+        // Weekly Pace Planner Pill
+        weeklyPacePillView.background = roundedBox(
+            if (isDark) "#1E293B" else "#EEF2FF",
+            if (isDark) "#334155" else "#C7D2FE",
+            14f,
+            1
+        )
+        weeklyPacePillView.setTextColor(if (isDark) Color.parseColor("#C7D2FE") else Color.parseColor("#3730A3"))
+        weeklyPacePillView.text = if (w.remainingThisWeek == 0) {
+            "✅ Weekly Pace Met: ${w.attendedThisWeek}/${w.weeklyQuota} office days logged this week"
+        } else {
+            "📆 This Week: ${w.attendedThisWeek}/${w.weeklyQuota} days done • Need ${w.remainingThisWeek} more (${w.weekdaysLeftThisWeek} weekday(s) left)"
         }
 
         val barPct = if (s.requiredDays > 0) {
@@ -1276,8 +1280,9 @@ class MainActivity : AppCompatActivity() {
                     val dtype = stats.dayTypeMap[dateStr] ?: DayType.NONE
                     val isWeekend = date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY
                     val isToday = date == today
+                    val hasNote = store.getDayNote(dateStr).isNotEmpty()
 
-                    cell.text = currentDay.toString()
+                    cell.text = if (hasNote) "$currentDay•" else currentDay.toString()
                     when (dtype) {
                         DayType.OFFICE -> {
                             cell.setTextColor(Color.WHITE)
@@ -1320,8 +1325,12 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
 
+                    // Tap: opens Day Inspector when locked, or toggles active mode when unlocked
                     cell.setOnClickListener {
-                        if (!ensureEditUnlocked()) return@setOnClickListener
+                        if (!isEditUnlocked) {
+                            showDayInspectorDialog(date)
+                            return@setOnClickListener
+                        }
                         val resulting = store.applyManualDayType(date, activeTapMode)
                         syncBackgroundAndWidget()
                         refreshAllViews()
@@ -1332,12 +1341,73 @@ class MainActivity : AppCompatActivity() {
                         }
                         Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
                     }
+
+                    // Long-press: always opens Day Inspector & Notes dialog
+                    cell.setOnLongClickListener {
+                        showDayInspectorDialog(date)
+                        true
+                    }
                     currentDay++
                 }
                 weekRow.addView(cell)
             }
             calendarContainer.addView(weekRow)
         }
+    }
+
+    private fun showDayInspectorDialog(date: LocalDate) {
+        val info = store.getDayInspectorInfo(date)
+        val dowName = date.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
+        val titleStr = "${date.format(DateTimeFormatter.ofPattern("dd MMM yyyy"))} ($dowName)"
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 28, 48, 12)
+        }
+
+        val statusTv = TextView(this).apply {
+            text = info.statusLabel
+            textSize = 15f
+            setTypeface(null, Typeface.BOLD)
+            setPadding(0, 0, 0, 8)
+        }
+        val windowTv = TextView(this).apply {
+            text = info.timeWindowLabel
+            textSize = 13f
+            setPadding(0, 0, 0, 4)
+        }
+        val spanTv = TextView(this).apply {
+            text = info.durationLabel
+            textSize = 13f
+            setTypeface(null, Typeface.BOLD)
+            setPadding(0, 0, 0, 16)
+        }
+        val noteInput = EditText(this).apply {
+            hint = if (isEditUnlocked) "Add note (e.g., Client visit, Half-day)..." else "Unlock 🔒 to edit note"
+            setText(info.note)
+            isEnabled = isEditUnlocked
+            setPadding(20, 16, 20, 16)
+        }
+
+        container.addView(statusTv)
+        container.addView(windowTv)
+        container.addView(spanTv)
+        container.addView(noteInput)
+
+        val builder = AlertDialog.Builder(this)
+            .setTitle(titleStr)
+            .setView(container)
+            .setNegativeButton("Close", null)
+
+        if (isEditUnlocked) {
+            builder.setPositiveButton("Save Note") { _, _ ->
+                store.setDayNote(date, noteInput.text.toString())
+                refreshAllViews()
+                Toast.makeText(this, "Note updated", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        builder.show()
     }
 
     // ==================== 5. AVATAR IMAGE PROCESSING ====================
@@ -1382,7 +1452,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Default Initials Monogram Avatar
         paint.color = Color.parseColor("#4F46E5")
         canvas.drawOval(rectF, paint)
 
