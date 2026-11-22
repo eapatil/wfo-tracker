@@ -1051,7 +1051,7 @@ class MainActivity : AppCompatActivity() {
         }
         autoPlanBtn = makeSmallChipButton("✨ Auto-Plan") {
             if (!ensureEditUnlocked()) return@makeSmallChipButton
-            it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            autoPlanBtn.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
             val modified = store.autoPlanRemainingDaysForMonth(selectedMonth)
             syncBackgroundAndWidget()
             refreshAllViews()
@@ -1233,7 +1233,7 @@ class MainActivity : AppCompatActivity() {
         val simCard = makeCardContainer()
         simCard.addView(makeSectionTitle("What-If Leave & Holiday Simulator"))
         val simSub = TextView(this).apply {
-            text = "Preview how upcoming leaves or holidays shift your required days for ${selectedMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault())}:"
+            text = "Preview how upcoming leaves or holidays shift your required days:"
             textSize = 12f
             setTextColor(cTextSecondary())
             setPadding(0, 4, 0, 12)
