@@ -27,6 +27,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.YearMonth
 import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 
 class WifiMonitorService : Service() {
 
@@ -36,6 +37,10 @@ class WifiMonitorService : Service() {
         const val ACTION_DATA_UPDATED = "com.offline.wfo.DATA_UPDATED"
         const val ACTION_QUICK_LOG_TODAY = "com.offline.wfo.QUICK_LOG_TODAY"
         const val ACTION_REFRESH_STATUS = "com.offline.wfo.REFRESH_STATUS"
+        const val ACTION_PLAN_MARK_LEAVE = "com.offline.wfo.PLAN_MARK_LEAVE"
+        const val ACTION_PLAN_MOVE_TOMORROW = "com.offline.wfo.PLAN_MOVE_TOMORROW"
+        const val EXTRA_NOTIF_ID = "extra_notif_id"
+        const val EXTRA_DATE_STR = "extra_date_str"
     }
 
     private lateinit var connectivityManager: ConnectivityManager
@@ -174,7 +179,6 @@ class WifiMonitorService : Service() {
             WfoWidgetProvider.updateAllWidgets(this)
             sendBroadcast(Intent(ACTION_DATA_UPDATED).setPackage(packageName))
 
-            // Pop up a high-priority confirmation alert once on the first Wi-Fi connect of the day
             if (isNewToday) {
                 notifyCheckInSuccess(connectedSsid)
             }
@@ -299,7 +303,13 @@ class WifiMonitorService : Service() {
     }
 }
 
-fun sendAlertNotification(context: Context, title: String, body: String) {
+fun sendAlertNotification(
+    context: Context,
+    title: String,
+    body: String,
+    notifId: Int = System.currentTimeMillis().toInt(),
+    actions: List<NotificationCompat.Action> = emptyList()
+) {
     val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     nm.createNotificationChannel(
         NotificationChannel(
@@ -314,7 +324,7 @@ fun sendAlertNotification(context: Context, title: String, body: String) {
         Intent(context, MainActivity::class.java),
         PendingIntent.FLAG_IMMUTABLE
     )
-    val notif = NotificationCompat.Builder(context, WifiMonitorService.CHANNEL_ALERTS)
+    val builder = NotificationCompat.Builder(context, WifiMonitorService.CHANNEL_ALERTS)
         .setSmallIcon(android.R.drawable.ic_dialog_info)
         .setContentTitle(title)
         .setContentText(body)
@@ -322,8 +332,9 @@ fun sendAlertNotification(context: Context, title: String, body: String) {
         .setContentIntent(openIntent)
         .setAutoCancel(true)
         .setPriority(NotificationCompat.PRIORITY_HIGH)
-        .build()
-    nm.notify(System.currentTimeMillis().toInt(), notif)
+
+    actions.forEach { builder.addAction(it) }
+    nm.notify(notifId, builder.build())
 }
 
 class BootReceiver : BroadcastReceiver() {
@@ -345,6 +356,42 @@ class BootReceiver : BroadcastReceiver() {
 class ReminderReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent?) {
+        val store = AttendanceStore(context)
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        // Handle Actionable Missed-Plan Notification Buttons directly from lock screen
+        when (intent?.action) {
+            WifiMonitorService.ACTION_PLAN_MARK_LEAVE -> {
+                val dateStr = intent.getStringExtra(WifiMonitorService.EXTRA_DATE_STR) ?: LocalDate.now().toString()
+                val notifId = intent.getIntExtra(WifiMonitorService.EXTRA_NOTIF_ID, -1)
+                runCatching { LocalDate.parse(dateStr) }.getOrNull()?.let { targetDate ->
+                    store.setExplicitDayType(targetDate, DayType.LEAVE, "Leave (from Alert)")
+                }
+                if (notifId != -1) nm.cancel(notifId)
+                WfoWidgetProvider.updateAllWidgets(context)
+                context.sendBroadcast(Intent(WifiMonitorService.ACTION_DATA_UPDATED).setPackage(context.packageName))
+                return
+            }
+            WifiMonitorService.ACTION_PLAN_MOVE_TOMORROW -> {
+                val dateStr = intent.getStringExtra(WifiMonitorService.EXTRA_DATE_STR) ?: LocalDate.now().toString()
+                val notifId = intent.getIntExtra(WifiMonitorService.EXTRA_NOTIF_ID, -1)
+                runCatching { LocalDate.parse(dateStr) }.getOrNull()?.let { targetDate ->
+                    store.setExplicitDayType(targetDate, DayType.NONE)
+                    var nextDay = targetDate.plusDays(1)
+                    while (nextDay.dayOfWeek == DayOfWeek.SATURDAY || nextDay.dayOfWeek == DayOfWeek.SUNDAY) {
+                        nextDay = nextDay.plusDays(1)
+                    }
+                    if (store.getDayType(nextDay) == DayType.NONE) {
+                        store.setExplicitDayType(nextDay, DayType.PLANNED, "Rescheduled Office")
+                    }
+                }
+                if (notifId != -1) nm.cancel(notifId)
+                WfoWidgetProvider.updateAllWidgets(context)
+                context.sendBroadcast(Intent(WifiMonitorService.ACTION_DATA_UPDATED).setPackage(context.packageName))
+                return
+            }
+        }
+
         evaluateReminders(context)
         scheduleNextCheckpoint(context)
         WfoWidgetProvider.updateAllWidgets(context)
@@ -403,21 +450,47 @@ class ReminderReceiver : BroadcastReceiver() {
                 }
             }
 
-            // 3. Missed-Plan Rollover Alert (11:30 - 14:30)
+            // 3. Actionable Missed-Plan Rollover Alert (11:30 - 14:30)
             if (store.isPlannedRemindersEnabled() &&
                 todayType == DayType.PLANNED &&
                 !now.isBefore(LocalTime.of(11, 30)) &&
                 now.isBefore(LocalTime.of(14, 30)) &&
                 store.claimOnceFlag("notif_plan_missed_$today")
             ) {
+                val notifId = 4401
+                val leaveIntent = Intent(context, ReminderReceiver::class.java).apply {
+                    action = WifiMonitorService.ACTION_PLAN_MARK_LEAVE
+                    putExtra(WifiMonitorService.EXTRA_DATE_STR, today.toString())
+                    putExtra(WifiMonitorService.EXTRA_NOTIF_ID, notifId)
+                }
+                val moveIntent = Intent(context, ReminderReceiver::class.java).apply {
+                    action = WifiMonitorService.ACTION_PLAN_MOVE_TOMORROW
+                    putExtra(WifiMonitorService.EXTRA_DATE_STR, today.toString())
+                    putExtra(WifiMonitorService.EXTRA_NOTIF_ID, notifId)
+                }
+
+                val leavePi = PendingIntent.getBroadcast(
+                    context, 411, leaveIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                val movePi = PendingIntent.getBroadcast(
+                    context, 412, moveIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+
+                val actions = listOf(
+                    NotificationCompat.Action(android.R.drawable.ic_menu_close_clear_cancel, "Mark as Leave", leavePi),
+                    NotificationCompat.Action(android.R.drawable.ic_menu_my_calendar, "Move to Tomorrow", movePi)
+                )
+
                 sendAlertNotification(
                     context,
                     "⚠️ Planned Office Visit Not Detected",
-                    "No office Wi-Fi detected yet for today's planned visit. Open WFO Tracker to reschedule another day if plans changed."
+                    "No office Wi-Fi detected yet for today's planned visit. Update directly below:",
+                    notifId = notifId,
+                    actions = actions
                 )
             }
 
-            // 4. Night-Before Prep Alert (20:00 - 22:00)
+            // 4. Night-Before Prep & Quarter-End Pace Alert (20:00 - 22:00)
             val tomorrow = today.plusDays(1)
             if (store.isPlannedRemindersEnabled() &&
                 store.getDayType(tomorrow) == DayType.PLANNED &&
@@ -431,6 +504,32 @@ class ReminderReceiver : BroadcastReceiver() {
                     "Reminder: Tomorrow ($tomorrow) is scheduled as a Planned Office day."
                 )
             }
+
+            // Quarter-End Pace Alert (within last 21 days of quarter if QTD trails target)
+            if (!now.isBefore(LocalTime.of(20, 0)) && now.isBefore(LocalTime.of(22, 0))) {
+                val qIndex = (today.monthValue - 1) / 3
+                val qEndMonth = YearMonth.of(today.year, qIndex * 3 + 3)
+                val qEndDate = qEndMonth.atEndOfMonth()
+                val daysToQEnd = ChronoUnit.DAYS.between(today, qEndDate)
+                if (daysToQEnd in 1..21) {
+                    val qStats = store.getQuarterStats(YearMonth.from(today), today)
+                    if (qStats.remainingDays > 0 &&
+                        store.claimOnceFlag("notif_qend_${today.year}_Q${qIndex + 1}_$today")
+                    ) {
+                        sendAlertNotification(
+                            context,
+                            "📊 ${qStats.quarterLabel} Pace Alert",
+                            "Only $daysToQEnd day(s) left in the quarter — you need ${qStats.remainingDays} more office day(s) (${qStats.attendedDays}/${qStats.requiredDays})."
+                        )
+                    }
+                }
+            }
+
+            // 5. Auto-End-of-Day Disconnect Safety Net (23:50 - 23:59)
+            if (!now.isBefore(LocalTime.of(23, 50)) && store.wasConnectedToOfficeWifi()) {
+                store.recordOfficeDisconnect(today, now)
+                context.sendBroadcast(Intent(WifiMonitorService.ACTION_DATA_UPDATED).setPackage(context.packageName))
+            }
         }
 
         fun scheduleNextCheckpoint(context: Context) {
@@ -442,7 +541,8 @@ class ReminderReceiver : BroadcastReceiver() {
                 LocalTime.of(10, 0),
                 LocalTime.of(11, 0),
                 LocalTime.of(11, 35),
-                LocalTime.of(20, 5)
+                LocalTime.of(20, 5),
+                LocalTime.of(23, 55)
             )
 
             var nextTrigger: LocalDateTime? = null
