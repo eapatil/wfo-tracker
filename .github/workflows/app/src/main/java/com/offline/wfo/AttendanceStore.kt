@@ -1,8 +1,11 @@
 package com.offline.wfo
 
 import android.content.Context
+import android.location.Location
 import android.net.Uri
 import android.provider.DocumentsContract
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.time.DayOfWeek
 import java.time.Duration
@@ -25,6 +28,20 @@ enum class DayType {
     LEAVE,
     HOLIDAY
 }
+
+enum class TrackingMode(val label: String) {
+    WIFI_ONLY("Wi-Fi Only"),
+    LOCATION_ONLY("Location Only"),
+    BOTH("Wi-Fi + Location")
+}
+
+data class OfficeLocation(
+    val id: String,
+    val name: String,
+    val lat: Double,
+    val lng: Double,
+    val radiusMeters: Int = 500
+)
 
 data class DayLog(
     val dateStr: String,
@@ -123,6 +140,164 @@ class AttendanceStore(private val context: Context) {
 
     fun isFullAppLockEnabled(): Boolean = prefs.getBoolean("full_app_lock", false)
     fun setFullAppLockEnabled(enabled: Boolean) = prefs.edit().putBoolean("full_app_lock", enabled).apply()
+
+    // ==================== TRACKING MODE & OFFICE LOCATIONS ====================
+
+    fun getTrackingMode(): TrackingMode {
+        val raw = prefs.getString("tracking_mode", TrackingMode.BOTH.name) ?: TrackingMode.BOTH.name
+        return runCatching { TrackingMode.valueOf(raw) }.getOrDefault(TrackingMode.BOTH)
+    }
+
+    fun setTrackingMode(mode: TrackingMode) {
+        prefs.edit().putString("tracking_mode", mode.name).apply()
+    }
+
+    fun usesWifi(): Boolean {
+        val m = getTrackingMode()
+        return m == TrackingMode.WIFI_ONLY || m == TrackingMode.BOTH
+    }
+
+    fun usesLocation(): Boolean {
+        val m = getTrackingMode()
+        return m == TrackingMode.LOCATION_ONLY || m == TrackingMode.BOTH
+    }
+
+    fun getGeofenceRadiusMeters(): Int = prefs.getInt("geofence_radius_m", 500).coerceIn(100, 5000)
+
+    fun setGeofenceRadiusMeters(radiusMeters: Int) {
+        val clamped = radiusMeters.coerceIn(100, 5000)
+        val updated = getSavedLocations().map { it.copy(radiusMeters = clamped) }
+        prefs.edit()
+            .putInt("geofence_radius_m", clamped)
+            .putString("saved_locations_json", encodeLocations(updated))
+            .apply()
+    }
+
+    fun getSavedLocations(): List<OfficeLocation> {
+        val raw = prefs.getString("saved_locations_json", null)
+        val defaultRadius = prefs.getInt("geofence_radius_m", 500).coerceIn(100, 5000)
+        if (raw.isNullOrBlank()) {
+            return listOf(
+                OfficeLocation(
+                    id = "deloitte_towers_hyd",
+                    name = "Deloitte Towers, Gachibowli",
+                    lat = 17.4430743,
+                    lng = 78.3693235,
+                    radiusMeters = defaultRadius
+                )
+            )
+        }
+        return runCatching {
+            val arr = JSONArray(raw)
+            val list = mutableListOf<OfficeLocation>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                list.add(
+                    OfficeLocation(
+                        id = obj.optString("id", "loc_$i"),
+                        name = obj.optString("name", "Office"),
+                        lat = obj.getDouble("lat"),
+                        lng = obj.getDouble("lng"),
+                        radiusMeters = obj.optInt("radiusMeters", defaultRadius)
+                    )
+                )
+            }
+            list
+        }.getOrDefault(emptyList())
+    }
+
+    fun setActiveOfficeLocation(name: String, lat: Double, lng: Double, radiusMeters: Int = getGeofenceRadiusMeters()) {
+        val cleanName = name.trim().ifEmpty { "Office Location" }
+        val clampedRadius = radiusMeters.coerceIn(100, 5000)
+        val newLoc = OfficeLocation(
+            id = "loc_${lat.toInt()}_${lng.toInt()}",
+            name = cleanName,
+            lat = lat,
+            lng = lng,
+            radiusMeters = clampedRadius
+        )
+        val existing = getSavedLocations().toMutableList()
+        existing.removeAll {
+            it.name.equals(cleanName, ignoreCase = true) ||
+                distanceMeters(it.lat, it.lng, lat, lng) < 25f
+        }
+        existing.add(0, newLoc)
+        prefs.edit()
+            .putInt("geofence_radius_m", clampedRadius)
+            .putString("saved_locations_json", encodeLocations(existing.take(8)))
+            .apply()
+    }
+
+    fun selectSavedLocation(locId: String) {
+        val existing = getSavedLocations().toMutableList()
+        val match = existing.find { it.id == locId } ?: return
+        existing.remove(match)
+        existing.add(0, match.copy(radiusMeters = getGeofenceRadiusMeters()))
+        prefs.edit().putString("saved_locations_json", encodeLocations(existing)).apply()
+    }
+
+    fun removeSavedLocation(locId: String) {
+        val updated = getSavedLocations().filterNot { it.id == locId }
+        prefs.edit().putString("saved_locations_json", encodeLocations(updated)).apply()
+    }
+
+    fun getPrimaryOfficeLocation(): OfficeLocation? = getSavedLocations().firstOrNull()
+
+    fun findMatchingOffice(lat: Double, lng: Double): Pair<OfficeLocation, Float>? {
+        val radius = getGeofenceRadiusMeters()
+        var bestMatch: Pair<OfficeLocation, Float>? = null
+        for (loc in getSavedLocations()) {
+            val dist = distanceMeters(lat, lng, loc.lat, loc.lng)
+            val effRadius = maxOf(radius, loc.radiusMeters).toFloat()
+            if (dist <= effRadius && (bestMatch == null || dist < bestMatch.second)) {
+                bestMatch = loc.copy(radiusMeters = radius) to dist
+            }
+        }
+        return bestMatch
+    }
+
+    fun distanceToPrimaryOfficeMeters(lat: Double, lng: Double): Float? {
+        val loc = getPrimaryOfficeLocation() ?: return null
+        return distanceMeters(lat, lng, loc.lat, loc.lng)
+    }
+
+    fun cacheLastKnownDeviceLocation(lat: Double, lng: Double) {
+        prefs.edit()
+            .putString("last_gps_lat", lat.toString())
+            .putString("last_gps_lng", lng.toString())
+            .putLong("last_gps_ms", System.currentTimeMillis())
+            .apply()
+    }
+
+    fun getCachedDeviceLocation(): Pair<Double, Double>? {
+        val latStr = prefs.getString("last_gps_lat", null) ?: return null
+        val lngStr = prefs.getString("last_gps_lng", null) ?: return null
+        val lat = latStr.toDoubleOrNull() ?: return null
+        val lng = lngStr.toDoubleOrNull() ?: return null
+        return lat to lng
+    }
+
+    private fun encodeLocations(list: List<OfficeLocation>): String {
+        val arr = JSONArray()
+        for (loc in list) {
+            arr.put(
+                JSONObject().apply {
+                    put("id", loc.id)
+                    put("name", loc.name)
+                    put("lat", loc.lat)
+                    put("lng", loc.lng)
+                    put("radiusMeters", loc.radiusMeters)
+                }
+            )
+        }
+        return arr.toString()
+    }
+
+    private fun distanceMeters(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Float {
+        val results = FloatArray(1)
+        Location.distanceBetween(lat1, lng1, lat2, lng2, results)
+        return results[0]
+    }
 
     // ==================== AUTO-BACKUP FOLDER & HEALTH (SAF) ====================
 
@@ -249,7 +424,7 @@ class AttendanceStore(private val context: Context) {
         return ok
     }
 
-    // ==================== POLICY & WI-FI SETTINGS ====================
+    // ==================== POLICY, WI-FI & GRANULAR NOTIFICATION SETTINGS ====================
 
     fun getTargetPercent(): Int = prefs.getInt("target_percent", 40)
     fun setTargetPercent(pct: Int) = prefs.edit().putInt("target_percent", pct.coerceIn(5, 100)).apply()
@@ -262,6 +437,19 @@ class AttendanceStore(private val context: Context) {
 
     fun isExcludeLeavesEnabled(): Boolean = prefs.getBoolean("exclude_leaves", false)
     fun setExcludeLeavesEnabled(exclude: Boolean) = prefs.edit().putBoolean("exclude_leaves", exclude).apply()
+
+    // Granular Notification Toggles
+    fun isConnectAlertEnabled(): Boolean = prefs.getBoolean("notif_connect_enabled", true)
+    fun setConnectAlertEnabled(enabled: Boolean) = prefs.edit().putBoolean("notif_connect_enabled", enabled).apply()
+
+    fun isDisconnectAlertEnabled(): Boolean = prefs.getBoolean("notif_disconnect_enabled", true)
+    fun setDisconnectAlertEnabled(enabled: Boolean) = prefs.edit().putBoolean("notif_disconnect_enabled", enabled).apply()
+
+    fun isMilestoneAlertEnabled(): Boolean = prefs.getBoolean("notif_milestone_enabled", true)
+    fun setMilestoneAlertEnabled(enabled: Boolean) = prefs.edit().putBoolean("notif_milestone_enabled", enabled).apply()
+
+    fun isQuarterEndAlertEnabled(): Boolean = prefs.getBoolean("notif_qend_enabled", true)
+    fun setQuarterEndAlertEnabled(enabled: Boolean) = prefs.edit().putBoolean("notif_qend_enabled", enabled).apply()
 
     fun isPlannedRemindersEnabled(): Boolean = prefs.getBoolean("planned_reminders", true)
     fun setPlannedRemindersEnabled(enabled: Boolean) = prefs.edit().putBoolean("planned_reminders", enabled).apply()
@@ -294,16 +482,16 @@ class AttendanceStore(private val context: Context) {
         setTargetSsids(updated.joinToString(", "))
     }
 
-    // ==================== PERSISTED WI-FI CONNECTION STATE ====================
+    // ==================== PERSISTED OFFICE PRESENCE STATE ====================
 
-    fun wasConnectedToOfficeWifi(): Boolean = prefs.getBoolean("was_on_office_wifi", false)
+    fun isAtOfficeNow(): Boolean = prefs.getBoolean("was_on_office_wifi", false)
 
-    fun getActiveOfficeSsid(): String = prefs.getString("active_office_ssid", "") ?: ""
+    fun getActiveOfficeLabel(): String = prefs.getString("active_office_ssid", "") ?: ""
 
-    fun setConnectedToOfficeWifi(connected: Boolean, ssid: String = "") {
+    fun setOfficePresenceState(connected: Boolean, label: String = "") {
         prefs.edit()
             .putBoolean("was_on_office_wifi", connected)
-            .putString("active_office_ssid", if (connected) ssid else "")
+            .putString("active_office_ssid", if (connected) label else "")
             .apply()
     }
 
@@ -336,7 +524,7 @@ class AttendanceStore(private val context: Context) {
     }
 
     fun recordOfficePresence(
-        ssid: String = "",
+        sourceLabel: String = "",
         date: LocalDate = LocalDate.now(),
         time: LocalTime = LocalTime.now()
     ): Boolean {
@@ -351,7 +539,7 @@ class AttendanceStore(private val context: Context) {
             .putStringSet("all_marked_dates", dates)
             .putString("day_type_$key", DayType.OFFICE.name)
             .putBoolean("was_on_office_wifi", true)
-            .putString("active_office_ssid", ssid)
+            .putString("active_office_ssid", sourceLabel)
 
         if (isNewOfficeToday) {
             editor.putString("times_$key", "$nowStr|$nowStr")
@@ -372,8 +560,8 @@ class AttendanceStore(private val context: Context) {
         date: LocalDate = LocalDate.now(),
         time: LocalTime = LocalTime.now()
     ): Boolean {
-        val wasConnected = wasConnectedToOfficeWifi()
-        setConnectedToOfficeWifi(false, "")
+        val wasConnected = isAtOfficeNow()
+        setOfficePresenceState(false, "")
 
         val key = date.toString()
         if (getDayType(key) != DayType.OFFICE) return false
@@ -428,9 +616,6 @@ class AttendanceStore(private val context: Context) {
         }
     }
 
-    /**
-     * Reverts a batch of dates back to their prior DayTypes (for Undo support).
-     */
     fun restoreBatchDates(previousStates: Map<LocalDate, DayType>) {
         if (previousStates.isEmpty()) return
         val dates = getAllMarkedDates()
@@ -450,10 +635,6 @@ class AttendanceStore(private val context: Context) {
         triggerSilentAutoBackup()
     }
 
-    /**
-     * One-tap Auto-Plan Month: returns a map of modified dates -> prior DayTypes so the caller
-     * can offer an immediate Undo button.
-     */
     fun autoPlanRemainingDaysForMonth(
         ym: YearMonth = YearMonth.now(),
         today: LocalDate = LocalDate.now()
@@ -521,12 +702,6 @@ class AttendanceStore(private val context: Context) {
         return previousStates
     }
 
-    /**
-     * Bulk imports holidays from either an `.ics` calendar file (DTSTART entries + SUMMARY)
-     * or a CSV file (`YYYY-MM-DD,Holiday Name`).
-     * Never overwrites already confirmed OFFICE days.
-     * Returns a map of modified dates -> prior DayTypes for Undo support.
-     */
     fun bulkImportHolidays(rawContent: String): Map<LocalDate, DayType> {
         val parsedHolidays = mutableListOf<Pair<LocalDate, String>>()
         val trimmedAll = rawContent.trim()
@@ -536,7 +711,7 @@ class AttendanceStore(private val context: Context) {
         ) {
             var currentDate: LocalDate? = null
             var currentSummary = "Company Holiday"
-            val basicDateFmt = DateTimeFormatter.BASIC_ISO_DATE // yyyyMMdd
+            val basicDateFmt = DateTimeFormatter.BASIC_ISO_DATE
 
             trimmedAll.lineSequence().forEach { rawLine ->
                 val line = rawLine.trim()
@@ -563,7 +738,6 @@ class AttendanceStore(private val context: Context) {
                 }
             }
         } else {
-            // CSV or plain date list format: YYYY-MM-DD[,Holiday Name]
             trimmedAll.lineSequence().forEach { rawLine ->
                 val line = rawLine.trim()
                 if (line.isEmpty() || line.startsWith("Date", ignoreCase = true)) return@forEach
@@ -602,7 +776,7 @@ class AttendanceStore(private val context: Context) {
         val raw = prefs.getString("times_$dateStr", "") ?: ""
         val note = getDayNote(dateStr)
         val isToday = dateStr == LocalDate.now().toString()
-        val stillConnected = isToday && wasConnectedToOfficeWifi()
+        val stillConnected = isToday && isAtOfficeNow()
 
         val base = when {
             raw.contains("|") -> {
@@ -636,10 +810,10 @@ class AttendanceStore(private val context: Context) {
         val raw = prefs.getString("times_$key", "") ?: ""
         val note = getDayNote(key)
         val isToday = date == LocalDate.now()
-        val stillConnected = isToday && wasConnectedToOfficeWifi()
+        val stillConnected = isToday && isAtOfficeNow()
 
         val statusLabel = when {
-            type == DayType.OFFICE && stillConnected -> "🏢 In Office (Wi-Fi Connected)"
+            type == DayType.OFFICE && stillConnected -> "🏢 In Office (Active)"
             type == DayType.OFFICE -> "🏢 Confirmed Office"
             type == DayType.PLANNED -> "📅 Planned Office Day"
             type == DayType.LEAVE -> "🌴 Leave"
@@ -656,14 +830,14 @@ class AttendanceStore(private val context: Context) {
                 if (stillConnected) {
                     val nowStr = LocalTime.now().format(timeFmt)
                     val span = formatSpanLabel(first, nowStr)
-                    "Connected: $first  •  Status: Still Connected" to "Elapsed So Far: $span"
+                    "Connected: $first  •  Status: Active Now" to "Elapsed So Far: $span"
                 } else {
                     val span = formatSpanLabel(first, last)
                     "Connected: $first  •  Disconnected: $last" to "Recorded Span: $span"
                 }
             }
             raw.isNotEmpty() -> raw to "Manual Entry"
-            else -> "No Wi-Fi timestamps recorded" to "—"
+            else -> "No presence timestamps recorded" to "—"
         }
 
         return DayInspectorInfo(
@@ -814,7 +988,7 @@ class AttendanceStore(private val context: Context) {
         ym: YearMonth = YearMonth.now(),
         today: LocalDate = LocalDate.now()
     ): QuarterStats {
-        val qIndex = (ym.monthValue - 1) / 3 // 0..3
+        val qIndex = (ym.monthValue - 1) / 3
         val startMonth = qIndex * 3 + 1
         val months = listOf(
             YearMonth.of(ym.year, startMonth),
@@ -962,7 +1136,7 @@ class AttendanceStore(private val context: Context) {
             val customNote = getDayNote(dateStr).replace(",", " ")
             if (raw.contains("|")) {
                 val parts = raw.split("|")
-                val noteOut = if (customNote.isNotEmpty()) "Auto-WiFi ($customNote)" else "Auto-WiFi"
+                val noteOut = if (customNote.isNotEmpty()) "Auto ($customNote)" else "Auto"
                 sb.append("$dateStr,$dow,${dtype.name},${parts[0]},${parts[1]},$noteOut\n")
             } else {
                 val noteOut = if (customNote.isNotEmpty()) customNote else raw.replace(",", " ")
@@ -998,7 +1172,7 @@ class AttendanceStore(private val context: Context) {
 
             if (firstIn.isNotEmpty() && lastSeen.isNotEmpty()) {
                 editor.putString("times_$key", "$firstIn|$lastSeen")
-                if (notes.isNotEmpty() && !notes.equals("Auto-WiFi", ignoreCase = true)) {
+                if (notes.isNotEmpty() && !notes.equals("Auto", ignoreCase = true) && !notes.equals("Auto-WiFi", ignoreCase = true)) {
                     editor.putString("note_$key", notes)
                 }
             } else if (notes.isNotEmpty()) {
