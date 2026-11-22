@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.os.Bundle
 import android.view.View
 import android.widget.RemoteViews
 import java.time.DayOfWeek
@@ -26,6 +27,16 @@ class WfoWidgetProvider : AppWidgetProvider() {
         }
     }
 
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle?
+    ) {
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+        updateSingleWidget(context, appWidgetManager, appWidgetId)
+    }
+
     companion object {
         fun updateAllWidgets(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
@@ -43,6 +54,7 @@ class WfoWidgetProvider : AppWidgetProvider() {
         ) {
             val store = AttendanceStore(context)
             val stats = store.getMonthStats()
+            val today = LocalDate.now()
 
             val views = RemoteViews(context.packageName, R.layout.widget_wfo)
             views.setTextViewText(
@@ -65,6 +77,28 @@ class WfoWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_status, statusTxt)
             views.setTextColor(R.id.widget_status, Color.parseColor(statusColor))
 
+            // Build Mon-Fri week status strip (● Office, ◐ Planned, ✕ Leave/Holiday, ○ Open)
+            val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
+            val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 80)
+            if (minHeight >= 75) {
+                val monday = today.with(DayOfWeek.MONDAY)
+                val labels = listOf("M", "T", "W", "T", "F")
+                val weekParts = (0..4).map { idx ->
+                    val d = monday.plusDays(idx.toLong())
+                    val dot = when (store.getDayType(d)) {
+                        DayType.OFFICE -> "●"
+                        DayType.PLANNED -> "◐"
+                        DayType.LEAVE, DayType.HOLIDAY -> "✕"
+                        DayType.NONE -> "○"
+                    }
+                    "${labels[idx]} $dot"
+                }
+                views.setViewVisibility(R.id.widget_week_strip, View.VISIBLE)
+                views.setTextViewText(R.id.widget_week_strip, weekParts.joinToString("  "))
+            } else {
+                views.setViewVisibility(R.id.widget_week_strip, View.GONE)
+            }
+
             val openIntent = Intent(context, MainActivity::class.java)
             val pendingIntent = PendingIntent.getActivity(
                 context,
@@ -74,7 +108,6 @@ class WfoWidgetProvider : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
 
-            val today = LocalDate.now()
             val now = LocalTime.now()
             val isWeekday = today.dayOfWeek != DayOfWeek.SATURDAY && today.dayOfWeek != DayOfWeek.SUNDAY
             val inWindow = !now.isBefore(LocalTime.of(10, 0)) && now.isBefore(LocalTime.of(11, 0))
