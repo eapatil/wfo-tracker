@@ -120,6 +120,7 @@ data class BackupHealthInfo(
 class AttendanceStore(private val context: Context) {
     private val prefs = context.getSharedPreferences("wfo_offline_prefs", Context.MODE_PRIVATE)
     private val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
+    private val autoBackupFileName = "wfo_auto_backup.csv"
 
     // ==================== PROFILE & SECURITY SETTINGS ====================
 
@@ -236,6 +237,57 @@ class AttendanceStore(private val context: Context) {
         }.getOrDefault("Selected Folder")
     }
 
+    fun findExistingAutoBackupUri(treeUri: Uri): Uri? {
+        return runCatching {
+            val treeDocId = DocumentsContract.getTreeDocumentId(treeUri)
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, treeDocId)
+            context.contentResolver.query(
+                childrenUri,
+                arrayOf(
+                    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME
+                ),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                while (cursor.moveToNext()) {
+                    val docId = cursor.getString(0)
+                    val name = cursor.getString(1)
+                    if (name.equals(autoBackupFileName, ignoreCase = true)) {
+                        return@use DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
+                    }
+                }
+                null
+            }
+        }.getOrNull()
+    }
+
+    fun importFromUri(uri: Uri, autoBackupAfter: Boolean = true): Int {
+        val text = context.contentResolver.openInputStream(uri)
+            ?.bufferedReader()?.use { it.readText() } ?: ""
+        if (text.isBlank()) return 0
+        return importFromCsv(text, autoBackupAfter = autoBackupAfter)
+    }
+
+    /**
+     * Checks whether `wfo_auto_backup.csv` already exists in `treeUri` and imports any
+     * saved entries without creating a duplicate file. Returns the number of restored dates.
+     */
+    fun restoreExistingBackupFromFolder(treeUri: Uri): Int {
+        val existingUri = findExistingAutoBackupUri(treeUri) ?: return 0
+        val restored = runCatching {
+            importFromUri(existingUri, autoBackupAfter = false)
+        }.getOrDefault(0)
+        if (restored > 0) {
+            prefs.edit()
+                .putBoolean("last_auto_backup_ok", true)
+                .putLong("last_auto_backup_ms", System.currentTimeMillis())
+                .apply()
+        }
+        return restored
+    }
+
     fun getBackupHealthInfo(): BackupHealthInfo {
         val rawUri = getAutoBackupTreeUri()
         if (rawUri.isEmpty()) {
@@ -288,38 +340,13 @@ class AttendanceStore(private val context: Context) {
             val treeUri = Uri.parse(rawUri)
             val treeDocId = DocumentsContract.getTreeDocumentId(treeUri)
             val parentDocUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocId)
-            val fileName = "wfo_auto_backup.csv"
 
-            var targetFileUri: Uri? = null
-            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, treeDocId)
-            context.contentResolver.query(
-                childrenUri,
-                arrayOf(
-                    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-                    DocumentsContract.Document.COLUMN_DISPLAY_NAME
-                ),
-                null,
-                null,
-                null
-            )?.use { cursor ->
-                while (cursor.moveToNext()) {
-                    val docId = cursor.getString(0)
-                    val name = cursor.getString(1)
-                    if (name == fileName) {
-                        targetFileUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
-                        break
-                    }
-                }
-            }
-
-            if (targetFileUri == null) {
-                targetFileUri = DocumentsContract.createDocument(
-                    context.contentResolver,
-                    parentDocUri,
-                    "text/csv",
-                    fileName
-                )
-            }
+            val targetFileUri = findExistingAutoBackupUri(treeUri) ?: DocumentsContract.createDocument(
+                context.contentResolver,
+                parentDocUri,
+                "text/csv",
+                autoBackupFileName
+            )
 
             targetFileUri?.let { uri ->
                 context.contentResolver.openOutputStream(uri, "wt")?.use { out ->
@@ -1061,7 +1088,7 @@ class AttendanceStore(private val context: Context) {
         return sb.toString()
     }
 
-    fun importFromCsv(csvText: String): Int {
+    fun importFromCsv(csvText: String, autoBackupAfter: Boolean = true): Int {
         val dates = getAllMarkedDates()
         val editor = prefs.edit()
         var count = 0
@@ -1099,7 +1126,9 @@ class AttendanceStore(private val context: Context) {
         }
 
         editor.putStringSet("all_marked_dates", dates).apply()
-        triggerSilentAutoBackup()
+        if (autoBackupAfter && count > 0) {
+            triggerSilentAutoBackup()
+        }
         return count
     }
 
