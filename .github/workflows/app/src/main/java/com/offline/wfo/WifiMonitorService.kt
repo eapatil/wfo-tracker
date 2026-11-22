@@ -18,9 +18,7 @@ import android.net.NetworkRequest
 import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import java.time.DayOfWeek
@@ -42,8 +40,6 @@ class WifiMonitorService : Service() {
 
     private lateinit var connectivityManager: ConnectivityManager
     private lateinit var store: AttendanceStore
-    private val mainHandler = Handler(Looper.getMainLooper())
-    private var pendingStayRunnable: Runnable? = null
     private var isConnectedToOfficeWifi = false
     private var callbackRegistered = false
 
@@ -130,7 +126,6 @@ class WifiMonitorService : Service() {
     }
 
     override fun onDestroy() {
-        cancelPendingStayCheck()
         if (callbackRegistered) {
             runCatching { connectivityManager.unregisterNetworkCallback(networkCallback) }
         }
@@ -174,22 +169,14 @@ class WifiMonitorService : Service() {
 
         if (matched) {
             isConnectedToOfficeWifi = true
-            val thresholdMet = store.evaluateWifiStayThreshold()
+            // Immediately logs today as OFFICE on 1st connect; subsequent events update Last Connect
+            val isNewToday = store.recordOfficePresence()
+            updatePersistentNotification()
+            WfoWidgetProvider.updateAllWidgets(this)
+            sendBroadcast(Intent(ACTION_DATA_UPDATED).setPackage(packageName))
 
-            if (thresholdMet) {
-                cancelPendingStayCheck()
-                val isNewToday = store.recordOfficePresence()
-                updatePersistentNotification()
-                WfoWidgetProvider.updateAllWidgets(this)
-                sendBroadcast(Intent(ACTION_DATA_UPDATED).setPackage(packageName))
-
-                if (isNewToday) {
-                    notifyCheckInSuccess(connectedSsid)
-                }
-            } else {
-                val mins = store.getMinStayMinutes()
-                updatePersistentNotification("Connected to $connectedSsid • Verifying ${mins}m stay...")
-                scheduleStayCompletionCheck(mins)
+            if (isNewToday) {
+                notifyCheckInSuccess(connectedSsid)
             }
         } else {
             handleWifiDisconnected()
@@ -197,32 +184,12 @@ class WifiMonitorService : Service() {
     }
 
     private fun handleWifiDisconnected() {
-        cancelPendingStayCheck()
         if (isConnectedToOfficeWifi) {
             store.updateLastSeenOnly()
             isConnectedToOfficeWifi = false
             sendBroadcast(Intent(ACTION_DATA_UPDATED).setPackage(packageName))
         }
-        if (store.getDayType(LocalDate.now()) != DayType.OFFICE) {
-            store.clearPendingWifiStay()
-        }
         updatePersistentNotification()
-    }
-
-    private fun scheduleStayCompletionCheck(minStayMinutes: Int) {
-        if (pendingStayRunnable != null) return
-        val delayMs = (minStayMinutes * 60_000L) + 2_000L
-        val runnable = Runnable {
-            pendingStayRunnable = null
-            checkCurrentActiveWifi()
-        }
-        pendingStayRunnable = runnable
-        mainHandler.postDelayed(runnable, delayMs)
-    }
-
-    private fun cancelPendingStayCheck() {
-        pendingStayRunnable?.let { mainHandler.removeCallbacks(it) }
-        pendingStayRunnable = null
     }
 
     private fun notifyCheckInSuccess(sourceLabel: String) {
@@ -255,7 +222,7 @@ class WifiMonitorService : Service() {
         }
     }
 
-    private fun shouldShowQuickLogAction(
+    fun shouldShowQuickLogAction(
         today: LocalDate = LocalDate.now(),
         now: LocalTime = LocalTime.now()
     ): Boolean {
