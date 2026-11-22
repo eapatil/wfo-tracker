@@ -132,6 +132,39 @@ class AttendanceStore(private val context: Context) {
     fun isFullAppLockEnabled(): Boolean = prefs.getBoolean("full_app_lock", false)
     fun setFullAppLockEnabled(enabled: Boolean) = prefs.edit().putBoolean("full_app_lock", enabled).apply()
 
+    // ==================== PRIORITY WEEKDAYS FOR AUTO-PLAN ====================
+
+    fun getPreferredWeekdaysPriority(): List<DayOfWeek> {
+        val raw = prefs.getString("preferred_weekdays_order", "") ?: ""
+        if (raw.isBlank()) {
+            return listOf(DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY)
+        }
+        return raw.split(",")
+            .mapNotNull { token ->
+                runCatching { DayOfWeek.valueOf(token.trim().uppercase(Locale.ROOT)) }.getOrNull()
+            }
+            .filter { it != DayOfWeek.SATURDAY && it != DayOfWeek.SUNDAY }
+            .distinct()
+    }
+
+    fun setPreferredWeekdaysPriority(orderedDays: List<DayOfWeek>) {
+        val cleaned = orderedDays
+            .filter { it != DayOfWeek.SATURDAY && it != DayOfWeek.SUNDAY }
+            .distinct()
+        prefs.edit().putString("preferred_weekdays_order", cleaned.joinToString(",") { it.name }).apply()
+    }
+
+    fun cycleWeekdayPriority(day: DayOfWeek) {
+        if (day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY) return
+        val current = getPreferredWeekdaysPriority().toMutableList()
+        if (current.contains(day)) {
+            current.remove(day)
+        } else {
+            current.add(day)
+        }
+        setPreferredWeekdaysPriority(current)
+    }
+
     // ==================== TRACKING MODE & GEOFENCE LOCATION ====================
 
     fun getTrackingMode(): TrackingMode {
@@ -423,7 +456,7 @@ class AttendanceStore(private val context: Context) {
             .apply()
     }
 
-    // ==================== DATE, NOTES & ATTENDANCE OPERATIONS ====================
+    // ==================== DATE, NOTES, UPCOMING HOLIDAYS/LEAVES & ATTENDANCE ====================
 
     fun getAllMarkedDates(): MutableSet<String> {
         return prefs.getStringSet("all_marked_dates", emptySet())?.toMutableSet() ?: mutableSetOf()
@@ -449,6 +482,46 @@ class AttendanceStore(private val context: Context) {
         }
         editor.apply()
         triggerSilentAutoBackup()
+    }
+
+    fun getUpcomingHolidaysAndLeaves(today: LocalDate = LocalDate.now()): List<DayLog> {
+        return getAllMarkedDates()
+            .mapNotNull { dateStr -> runCatching { LocalDate.parse(dateStr) }.getOrNull() }
+            .filter { !it.isBefore(today) }
+            .sorted()
+            .mapNotNull { d ->
+                val t = getDayType(d)
+                if (t == DayType.HOLIDAY || t == DayType.LEAVE) {
+                    val dow = d.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())
+                    DayLog(d.toString(), dow, t, getFormattedDetail(d.toString(), t))
+                } else {
+                    null
+                }
+            }
+    }
+
+    fun clearUpcomingHolidaysAndLeaves(today: LocalDate = LocalDate.now()): Map<LocalDate, DayType> {
+        val previousStates = mutableMapOf<LocalDate, DayType>()
+        val dates = getAllMarkedDates()
+        val editor = prefs.edit()
+
+        dates.filter { dateStr ->
+            val d = runCatching { LocalDate.parse(dateStr) }.getOrNull() ?: return@filter false
+            if (d.isBefore(today)) return@filter false
+            val t = getDayType(dateStr)
+            t == DayType.HOLIDAY || t == DayType.LEAVE
+        }.forEach { dateStr ->
+            val d = LocalDate.parse(dateStr)
+            previousStates[d] = getDayType(dateStr)
+            dates.remove(dateStr)
+            editor.remove("day_type_$dateStr").remove("times_$dateStr")
+        }
+
+        if (previousStates.isNotEmpty()) {
+            editor.putStringSet("all_marked_dates", dates).apply()
+            triggerSilentAutoBackup()
+        }
+        return previousStates
     }
 
     fun recordOfficePresence(
@@ -574,19 +647,7 @@ class AttendanceStore(private val context: Context) {
         val currentYm = YearMonth.from(today)
         if (ym.isBefore(currentYm)) return emptyMap()
 
-        val officeDates = getAllMarkedDates()
-            .filter { getDayType(it) == DayType.OFFICE }
-            .mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }
-
-        val preferredDays: List<DayOfWeek> = if (officeDates.isNotEmpty()) {
-            officeDates.groupingBy { it.dayOfWeek }
-                .eachCount()
-                .entries
-                .sortedWith(compareBy({ -it.value }, { it.key.value }))
-                .map { it.key }
-        } else {
-            listOf(DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY)
-        }
+        val preferredDays = getPreferredWeekdaysPriority()
 
         val candidates = mutableListOf<LocalDate>()
         for (day in 1..ym.lengthOfMonth()) {
