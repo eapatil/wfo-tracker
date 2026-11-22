@@ -7,7 +7,11 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.view.View
 import android.widget.RemoteViews
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.LocalTime
 import java.util.Locale
 
 class WfoWidgetProvider : AppWidgetProvider() {
@@ -69,6 +73,27 @@ class WfoWidgetProvider : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
+
+            val today = LocalDate.now()
+            val now = LocalTime.now()
+            val isWeekday = today.dayOfWeek != DayOfWeek.SATURDAY && today.dayOfWeek != DayOfWeek.SUNDAY
+            val inWindow = !now.isBefore(LocalTime.of(10, 0)) && now.isBefore(LocalTime.of(11, 0))
+            val canQuickLog = isWeekday && inWindow && store.getDayType(today) != DayType.OFFICE
+
+            if (canQuickLog) {
+                views.setViewVisibility(R.id.widget_quick_log, View.VISIBLE)
+                val quickIntent = Intent(context, WifiMonitorService::class.java)
+                    .setAction(WifiMonitorService.ACTION_QUICK_LOG_TODAY)
+                val quickPi = PendingIntent.getService(
+                    context,
+                    4,
+                    quickIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                views.setOnClickPendingIntent(R.id.widget_quick_log, quickPi)
+            } else {
+                views.setViewVisibility(R.id.widget_quick_log, View.GONE)
+            }
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
