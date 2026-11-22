@@ -7,128 +7,205 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
-import android.os.Bundle
-import android.view.View
+import android.os.Build
 import android.widget.RemoteViews
+import androidx.core.content.ContextCompat
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
-import java.util.Locale
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
 
 class WfoWidgetProvider : AppWidgetProvider() {
+
+    companion object {
+        const val ACTION_WIDGET_REFRESH = "com.offline.wfo.ACTION_WIDGET_REFRESH"
+
+        fun updateAllWidgets(context: Context) {
+            val manager = AppWidgetManager.getInstance(context)
+            val component = ComponentName(context, WfoWidgetProvider::class.java)
+            val ids = manager.getAppWidgetIds(component)
+            if (ids.isNotEmpty()) {
+                for (id in ids) {
+                    updateSingleWidget(context, manager, id)
+                }
+            }
+        }
+
+        private fun updateSingleWidget(
+            context: Context,
+            manager: AppWidgetManager,
+            appWidgetId: Int
+        ) {
+            val store = AttendanceStore(context)
+            val today = LocalDate.now()
+            val ym = YearMonth.from(today)
+            val stats = store.getMonthStats(ym, today)
+            val todayType = store.getDayType(today)
+            val isOnOffice = store.wasConnectedToOfficeWifi()
+            val activeSrc = store.getActiveOfficeSsid()
+            val mode = store.getTrackingMode()
+
+            val views = RemoteViews(context.packageName, R.layout.wfo_widget)
+
+            // Header: Month & Sync Timestamp
+            val shortMonthYear = ym.format(DateTimeFormatter.ofPattern("MMM yyyy"))
+            val nowTime = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+            views.setTextViewText(R.id.widget_month_title, "WFO • $shortMonthYear")
+            views.setTextViewText(R.id.widget_updated_time, "Updated $nowTime")
+
+            // Live Today Status Pill
+            val disconnectedHint = when (mode) {
+                TrackingMode.LOCATION_ONLY -> "Not at office"
+                TrackingMode.WIFI_ONLY -> "Not on office Wi-Fi"
+                TrackingMode.BOTH -> "WFH Today"
+            }
+
+            when {
+                isOnOffice -> {
+                    val src = if (activeSrc.isNotEmpty()) " ($activeSrc)" else ""
+                    views.setTextViewText(R.id.widget_status_pill, "🟢 At Office$src")
+                    views.setTextColor(R.id.widget_status_pill, Color.parseColor("#065F46"))
+                    views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_green)
+                }
+                todayType == DayType.OFFICE -> {
+                    views.setTextViewText(R.id.widget_status_pill, "✅ Office Logged")
+                    views.setTextColor(R.id.widget_status_pill, Color.parseColor("#065F46"))
+                    views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_green)
+                }
+                todayType == DayType.PLANNED -> {
+                    views.setTextViewText(R.id.widget_status_pill, "📅 Planned Office")
+                    views.setTextColor(R.id.widget_status_pill, Color.parseColor("#3730A3"))
+                    views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_indigo)
+                }
+                todayType == DayType.LEAVE -> {
+                    views.setTextViewText(R.id.widget_status_pill, "🌴 On Leave")
+                    views.setTextColor(R.id.widget_status_pill, Color.parseColor("#92400E"))
+                    views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_amber)
+                }
+                todayType == DayType.HOLIDAY -> {
+                    views.setTextViewText(R.id.widget_status_pill, "🎉 Holiday")
+                    views.setTextColor(R.id.widget_status_pill, Color.parseColor("#5B21B6"))
+                    views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_purple)
+                }
+                else -> {
+                    views.setTextViewText(R.id.widget_status_pill, "🏠 $disconnectedHint")
+                    views.setTextColor(R.id.widget_status_pill, Color.parseColor("#475569"))
+                    views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_neutral)
+                }
+            }
+
+            // Hero Progress Ratio & Bar
+            views.setTextViewText(
+                R.id.widget_hero_ratio,
+                "${stats.attendedDays} / ${stats.requiredDays} days (${stats.actualPercent}%)"
+            )
+            val progressMax = maxOf(1, stats.requiredDays)
+            val progressVal = stats.attendedDays.coerceIn(0, progressMax)
+            views.setProgressBar(R.id.widget_progress_bar, progressMax, progressVal, false)
+
+            // Pace & Buffer Line
+            val paceText = when {
+                stats.remainingDays == 0 ->
+                    "🎉 ${stats.targetPercent}% target met — safe to WFH"
+                stats.bufferDays < 0 ->
+                    "⚠️ Need ${stats.remainingDays}d (${stats.availableWeekdaysLeft} left)"
+                stats.bufferDays == 0 ->
+                    "🚨 0 buffer — attend all ${stats.availableWeekdaysLeft} left"
+                else ->
+                    "${stats.remainingDays} needed • ${stats.bufferDays} WFH buffer left"
+            }
+            views.setTextViewText(R.id.widget_pace_text, paceText)
+
+            // This Week 5-Day Mon–Fri Strip
+            val monday = today.with(DayOfWeek.MONDAY)
+            val dayIds = listOf(
+                R.id.widget_day_mon to "M",
+                R.id.widget_day_tue to "T",
+                R.id.widget_day_wed to "W",
+                R.id.widget_day_thu to "T",
+                R.id.widget_day_fri to "F"
+            )
+            dayIds.forEachIndexed { idx, (viewId, letter) ->
+                val d = monday.plusDays(idx.toLong())
+                val t = store.getDayType(d)
+                views.setTextViewText(viewId, letter)
+                when (t) {
+                    DayType.OFFICE -> {
+                        views.setTextColor(viewId, Color.WHITE)
+                        views.setInt(viewId, "setBackgroundResource", R.drawable.widget_day_office)
+                    }
+                    DayType.PLANNED -> {
+                        views.setTextColor(Color.parseColor("#3730A3"))
+                        views.setInt(viewId, "setBackgroundResource", R.drawable.widget_day_planned)
+                    }
+                    DayType.LEAVE -> {
+                        views.setTextColor(Color.WHITE)
+                        views.setInt(viewId, "setBackgroundResource", R.drawable.widget_day_leave)
+                    }
+                    DayType.HOLIDAY -> {
+                        views.setTextColor(Color.WHITE)
+                        views.setInt(viewId, "setBackgroundResource", R.drawable.widget_day_holiday)
+                    }
+                    DayType.NONE -> {
+                        views.setTextColor(Color.parseColor("#64748B"))
+                        views.setInt(viewId, "setBackgroundResource", R.drawable.widget_day_none)
+                    }
+                }
+            }
+
+            // Tap Card Body -> Open MainActivity
+            val openAppIntent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val openPending = PendingIntent.getActivity(
+                context,
+                appWidgetId,
+                openAppIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.widget_root_container, openPending)
+
+            // Tap Refresh Icon -> Trigger Immediate Background Wi-Fi / Geofence Check
+            val refreshIntent = Intent(context, WfoWidgetProvider::class.java).apply {
+                action = ACTION_WIDGET_REFRESH
+            }
+            val refreshPending = PendingIntent.getBroadcast(
+                context,
+                900 + appWidgetId,
+                refreshIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.widget_refresh_btn, refreshPending)
+
+            manager.updateAppWidget(appWidgetId, views)
+        }
+    }
 
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        for (appWidgetId in appWidgetIds) {
-            updateSingleWidget(context, appWidgetManager, appWidgetId)
+        for (id in appWidgetIds) {
+            updateSingleWidget(context, appWidgetManager, id)
         }
     }
 
-    override fun onAppWidgetOptionsChanged(
-        context: Context,
-        appWidgetManager: AppWidgetManager,
-        appWidgetId: Int,
-        newOptions: Bundle?
-    ) {
-        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
-        updateSingleWidget(context, appWidgetManager, appWidgetId)
-    }
-
-    companion object {
-        fun updateAllWidgets(context: Context) {
-            val manager = AppWidgetManager.getInstance(context)
-            val component = ComponentName(context, WfoWidgetProvider::class.java)
-            val ids = manager.getAppWidgetIds(component)
-            for (id in ids) {
-                updateSingleWidget(context, manager, id)
-            }
-        }
-
-        private fun updateSingleWidget(
-            context: Context,
-            appWidgetManager: AppWidgetManager,
-            appWidgetId: Int
-        ) {
-            val store = AttendanceStore(context)
-            val stats = store.getMonthStats()
-            val today = LocalDate.now()
-
-            val views = RemoteViews(context.packageName, R.layout.widget_wfo)
-            views.setTextViewText(
-                R.id.widget_month,
-                stats.monthLabel.uppercase(Locale.getDefault())
-            )
-            views.setTextViewText(
-                R.id.widget_count,
-                "${stats.attendedDays} / ${stats.requiredDays} Days (${stats.actualPercent}%)"
-            )
-
-            val (statusTxt, statusColor) = when {
-                stats.remainingDays == 0 ->
-                    "Target met! Safe to WFH" to "#34D399"
-                stats.bufferDays <= 0 ->
-                    "${stats.remainingDays} needed • 0 buffer days!" to "#F87171"
-                else ->
-                    "${stats.remainingDays} needed • ${stats.bufferDays} buffer days" to "#FBBF24"
-            }
-            views.setTextViewText(R.id.widget_status, statusTxt)
-            views.setTextColor(R.id.widget_status, Color.parseColor(statusColor))
-
-            // Build Mon-Fri week status strip (● Office, ◐ Planned, ✕ Leave/Holiday, ○ Open)
-            val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
-            val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 80)
-            if (minHeight >= 75) {
-                val monday = today.with(DayOfWeek.MONDAY)
-                val labels = listOf("M", "T", "W", "T", "F")
-                val weekParts = (0..4).map { idx ->
-                    val d = monday.plusDays(idx.toLong())
-                    val dot = when (store.getDayType(d)) {
-                        DayType.OFFICE -> "●"
-                        DayType.PLANNED -> "◐"
-                        DayType.LEAVE, DayType.HOLIDAY -> "✕"
-                        DayType.NONE -> "○"
-                    }
-                    "${labels[idx]} $dot"
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action == ACTION_WIDGET_REFRESH) {
+            runCatching {
+                val serviceIntent = Intent(context, WifiMonitorService::class.java).apply {
+                    action = WifiMonitorService.ACTION_REFRESH_STATUS
                 }
-                views.setViewVisibility(R.id.widget_week_strip, View.VISIBLE)
-                views.setTextViewText(R.id.widget_week_strip, weekParts.joinToString("  "))
-            } else {
-                views.setViewVisibility(R.id.widget_week_strip, View.GONE)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    ContextCompat.startForegroundService(context, serviceIntent)
+                } else {
+                    context.startService(serviceIntent)
+                }
             }
-
-            val openIntent = Intent(context, MainActivity::class.java)
-            val pendingIntent = PendingIntent.getActivity(
-                context,
-                0,
-                openIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
-
-            val now = LocalTime.now()
-            val isWeekday = today.dayOfWeek != DayOfWeek.SATURDAY && today.dayOfWeek != DayOfWeek.SUNDAY
-            val inWindow = !now.isBefore(LocalTime.of(10, 0)) && now.isBefore(LocalTime.of(11, 0))
-            val canQuickLog = isWeekday && inWindow && store.getDayType(today) != DayType.OFFICE
-
-            if (canQuickLog) {
-                views.setViewVisibility(R.id.widget_quick_log, View.VISIBLE)
-                val quickIntent = Intent(context, WifiMonitorService::class.java)
-                    .setAction(WifiMonitorService.ACTION_QUICK_LOG_TODAY)
-                val quickPi = PendingIntent.getService(
-                    context,
-                    4,
-                    quickIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                views.setOnClickPendingIntent(R.id.widget_quick_log, quickPi)
-            } else {
-                views.setViewVisibility(R.id.widget_quick_log, View.GONE)
-            }
-
-            appWidgetManager.updateAppWidget(appWidgetId, views)
+            updateAllWidgets(context)
         }
     }
 }
