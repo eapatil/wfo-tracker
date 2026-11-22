@@ -3,6 +3,7 @@ package com.offline.wfo
 import android.content.Context
 import java.io.File
 import java.time.DayOfWeek
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
@@ -26,6 +27,15 @@ data class DayLog(
     val dayOfWeekShort: String,
     val type: DayType,
     val detail: String
+)
+
+data class DayInspectorInfo(
+    val date: LocalDate,
+    val type: DayType,
+    val statusLabel: String,
+    val timeWindowLabel: String,
+    val durationLabel: String,
+    val note: String
 )
 
 data class MonthStats(
@@ -57,6 +67,13 @@ data class QuarterStats(
     val attendedDays: Int,
     val remainingDays: Int,
     val actualPercent: Int
+)
+
+data class WeeklyPaceStats(
+    val weeklyQuota: Int,
+    val attendedThisWeek: Int,
+    val remainingThisWeek: Int,
+    val weekdaysLeftThisWeek: Int
 )
 
 data class RhythmStats(
@@ -100,9 +117,6 @@ class AttendanceStore(private val context: Context) {
     fun isExcludeLeavesEnabled(): Boolean = prefs.getBoolean("exclude_leaves", false)
     fun setExcludeLeavesEnabled(exclude: Boolean) = prefs.edit().putBoolean("exclude_leaves", exclude).apply()
 
-    fun getMinStayMinutes(): Int = prefs.getInt("min_stay_minutes", 0)
-    fun setMinStayMinutes(mins: Int) = prefs.edit().putInt("min_stay_minutes", mins.coerceAtLeast(0)).apply()
-
     fun isPlannedRemindersEnabled(): Boolean = prefs.getBoolean("planned_reminders", true)
     fun setPlannedRemindersEnabled(enabled: Boolean) = prefs.edit().putBoolean("planned_reminders", enabled).apply()
 
@@ -134,35 +148,7 @@ class AttendanceStore(private val context: Context) {
         setTargetSsids(updated.joinToString(", "))
     }
 
-    // ==================== MINIMUM STAY TRACKING ====================
-
-    fun evaluateWifiStayThreshold(
-        nowMs: Long = System.currentTimeMillis(),
-        today: LocalDate = LocalDate.now()
-    ): Boolean {
-        val requiredMins = getMinStayMinutes()
-        if (requiredMins <= 0) return true
-
-        val todayStr = today.toString()
-        val pendingDate = prefs.getString("pending_wifi_date", "") ?: ""
-        val pendingStart = prefs.getLong("pending_wifi_start_ms", 0L)
-
-        if (pendingDate != todayStr || pendingStart <= 0L) {
-            prefs.edit()
-                .putString("pending_wifi_date", todayStr)
-                .putLong("pending_wifi_start_ms", nowMs)
-                .apply()
-            return false
-        }
-        val elapsedMins = (nowMs - pendingStart) / 60_000L
-        return elapsedMins >= requiredMins
-    }
-
-    fun clearPendingWifiStay() {
-        prefs.edit().remove("pending_wifi_date").remove("pending_wifi_start_ms").apply()
-    }
-
-    // ==================== DATE & ATTENDANCE OPERATIONS ====================
+    // ==================== DATE, NOTES & ATTENDANCE OPERATIONS ====================
 
     fun getAllMarkedDates(): MutableSet<String> {
         return prefs.getStringSet("all_marked_dates", emptySet())?.toMutableSet() ?: mutableSetOf()
@@ -175,9 +161,24 @@ class AttendanceStore(private val context: Context) {
         return runCatching { DayType.valueOf(raw) }.getOrDefault(DayType.NONE)
     }
 
+    fun getDayNote(dateStr: String): String = prefs.getString("note_$dateStr", "") ?: ""
+
+    fun setDayNote(date: LocalDate, note: String) {
+        val key = date.toString()
+        val clean = note.trim()
+        val editor = prefs.edit()
+        if (clean.isEmpty()) {
+            editor.remove("note_$key")
+        } else {
+            editor.putString("note_$key", clean)
+        }
+        editor.apply()
+    }
+
     /**
-     * Records automatic office Wi-Fi presence.
-     * Upgrades PLANNED -> OFFICE automatically.
+     * Immediately logs the day as OFFICE upon connecting to office Wi-Fi.
+     * Preserves the 1st connect timestamp of the day and updates the last connect timestamp
+     * purely for duration records. Upgrades PLANNED -> OFFICE automatically.
      * Returns true if this is the first confirmed OFFICE check-in today.
      */
     fun recordOfficePresence(
@@ -196,16 +197,7 @@ class AttendanceStore(private val context: Context) {
             .putString("day_type_$key", DayType.OFFICE.name)
 
         if (isNewOfficeToday) {
-            val pendingStartMs = prefs.getLong("pending_wifi_start_ms", 0L)
-            val arrivalStr = if (pendingStartMs > 0L && prefs.getString("pending_wifi_date", "") == key) {
-                val arrivalTime = java.time.Instant.ofEpochMilli(pendingStartMs)
-                    .atZone(java.time.ZoneId.systemDefault())
-                    .toLocalTime()
-                arrivalTime.format(timeFmt)
-            } else {
-                nowStr
-            }
-            editor.putString("times_$key", "$arrivalStr|$nowStr")
+            editor.putString("times_$key", "$nowStr|$nowStr")
         } else {
             val existing = prefs.getString("times_$key", "") ?: ""
             val firstSeen = if (existing.contains("|")) existing.substringBefore("|") else nowStr
@@ -268,18 +260,79 @@ class AttendanceStore(private val context: Context) {
 
     fun getFormattedDetail(dateStr: String, type: DayType): String {
         val raw = prefs.getString("times_$dateStr", "") ?: ""
-        if (raw.contains("|")) {
-            val parts = raw.split("|")
-            return if (parts[0] == parts[1]) "Arrived ${parts[0]}" else "${parts[0]} – ${parts[1]}"
+        val note = getDayNote(dateStr)
+        val base = when {
+            raw.contains("|") -> {
+                val parts = raw.split("|")
+                val dur = formatSpanLabel(parts[0], parts[1])
+                if (parts[0] == parts[1]) {
+                    "1st connect ${parts[0]}"
+                } else {
+                    "${parts[0]} – ${parts[1]} ($dur)"
+                }
+            }
+            raw.isNotEmpty() -> raw
+            else -> when (type) {
+                DayType.OFFICE -> "Office"
+                DayType.PLANNED -> "Planned"
+                DayType.LEAVE -> "Leave"
+                DayType.HOLIDAY -> "Holiday"
+                DayType.NONE -> ""
+            }
         }
-        if (raw.isNotEmpty()) return raw
-        return when (type) {
-            DayType.OFFICE -> "Office"
-            DayType.PLANNED -> "Planned"
-            DayType.LEAVE -> "Leave"
-            DayType.HOLIDAY -> "Holiday"
-            DayType.NONE -> ""
+        return if (note.isNotEmpty()) "$base • 📝 $note" else base
+    }
+
+    fun getDayInspectorInfo(date: LocalDate): DayInspectorInfo {
+        val key = date.toString()
+        val type = getDayType(key)
+        val raw = prefs.getString("times_$key", "") ?: ""
+        val note = getDayNote(key)
+
+        val statusLabel = when {
+            type == DayType.OFFICE -> "🏢 Confirmed Office"
+            type == DayType.PLANNED -> "📅 Planned Office Day"
+            type == DayType.LEAVE -> "🌴 Leave"
+            type == DayType.HOLIDAY -> "🎉 Holiday"
+            date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY -> "Weekend"
+            else -> "Unmarked / WFH"
         }
+
+        val (windowLabel, durationLabel) = when {
+            raw.contains("|") -> {
+                val parts = raw.split("|")
+                val first = parts[0]
+                val last = parts[1]
+                val span = formatSpanLabel(first, last)
+                "1st Connect: $first  •  Last Connect: $last" to "Recorded Span: $span"
+            }
+            raw.isNotEmpty() -> raw to "Manual Entry"
+            else -> "No Wi-Fi timestamps recorded" to "—"
+        }
+
+        return DayInspectorInfo(
+            date = date,
+            type = type,
+            statusLabel = statusLabel,
+            timeWindowLabel = windowLabel,
+            durationLabel = durationLabel,
+            note = note
+        )
+    }
+
+    private fun formatSpanLabel(startStr: String, endStr: String): String {
+        return runCatching {
+            val t1 = LocalTime.parse(startStr, timeFmt)
+            val t2 = LocalTime.parse(endStr, timeFmt)
+            val mins = maxOf(0L, Duration.between(t1, t2).toMinutes())
+            val h = mins / 60
+            val m = mins % 60
+            when {
+                h > 0 && m > 0 -> "${h}h ${m}m"
+                h > 0 -> "${h}h"
+                else -> "${m}m"
+            }
+        }.getOrDefault("0m")
     }
 
     // ==================== NOTIFICATION DEDUPLICATION ====================
@@ -432,12 +485,41 @@ class AttendanceStore(private val context: Context) {
         )
     }
 
+    fun getWeeklyPaceStats(today: LocalDate = LocalDate.now()): WeeklyPaceStats {
+        val targetPct = getTargetPercent()
+        val rawWeeklyQuota = 5.0 * (targetPct / 100.0)
+        val weeklyQuota = maxOf(
+            1,
+            if (isRoundUpEnabled()) ceil(rawWeeklyQuota).toInt() else rawWeeklyQuota.roundToInt()
+        )
+
+        val monday = today.with(DayOfWeek.MONDAY)
+        var attendedThisWeek = 0
+        var weekdaysLeft = 0
+
+        for (i in 0..4) {
+            val d = monday.plusDays(i.toLong())
+            val t = getDayType(d)
+            if (t == DayType.OFFICE) {
+                attendedThisWeek++
+            } else if (!d.isBefore(today) && t != DayType.HOLIDAY && t != DayType.LEAVE) {
+                weekdaysLeft++
+            }
+        }
+
+        return WeeklyPaceStats(
+            weeklyQuota = weeklyQuota,
+            attendedThisWeek = attendedThisWeek,
+            remainingThisWeek = maxOf(0, weeklyQuota - attendedThisWeek),
+            weekdaysLeftThisWeek = weekdaysLeft
+        )
+    }
+
     fun getRhythmStats(today: LocalDate = LocalDate.now()): RhythmStats {
         val allDates = getAllMarkedDates()
         val officeDates = allDates.filter { getDayType(it) == DayType.OFFICE }
             .mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }
 
-        // Top 3 frequent office weekdays
         val topDaysLabel = if (officeDates.isEmpty()) {
             "No history yet"
         } else {
@@ -449,7 +531,6 @@ class AttendanceStore(private val context: Context) {
                 .joinToString(", ") { it.key.getDisplayName(TextStyle.SHORT, Locale.getDefault()) }
         }
 
-        // Weekly streak: consecutive weeks meeting weekly quota
         val targetPct = getTargetPercent()
         val rawWeeklyQuota = 5.0 * (targetPct / 100.0)
         val weeklyQuota = maxOf(1, if (isRoundUpEnabled()) ceil(rawWeeklyQuota).toInt() else rawWeeklyQuota.roundToInt())
@@ -480,7 +561,7 @@ class AttendanceStore(private val context: Context) {
     // ==================== CSV EXPORT, RESTORE & SUMMARY REPORT ====================
 
     fun exportAllCsv(): String {
-        val sb = StringBuilder("Date,Day,Status,First_Check_In,Last_Seen,Notes\n")
+        val sb = StringBuilder("Date,Day,Status,First_Connect,Last_Connect,Notes\n")
         val sortedDates = getAllMarkedDates().sorted()
         for (dateStr in sortedDates) {
             val dtype = getDayType(dateStr)
@@ -488,11 +569,14 @@ class AttendanceStore(private val context: Context) {
             val d = LocalDate.parse(dateStr)
             val dow = d.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())
             val raw = prefs.getString("times_$dateStr", "") ?: ""
+            val customNote = getDayNote(dateStr).replace(",", " ")
             if (raw.contains("|")) {
                 val parts = raw.split("|")
-                sb.append("$dateStr,$dow,${dtype.name},${parts[0]},${parts[1]},Auto-WiFi\n")
+                val noteOut = if (customNote.isNotEmpty()) "Auto-WiFi ($customNote)" else "Auto-WiFi"
+                sb.append("$dateStr,$dow,${dtype.name},${parts[0]},${parts[1]},$noteOut\n")
             } else {
-                sb.append("$dateStr,$dow,${dtype.name},,,${raw.replace(",", " ")}\n")
+                val noteOut = if (customNote.isNotEmpty()) customNote else raw.replace(",", " ")
+                sb.append("$dateStr,$dow,${dtype.name},,,$noteOut\n")
             }
         }
         return sb.toString()
@@ -524,6 +608,9 @@ class AttendanceStore(private val context: Context) {
 
             if (firstIn.isNotEmpty() && lastSeen.isNotEmpty()) {
                 editor.putString("times_$key", "$firstIn|$lastSeen")
+                if (notes.isNotEmpty() && !notes.equals("Auto-WiFi", ignoreCase = true)) {
+                    editor.putString("note_$key", notes)
+                }
             } else if (notes.isNotEmpty()) {
                 editor.putString("times_$key", notes)
             } else {
