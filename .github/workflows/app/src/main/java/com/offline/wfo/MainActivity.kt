@@ -1460,6 +1460,8 @@ class MainActivity : AppCompatActivity() {
             showStatusPopup(true, "Settings saved & dashboard locked")
         }
         root.addView(saveFinishBtn)
+        addSpacer(root, 16)
+        root.addView(makePersonalFooterView())
 
         return scroll
     }
@@ -2361,6 +2363,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
         root.addView(setupWizardBtn)
+        addSpacer(root, 16)
+        root.addView(makePersonalFooterView())
 
         return scroll
     }
@@ -3800,6 +3804,16 @@ class MainActivity : AppCompatActivity() {
     private fun cBorder(): String = if (isDark) "#2E3D52" else "#CBD5E1"
     private fun cTextPrimary(): Int = Color.parseColor(if (isDark) "#F8FAFC" else "#0F172A")
     private fun cTextSecondary(): Int = Color.parseColor(if (isDark) "#94A3B8" else "#64748B")
+
+    private fun makePersonalFooterView(): TextView {
+        return TextView(this).apply {
+            text = "Built by Eleazer Patil for personal use"
+            textSize = 11f
+            setTextColor(cTextSecondary())
+            gravity = Gravity.CENTER
+            setPadding(0, 4, 0, 12)
+        }
+    }
 
     private fun makeCardContainer(): LinearLayout {
         return LinearLayout(this).apply {
