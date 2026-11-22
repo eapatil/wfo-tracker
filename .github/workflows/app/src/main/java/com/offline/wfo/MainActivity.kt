@@ -311,14 +311,28 @@ class MainActivity : AppCompatActivity() {
                         contentResolver.takePersistableUriPermission(treeUri, flags)
                     }
                     store.setAutoBackupTreeUri(treeUri.toString())
-                    val ok = store.triggerSilentAutoBackup()
-                    refreshAllViews()
-                    val msg = if (ok) {
-                        "Auto-backup enabled & synced!"
+
+                    val hadLocalDataBefore = store.getAllMarkedDates().isNotEmpty()
+                    val importedCount = store.restoreExistingBackupFromFolder(treeUri)
+                    if (importedCount > 0) {
+                        activeLogFilter = LogFilter.ALL
+                        syncBackgroundAndWidget()
+                        refreshAllViews()
+                        Toast.makeText(
+                            this,
+                            "Found existing backup — restored $importedCount date(s)!",
+                            Toast.LENGTH_LONG
+                        ).show()
                     } else {
-                        "Folder saved (will sync on next update)"
+                        val synced = store.triggerSilentAutoBackup()
+                        refreshAllViews()
+                        val msg = when {
+                            synced && hadLocalDataBefore -> "Auto-backup enabled & synced!"
+                            synced -> "Auto-backup folder ready!"
+                            else -> "Folder saved (will sync on next update)"
+                        }
+                        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
                     }
-                    Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
                 }
             }
             REQ_IMPORT_HOLIDAYS -> {
@@ -354,9 +368,8 @@ class MainActivity : AppCompatActivity() {
             REQ_IMPORT_CSV -> {
                 if (resultCode == Activity.RESULT_OK && data?.data != null) {
                     runCatching {
-                        val text = contentResolver.openInputStream(data.data!!)
-                            ?.bufferedReader()?.use { it.readText() } ?: ""
-                        val count = store.importFromCsv(text)
+                        val count = store.importFromUri(data.data!!, autoBackupAfter = true)
+                        activeLogFilter = LogFilter.ALL
                         syncBackgroundAndWidget()
                         refreshAllViews()
                         Toast.makeText(this, "Restored $count date(s)!", Toast.LENGTH_SHORT).show()
@@ -549,7 +562,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(title)
         root.addView(subtitle)
 
-        // Card A: Personal Profile & Lock
         val profileCard = makeCardContainer()
         profileCard.addView(makeSectionTitle("1. Personal Profile & Privacy"))
         addSpacer(profileCard, 14)
@@ -614,7 +626,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(profileCard)
         addSpacer(root, 20)
 
-        // Card B: System Permissions Checklist
         val permCard = makeCardContainer()
         permCard.addView(makeSectionTitle("2. Required System Permissions"))
         addSpacer(permCard, 12)
@@ -652,7 +663,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(permCard)
         addSpacer(root, 20)
 
-        // Card C: Office Wi-Fi & Geofence Location
         val trackingCard = makeCardContainer()
         trackingCard.addView(makeSectionTitle("3. Office Wi-Fi & Geofence Location"))
         setupLiveWifiView = TextView(this).apply {
@@ -705,7 +715,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(trackingCard)
         addSpacer(root, 20)
 
-        // Card D: Mandate Policy & Notification Preferences
         val policyCard = makeCardContainer()
         policyCard.addView(makeSectionTitle("4. Policy Rules & Notification Options"))
 
@@ -810,15 +819,14 @@ class MainActivity : AppCompatActivity() {
         root.addView(policyCard)
         addSpacer(root, 20)
 
-        // Card E: Silent Auto-Backup Folder
         val backupSetupCard = makeCardContainer()
-        backupSetupCard.addView(makeSectionTitle("5. Silent Auto-Backup Folder (Optional)"))
+        backupSetupCard.addView(makeSectionTitle("5. Auto-Backup Folder (Local or Drive)"))
         setupBackupFolderStatusView = TextView(this).apply {
             textSize = 13f
             setTextColor(cTextSecondary())
             setPadding(0, 6, 0, 12)
         }
-        val pickFolderBtn = makePillButton("📁 Choose Local / Drive Folder", "#E0E7FF", "#3730A3") {
+        val pickFolderBtn = makePillButton("📁 Choose Folder (Auto-Imports Existing Backup)", "#E0E7FF", "#3730A3") {
             launchBackupFolderPicker()
         }
         backupSetupCard.addView(setupBackupFolderStatusView)
@@ -863,7 +871,6 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
-        // Top Persistent Header + Check Now + Live Strip + Undo Banner
         val topBar = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(28, 20, 28, 12)
@@ -915,7 +922,6 @@ class MainActivity : AppCompatActivity() {
         profileHeader.addView(lockToggleBtn)
         topBar.addView(profileHeader)
 
-        // Today's Live Status Strip (connection status only — no timeframe)
         todayLiveStripView = TextView(this).apply {
             textSize = 13f
             setTypeface(null, Typeface.BOLD)
@@ -924,7 +930,6 @@ class MainActivity : AppCompatActivity() {
         }
         topBar.addView(todayLiveStripView)
 
-        // Undo Banner (Hidden by default; shown after Auto-Plan or Bulk Holiday Import)
         undoBannerRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -976,7 +981,6 @@ class MainActivity : AppCompatActivity() {
 
         scaffold.addView(topBar)
 
-        // Center Content Stack (3 Tabs)
         val tabContentHost = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -993,7 +997,6 @@ class MainActivity : AppCompatActivity() {
         tabContentHost.addView(settingsTabScroll)
         scaffold.addView(tabContentHost)
 
-        // Bottom Navigation Bar
         val bottomNav = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             background = roundedBox(cCardHex(), cBorder(), 0f, 2)
@@ -1024,7 +1027,6 @@ class MainActivity : AppCompatActivity() {
         }
         scroll.addView(root)
 
-        // Month Switcher + Today Jump Chip
         val navRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -1056,7 +1058,6 @@ class MainActivity : AppCompatActivity() {
         navRow.addView(nextBtn)
         root.addView(navRow)
 
-        // Smart Pace Status Pill
         paceBannerView = TextView(this).apply {
             textSize = 13f
             setTypeface(null, Typeface.BOLD)
@@ -1066,7 +1067,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(paceBannerView)
         addSpacer(root, 10)
 
-        // Weekly Pace Planner Pill
         weeklyPacePillView = TextView(this).apply {
             textSize = 12f
             setTypeface(null, Typeface.BOLD)
@@ -1076,7 +1076,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(weeklyPacePillView)
         addSpacer(root, 16)
 
-        // Hero Card with Custom Circular Progress Ring
         val heroCard = makeCardContainer()
         circularRingView = CircularProgressRingView(this).apply {
             layoutParams = LinearLayout.LayoutParams(340, 340).apply {
@@ -1116,7 +1115,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(heroCard)
         addSpacer(root, 16)
 
-        // Interactive Swipeable Calendar Card + Auto-Plan
         val calCard = makeCardContainer()
         val calHeaderRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1149,7 +1147,6 @@ class MainActivity : AppCompatActivity() {
         }
         calCard.addView(calHint)
 
-        // Tap Mode Selector Row
         val modeRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, 0, 0, 14)
@@ -1214,7 +1211,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(calCard)
         addSpacer(root, 16)
 
-        // Monthly Audit Log Card with Quick-Filter Pills
         val logCard = makeCardContainer()
         logCard.addView(makeSectionTitle("Monthly Log & Timestamps"))
         addSpacer(logCard, 10)
@@ -1407,7 +1403,6 @@ class MainActivity : AppCompatActivity() {
         }
         scroll.addView(root)
 
-        // 1. Tracking Mode Selector (Wi-Fi Only / Location Only / Both)
         val modeCard = makeCardContainer()
         modeCard.addView(makeSectionTitle("Tracking Mode"))
         val modeSelectorRow = LinearLayout(this).apply {
@@ -1448,7 +1443,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(modeCard)
         addSpacer(root, 16)
 
-        // 2. Office Location & Radius (Up to 1500m + Select Location)
         locationSectionCard = makeCardContainer()
         locationSectionCard.addView(makeSectionTitle("Office Geofence Location"))
         selectedOfficeView = TextView(this).apply {
@@ -1499,7 +1493,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(locationSectionCard)
         addSpacer(root, 16)
 
-        // 3. Office Wi-Fi Networks
         wifiSectionCard = makeCardContainer()
         wifiSectionCard.addView(makeSectionTitle("Office Wi-Fi Auto-Detection"))
         currentWifiView = TextView(this).apply {
@@ -1566,33 +1559,26 @@ class MainActivity : AppCompatActivity() {
         root.addView(wifiSectionCard)
         addSpacer(root, 16)
 
-        // 4. Granular Notification Controls
         val notifCard = makeCardContainer()
         notifCard.addView(makeSectionTitle("Notification Preferences"))
         addSpacer(notifCard, 6)
 
         notifConnectSwitch = makeSettingsSwitch("Connect Alert (Day Captured)") { checked ->
-            if (!ensureEditUnlocked()) return@makeSettingsSwitch
             store.setConnectAlertEnabled(checked)
         }
         notifDisconnectSwitch = makeSettingsSwitch("Disconnect Alert (Left Wi-Fi / Zone)") { checked ->
-            if (!ensureEditUnlocked()) return@makeSettingsSwitch
             store.setDisconnectAlertEnabled(checked)
         }
         notifPlannedSwitch = makeSettingsSwitch("Planned Day Alerts (Eve, Morning, Missed)") { checked ->
-            if (!ensureEditUnlocked()) return@makeSettingsSwitch
             store.setPlannedRemindersEnabled(checked)
         }
         notifMorningSwitch = makeSettingsSwitch("Morning Pace Nudge on WFH Days") { checked ->
-            if (!ensureEditUnlocked()) return@makeSettingsSwitch
             store.setMorningNudgeEnabled(checked)
         }
         notifTargetBufferSwitch = makeSettingsSwitch("Monthly Target Met & Zero Buffer Alerts") { checked ->
-            if (!ensureEditUnlocked()) return@makeSettingsSwitch
             store.setTargetBufferAlertEnabled(checked)
         }
         notifQuarterSwitch = makeSettingsSwitch("Quarter-End Pace Alert") { checked ->
-            if (!ensureEditUnlocked()) return@makeSettingsSwitch
             store.setQuarterPaceAlertEnabled(checked)
         }
 
@@ -1605,7 +1591,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(notifCard)
         addSpacer(root, 16)
 
-        // 5. Bulk Holiday Importer (.ics or CSV)
         val holidayCard = makeCardContainer()
         holidayCard.addView(makeSectionTitle("Bulk Holiday Importer"))
         val holHint = TextView(this).apply {
@@ -1623,7 +1608,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(holidayCard)
         addSpacer(root, 16)
 
-        // 6. Silent Auto-Backup & Manual CSV Backup
         val backupCard = makeCardContainer()
         backupCard.addView(makeSectionTitle("Backup & Data Portability"))
         autoBackupStatusView = TextView(this).apply {
@@ -1632,7 +1616,7 @@ class MainActivity : AppCompatActivity() {
         }
         backupCard.addView(autoBackupStatusView)
 
-        val autoFolderBtn = makePillButton("🔄 Configure Silent Auto-Backup Folder", "#0284C7", "#FFFFFF") {
+        val autoFolderBtn = makePillButton("🔄 Configure Auto-Backup Folder (Reuses Existing File)", "#0284C7", "#FFFFFF") {
             if (!ensureEditUnlocked()) return@makePillButton
             launchBackupFolderPicker()
         }
@@ -1662,7 +1646,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(backupCard)
         addSpacer(root, 16)
 
-        // 7. Policy, Permissions & Profile Wizard Button
         val setupWizardBtn = makePillButton("🛠️ Edit Policy Rules, Profile & Permissions", "#4F46E5", "#FFFFFF") {
             if (isEditUnlocked) {
                 showSetupMode()
@@ -1681,7 +1664,13 @@ class MainActivity : AppCompatActivity() {
             textSize = 13f
             setTextColor(cTextPrimary())
             setPadding(0, 8, 0, 8)
-            setOnCheckedChangeListener { _, checked ->
+            setOnCheckedChangeListener { view, checked ->
+                if (!view.isPressed) return@setOnCheckedChangeListener
+                if (!isEditUnlocked) {
+                    isChecked = !checked
+                    Toast.makeText(this@MainActivity, "Locked — Tap 🔒 at top to unlock edits", Toast.LENGTH_SHORT).show()
+                    return@setOnCheckedChangeListener
+                }
                 onToggle(checked)
                 refreshAllViews()
             }
@@ -1880,12 +1869,10 @@ class MainActivity : AppCompatActivity() {
         val targetPct = store.getTargetPercent()
         val mode = store.getTrackingMode()
 
-        // Update Avatars
         val avatarBmp = loadCircularAvatarBitmap()
         setupAvatarView.setImageBitmap(avatarBmp)
         dashAvatarView.setImageBitmap(avatarBmp)
 
-        // Setup Wizard Refresh
         setupPermStatusView.text = if (locOk && notifOk) {
             "✅ Location & Notifications: Allowed"
         } else {
@@ -1934,7 +1921,6 @@ class MainActivity : AppCompatActivity() {
             }
         )
 
-        // Persistent Header Refresh
         val uName = store.getUserName()
         dashGreetingView.text = if (uName.isNotEmpty()) "Hi, $uName" else "Hi there"
 
@@ -1962,7 +1948,6 @@ class MainActivity : AppCompatActivity() {
             if (isEditUnlocked) Color.parseColor("#065F46") else cTextPrimary()
         )
 
-        // Today's Live Status Strip (Mode-aware: Wi-Fi vs Office Location)
         val today = LocalDate.now()
         val todayType = store.getDayType(today)
         val isOnOfficePresence = store.wasConnectedToOfficeWifi()
@@ -2025,7 +2010,6 @@ class MainActivity : AppCompatActivity() {
 
         todayJumpBtn.visibility = if (selectedMonth != YearMonth.now()) View.VISIBLE else View.GONE
 
-        // Monthly, Weekly Pace & Circular Ring Refresh
         val s = store.getMonthStats(selectedMonth)
         val w = store.getWeeklyPaceStats()
 
@@ -2129,7 +2113,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Analytics Tab Refresh
         val q = store.getQuarterStats(selectedMonth)
         val r = store.getRhythmStats()
         val trends = store.getMultiMonthTrend(selectedMonth, 6)
@@ -2167,7 +2150,6 @@ class MainActivity : AppCompatActivity() {
         simResultView.text =
             "Simulated Target: ${simStats.requiredDays} days (${simStats.effectiveWorkingDays} working days) • Still Needed: ${simStats.remainingDays} • Buffer: ${maxOf(0, simStats.bufferDays)}$exclNote"
 
-        // Settings Tab Refresh
         styleModeChip(modeWifiOnlyBtn, mode == TrackingMode.WIFI_ONLY, "#4F46E5")
         styleModeChip(modeLocOnlyBtn, mode == TrackingMode.LOCATION_ONLY, "#0284C7")
         styleModeChip(modeBothBtn, mode == TrackingMode.BOTH, "#10B981")
@@ -2616,6 +2598,10 @@ class MainActivity : AppCompatActivity() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "*/*"
+            putExtra(
+                Intent.EXTRA_MIME_TYPES,
+                arrayOf("text/calendar", "text/csv", "text/comma-separated-values", "text/plain", "*/*")
+            )
         }
         launchSystemIntentForResult(intent, REQ_IMPORT_HOLIDAYS)
     }
@@ -2633,6 +2619,10 @@ class MainActivity : AppCompatActivity() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "*/*"
+            putExtra(
+                Intent.EXTRA_MIME_TYPES,
+                arrayOf("text/csv", "text/comma-separated-values", "text/plain", "application/csv", "*/*")
+            )
         }
         launchSystemIntentForResult(intent, REQ_IMPORT_CSV)
     }
