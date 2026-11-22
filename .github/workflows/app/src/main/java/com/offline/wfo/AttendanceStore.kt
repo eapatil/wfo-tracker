@@ -33,13 +33,6 @@ enum class TrackingMode {
     BOTH
 }
 
-data class OfficeLocationPreset(
-    val name: String,
-    val lat: Double,
-    val lng: Double,
-    val radiusMeters: Int = 500
-)
-
 data class DayLog(
     val dateStr: String,
     val dayOfWeekShort: String,
@@ -150,17 +143,16 @@ class AttendanceStore(private val context: Context) {
         prefs.edit().putString("tracking_mode", mode.name).apply()
     }
 
-    fun getOfficeLocationName(): String =
-        prefs.getString("office_loc_name", "Deloitte Towers, Hyderabad") ?: "Deloitte Towers, Hyderabad"
+    fun getOfficeLocationName(): String = prefs.getString("office_loc_name", "") ?: ""
 
     fun getOfficeLat(): Double =
         java.lang.Double.longBitsToDouble(
-            prefs.getLong("office_lat_bits", java.lang.Double.doubleToRawLongBits(17.4430743))
+            prefs.getLong("office_lat_bits", java.lang.Double.doubleToRawLongBits(0.0))
         )
 
     fun getOfficeLng(): Double =
         java.lang.Double.longBitsToDouble(
-            prefs.getLong("office_lng_bits", java.lang.Double.doubleToRawLongBits(78.3693235))
+            prefs.getLong("office_lng_bits", java.lang.Double.doubleToRawLongBits(0.0))
         )
 
     fun getGeofenceRadiusMeters(): Int =
@@ -171,23 +163,21 @@ class AttendanceStore(private val context: Context) {
     }
 
     fun hasOfficeLocationConfigured(): Boolean =
-        getOfficeLocationName().isNotBlank() && (getOfficeLat() != 0.0 || getOfficeLng() != 0.0)
+        prefs.getBoolean("office_loc_configured", false) &&
+            (getOfficeLat() != 0.0 || getOfficeLng() != 0.0)
 
     fun setOfficeLocation(name: String, lat: Double, lng: Double, radiusMeters: Int = getGeofenceRadiusMeters()) {
-        val cleanName = name.trim().ifEmpty { "Office Location" }
+        val cleanName = name.trim().ifEmpty {
+            String.format(Locale.US, "Office (%.4f, %.4f)", lat, lng)
+        }
         prefs.edit()
+            .putBoolean("office_loc_configured", true)
             .putString("office_loc_name", cleanName)
             .putLong("office_lat_bits", java.lang.Double.doubleToRawLongBits(lat))
             .putLong("office_lng_bits", java.lang.Double.doubleToRawLongBits(lng))
             .putInt("geofence_radius_m", radiusMeters.coerceIn(100, 5000))
             .apply()
     }
-
-    fun getNearbyOfficePresets(): List<OfficeLocationPreset> = listOf(
-        OfficeLocationPreset("Deloitte Towers, Hyderabad", 17.4430743, 78.3693235, 500),
-        OfficeLocationPreset("Deloitte Tower-3, Gachibowli", 17.4426, 78.3698, 500),
-        OfficeLocationPreset("Deloitte Towers Zone 6", 17.4435, 78.3689, 500)
-    )
 
     fun setLastKnownLocation(lat: Double, lng: Double) {
         prefs.edit()
@@ -270,10 +260,6 @@ class AttendanceStore(private val context: Context) {
         return importFromCsv(text, autoBackupAfter = autoBackupAfter)
     }
 
-    /**
-     * Checks whether `wfo_auto_backup.csv` already exists in `treeUri` and imports any
-     * saved entries without creating a duplicate file. Returns the number of restored dates.
-     */
     fun restoreExistingBackupFromFolder(treeUri: Uri): Int {
         val existingUri = findExistingAutoBackupUri(treeUri) ?: return 0
         val restored = runCatching {
