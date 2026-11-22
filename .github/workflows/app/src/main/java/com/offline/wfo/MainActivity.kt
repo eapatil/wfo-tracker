@@ -105,8 +105,14 @@ class MainActivity : AppCompatActivity() {
 
     // Lock Screen Live Animation State
     private lateinit var lockIconView: TextView
-    private lateinit var lockPulseRingView: View
+    private lateinit var lockOuterHaloView: View
+    private lateinit var lockInnerHaloView: View
     private var lockRunningAnimSet: AnimatorSet? = null
+
+    // Live Tracking Heartbeat & Active Presence Pulse State
+    private lateinit var heartbeatDotView: View
+    private var heartbeatAnimator: AnimatorSet? = null
+    private var liveStripPulseAnimator: ObjectAnimator? = null
 
     // Root Containers
     private lateinit var appLockOverlay: LinearLayout
@@ -289,13 +295,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        stopLockScreenRunningAnimation()
+        stopAllLoopingAnimations()
         runCatching { unregisterReceiver(updateReceiver) }
     }
 
     override fun onStop() {
         super.onStop()
-        stopLockScreenRunningAnimation()
+        stopAllLoopingAnimations()
         if (store.isSetupComplete() && !isAwaitingSystemIntent) {
             isEditUnlocked = false
             if (store.isFullAppLockEnabled()) {
@@ -458,39 +464,123 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ==================== ANIMATIONS (LOCK, UNLOCK, ENTRANCE & MOTION) ====================
+    // ==================== ANIMATIONS (HEARTBEAT, LOCK, UNLOCK & ENTRANCE) ====================
+
+    private fun stopAllLoopingAnimations() {
+        stopLockScreenRunningAnimation()
+        stopHeartbeatAnimation()
+        stopLiveStripPulse()
+    }
+
+    private fun startHeartbeatAnimation(active: Boolean) {
+        if (!::heartbeatDotView.isInitialized) return
+        stopHeartbeatAnimation()
+        if (!active) {
+            heartbeatDotView.scaleX = 1f
+            heartbeatDotView.scaleY = 1f
+            heartbeatDotView.alpha = 0.45f
+            return
+        }
+
+        heartbeatDotView.alpha = 1f
+        val beat = ObjectAnimator.ofPropertyValuesHolder(
+            heartbeatDotView,
+            PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.36f, 1.06f, 1.28f, 1f),
+            PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.36f, 1.06f, 1.28f, 1f),
+            PropertyValuesHolder.ofFloat(View.ALPHA, 1f, 0.7f, 1f, 0.75f, 1f)
+        ).apply {
+            duration = 1400L
+            repeatCount = ValueAnimator.INFINITE
+            interpolator = AccelerateDecelerateInterpolator()
+        }
+
+        heartbeatAnimator = AnimatorSet().apply {
+            play(beat)
+            start()
+        }
+    }
+
+    private fun stopHeartbeatAnimation() {
+        heartbeatAnimator?.cancel()
+        heartbeatAnimator = null
+        if (::heartbeatDotView.isInitialized) {
+            heartbeatDotView.scaleX = 1f
+            heartbeatDotView.scaleY = 1f
+        }
+    }
+
+    private fun startLiveStripPulse(enabled: Boolean) {
+        if (!::todayLiveStripView.isInitialized) return
+        stopLiveStripPulse()
+        if (!enabled) {
+            todayLiveStripView.scaleX = 1f
+            todayLiveStripView.scaleY = 1f
+            return
+        }
+        liveStripPulseAnimator = ObjectAnimator.ofPropertyValuesHolder(
+            todayLiveStripView,
+            PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.02f, 1f),
+            PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.04f, 1f)
+        ).apply {
+            duration = 1800L
+            repeatCount = ValueAnimator.INFINITE
+            interpolator = AccelerateDecelerateInterpolator()
+            start()
+        }
+    }
+
+    private fun stopLiveStripPulse() {
+        liveStripPulseAnimator?.cancel()
+        liveStripPulseAnimator = null
+        if (::todayLiveStripView.isInitialized) {
+            todayLiveStripView.scaleX = 1f
+            todayLiveStripView.scaleY = 1f
+        }
+    }
 
     private fun startLockScreenRunningAnimation() {
-        if (!::lockIconView.isInitialized || !::lockPulseRingView.isInitialized) return
+        if (!::lockIconView.isInitialized || !::lockOuterHaloView.isInitialized || !::lockInnerHaloView.isInitialized) return
         stopLockScreenRunningAnimation()
 
         lockIconView.text = "🔒"
         lockIconView.rotation = 0f
 
-        val pulseScaleX = ObjectAnimator.ofPropertyValuesHolder(
-            lockPulseRingView,
-            PropertyValuesHolder.ofFloat(View.SCALE_X, 0.88f, 1.24f, 0.88f),
-            PropertyValuesHolder.ofFloat(View.SCALE_Y, 0.88f, 1.24f, 0.88f),
-            PropertyValuesHolder.ofFloat(View.ALPHA, 0.55f, 0.12f, 0.55f)
+        val outerRadar = ObjectAnimator.ofPropertyValuesHolder(
+            lockOuterHaloView,
+            PropertyValuesHolder.ofFloat(View.SCALE_X, 0.85f, 1.55f),
+            PropertyValuesHolder.ofFloat(View.SCALE_Y, 0.85f, 1.55f),
+            PropertyValuesHolder.ofFloat(View.ALPHA, 0.55f, 0.0f)
         ).apply {
-            duration = 2200L
+            duration = 2000L
+            repeatCount = ValueAnimator.INFINITE
+            interpolator = DecelerateInterpolator()
+        }
+
+        val innerPulse = ObjectAnimator.ofPropertyValuesHolder(
+            lockInnerHaloView,
+            PropertyValuesHolder.ofFloat(View.SCALE_X, 0.92f, 1.16f, 0.92f),
+            PropertyValuesHolder.ofFloat(View.SCALE_Y, 0.92f, 1.16f, 0.92f),
+            PropertyValuesHolder.ofFloat(View.ALPHA, 0.65f, 0.25f, 0.65f)
+        ).apply {
+            duration = 1400L
             repeatCount = ValueAnimator.INFINITE
             interpolator = AccelerateDecelerateInterpolator()
         }
 
-        val iconFloat = ObjectAnimator.ofPropertyValuesHolder(
+        val pendulumRock = ObjectAnimator.ofPropertyValuesHolder(
             lockIconView,
-            PropertyValuesHolder.ofFloat(View.TRANSLATION_Y, 0f, -8f, 0f),
-            PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.06f, 1f),
-            PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.06f, 1f)
+            PropertyValuesHolder.ofFloat(View.ROTATION, -8f, 8f, -8f),
+            PropertyValuesHolder.ofFloat(View.TRANSLATION_Y, 0f, -10f, 0f),
+            PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.08f, 1f),
+            PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.08f, 1f)
         ).apply {
-            duration = 2200L
+            duration = 1800L
             repeatCount = ValueAnimator.INFINITE
             interpolator = AccelerateDecelerateInterpolator()
         }
 
         lockRunningAnimSet = AnimatorSet().apply {
-            playTogether(pulseScaleX, iconFloat)
+            playTogether(outerRadar, innerPulse, pendulumRock)
             start()
         }
     }
@@ -498,10 +588,15 @@ class MainActivity : AppCompatActivity() {
     private fun stopLockScreenRunningAnimation() {
         lockRunningAnimSet?.cancel()
         lockRunningAnimSet = null
-        if (::lockPulseRingView.isInitialized) {
-            lockPulseRingView.scaleX = 1f
-            lockPulseRingView.scaleY = 1f
-            lockPulseRingView.alpha = 0.35f
+        if (::lockOuterHaloView.isInitialized) {
+            lockOuterHaloView.scaleX = 1f
+            lockOuterHaloView.scaleY = 1f
+            lockOuterHaloView.alpha = 0.25f
+        }
+        if (::lockInnerHaloView.isInitialized) {
+            lockInnerHaloView.scaleX = 1f
+            lockInnerHaloView.scaleY = 1f
+            lockInnerHaloView.alpha = 0.45f
         }
         if (::lockIconView.isInitialized) {
             lockIconView.translationY = 0f
@@ -521,17 +616,18 @@ class MainActivity : AppCompatActivity() {
 
         val pop = ObjectAnimator.ofPropertyValuesHolder(
             lockIconView,
-            PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.32f, 1.1f),
-            PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.32f, 1.1f),
-            PropertyValuesHolder.ofFloat(View.ROTATION, 0f, -18f, 12f, 0f)
+            PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.44f, 1.15f),
+            PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.44f, 1.15f),
+            PropertyValuesHolder.ofFloat(View.TRANSLATION_Y, 0f, -18f, 0f),
+            PropertyValuesHolder.ofFloat(View.ROTATION, 0f, -22f, 14f, 0f)
         ).apply {
-            duration = 360L
-            interpolator = OvershootInterpolator()
+            duration = 440L
+            interpolator = OvershootInterpolator(1.2f)
         }
 
         val fadeOverlay = ObjectAnimator.ofFloat(appLockOverlay, View.ALPHA, 1f, 0f).apply {
-            duration = 220L
-            startDelay = 160L
+            duration = 260L
+            startDelay = 200L
         }
 
         AnimatorSet().apply {
@@ -552,63 +648,83 @@ class MainActivity : AppCompatActivity() {
 
         val targets = listOfNotNull(
             if (::topHeaderBar.isInitialized) topHeaderBar to 0L else null,
-            if (::heroCardContainer.isInitialized) heroCardContainer to 65L else null,
-            if (::calendarCardContainer.isInitialized) calendarCardContainer to 130L else null
+            if (::heroCardContainer.isInitialized) heroCardContainer to 85L else null,
+            if (::calendarCardContainer.isInitialized) calendarCardContainer to 170L else null
         )
 
         targets.forEach { (view, delay) ->
             view.alpha = 0f
-            view.translationY = 18f
+            view.translationY = 44f
+            view.scaleX = 0.96f
+            view.scaleY = 0.96f
             view.animate()
                 .alpha(1f)
                 .translationY(0f)
+                .scaleX(1f)
+                .scaleY(1f)
                 .setStartDelay(delay)
-                .setDuration(240L)
-                .setInterpolator(DecelerateInterpolator())
+                .setDuration(340L)
+                .setInterpolator(OvershootInterpolator(0.85f))
+                .start()
+        }
+
+        listOfNotNull(
+            if (::kpiWorkingView.isInitialized) kpiWorkingView else null,
+            if (::kpiRemainingView.isInitialized) kpiRemainingView else null,
+            if (::kpiBufferView.isInitialized) kpiBufferView else null
+        ).forEachIndexed { idx, kpi ->
+            kpi.scaleX = 0.85f
+            kpi.scaleY = 0.85f
+            kpi.animate()
+                .scaleX(1f)
+                .scaleY(1f)
+                .setStartDelay((180 + idx * 55).toLong())
+                .setDuration(280L)
+                .setInterpolator(OvershootInterpolator(1.1f))
                 .start()
         }
     }
 
     private fun animateTabReveal(target: View) {
         target.alpha = 0f
-        target.translationY = 12f
+        target.translationY = 24f
         target.animate()
             .alpha(1f)
             .translationY(0f)
-            .setDuration(180L)
+            .setDuration(230L)
             .setInterpolator(DecelerateInterpolator())
             .start()
     }
 
     private fun animateCalendarGlide(direction: Int) {
         if (!::calendarContainer.isInitialized) return
-        val offset = (28f * direction)
-        calendarContainer.alpha = 0.25f
+        val offset = (110f * direction)
+        calendarContainer.alpha = 0.15f
         calendarContainer.translationX = offset
         calendarContainer.animate()
             .alpha(1f)
             .translationX(0f)
-            .setDuration(190L)
+            .setDuration(250L)
             .setInterpolator(DecelerateInterpolator())
             .start()
     }
 
     private fun animateCellPop(view: View) {
         view.animate()
-            .scaleX(0.9f)
-            .scaleY(0.9f)
-            .setDuration(75L)
+            .scaleX(0.88f)
+            .scaleY(0.88f)
+            .setDuration(85L)
             .withEndAction {
                 view.animate()
-                    .scaleX(1.06f)
-                    .scaleY(1.06f)
-                    .setDuration(90L)
-                    .setInterpolator(OvershootInterpolator())
+                    .scaleX(1.12f)
+                    .scaleY(1.12f)
+                    .setDuration(120L)
+                    .setInterpolator(OvershootInterpolator(1.3f))
                     .withEndAction {
                         view.animate()
                             .scaleX(1f)
                             .scaleY(1f)
-                            .setDuration(80L)
+                            .setDuration(90L)
                             .start()
                     }
                     .start()
@@ -619,6 +735,8 @@ class MainActivity : AppCompatActivity() {
     // ==================== VIEW SWITCHERS, TABS & UNDO ====================
 
     private fun showAppLockScreen() {
+        stopHeartbeatAnimation()
+        stopLiveStripPulse()
         appLockOverlay.alpha = 1f
         appLockOverlay.visibility = View.VISIBLE
         setupScroll.visibility = View.GONE
@@ -683,13 +801,13 @@ class MainActivity : AppCompatActivity() {
         lastUndoBatch = batch
         undoBannerText.text = message
         undoBannerRow.alpha = 0f
-        undoBannerRow.translationY = -12f
+        undoBannerRow.translationY = -44f
         undoBannerRow.visibility = View.VISIBLE
         undoBannerRow.animate()
             .alpha(1f)
             .translationY(0f)
-            .setDuration(200L)
-            .setInterpolator(DecelerateInterpolator())
+            .setDuration(260L)
+            .setInterpolator(OvershootInterpolator(0.9f))
             .start()
     }
 
@@ -733,7 +851,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ==================== 1. FULL-APP LOCK OVERLAY WITH LIVE ANIMATION ====================
+    // ==================== 1. FULL-APP LOCK OVERLAY WITH RADAR & LOCK MOTION ====================
 
     private fun buildAppLockOverlay(): LinearLayout {
         return LinearLayout(this).apply {
@@ -744,27 +862,40 @@ class MainActivity : AppCompatActivity() {
             visibility = View.GONE
 
             val animStage = FrameLayout(this@MainActivity).apply {
-                layoutParams = LinearLayout.LayoutParams(190, 190).apply {
+                layoutParams = LinearLayout.LayoutParams(220, 220).apply {
                     gravity = Gravity.CENTER_HORIZONTAL
                 }
             }
 
-            lockPulseRingView = View(this@MainActivity).apply {
-                layoutParams = FrameLayout.LayoutParams(156, 156).apply {
+            lockOuterHaloView = View(this@MainActivity).apply {
+                layoutParams = FrameLayout.LayoutParams(184, 184).apply {
                     gravity = Gravity.CENTER
                 }
                 background = roundedBox(
-                    if (isDark) "#312E81" else "#E0E7FF",
+                    if (isDark) "#312E81" else "#C7D2FE",
+                    "#6366F1",
+                    999f,
+                    2
+                )
+                alpha = 0.25f
+            }
+
+            lockInnerHaloView = View(this@MainActivity).apply {
+                layoutParams = FrameLayout.LayoutParams(144, 144).apply {
+                    gravity = Gravity.CENTER
+                }
+                background = roundedBox(
+                    if (isDark) "#3730A3" else "#E0E7FF",
                     "#4F46E5",
                     999f,
                     3
                 )
-                alpha = 0.35f
+                alpha = 0.45f
             }
 
             lockIconView = TextView(this@MainActivity).apply {
                 text = "🔒"
-                textSize = 48f
+                textSize = 50f
                 gravity = Gravity.CENTER
                 layoutParams = FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -773,7 +904,8 @@ class MainActivity : AppCompatActivity() {
                 )
             }
 
-            animStage.addView(lockPulseRingView)
+            animStage.addView(lockOuterHaloView)
+            animStage.addView(lockInnerHaloView)
             animStage.addView(lockIconView)
 
             val title = TextView(this@MainActivity).apply {
@@ -1166,15 +1298,30 @@ class MainActivity : AppCompatActivity() {
             setTypeface(null, Typeface.BOLD)
             setTextColor(cTextPrimary())
         }
+
+        val statusRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 3, 0, 0)
+        }
+        heartbeatDotView = View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(18, 18).apply {
+                setMargins(0, 0, 10, 0)
+            }
+            background = roundedBox("#10B981", "#10B981", 999f, 0)
+        }
         dashServiceStatusView = TextView(this).apply {
             textSize = 12f
-            setPadding(0, 2, 0, 0)
+            setTypeface(null, Typeface.BOLD)
         }
+        statusRow.addView(heartbeatDotView)
+        statusRow.addView(dashServiceStatusView)
+
         greetingCol.addView(dashGreetingView)
-        greetingCol.addView(dashServiceStatusView)
+        greetingCol.addView(statusRow)
 
         checkNowBtn = makeSmallChipButton("🔄") {
-            checkNowBtn.animate().rotationBy(360f).setDuration(450L).setInterpolator(DecelerateInterpolator()).start()
+            checkNowBtn.animate().rotationBy(360f).setDuration(500L).setInterpolator(DecelerateInterpolator()).start()
             triggerManualCheckNow()
         }
         lockToggleBtn = makeSmallChipButton("🔒") {
@@ -1428,10 +1575,26 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, 0, 0, 14)
         }
-        modeOfficeBtn = makeModeChip("🏢 Office") { activeTapMode = DayType.OFFICE; refreshAllViews(animateCharts = false) }
-        modePlannedBtn = makeModeChip("📅 Plan") { activeTapMode = DayType.PLANNED; refreshAllViews(animateCharts = false) }
-        modeLeaveBtn = makeModeChip("🌴 Leave") { activeTapMode = DayType.LEAVE; refreshAllViews(animateCharts = false) }
-        modeHolidayBtn = makeModeChip("🎉 Holiday") { activeTapMode = DayType.HOLIDAY; refreshAllViews(animateCharts = false) }
+        modeOfficeBtn = makeModeChip("🏢 Office") {
+            activeTapMode = DayType.OFFICE
+            animateCellPop(modeOfficeBtn)
+            refreshAllViews(animateCharts = false)
+        }
+        modePlannedBtn = makeModeChip("📅 Plan") {
+            activeTapMode = DayType.PLANNED
+            animateCellPop(modePlannedBtn)
+            refreshAllViews(animateCharts = false)
+        }
+        modeLeaveBtn = makeModeChip("🌴 Leave") {
+            activeTapMode = DayType.LEAVE
+            animateCellPop(modeLeaveBtn)
+            refreshAllViews(animateCharts = false)
+        }
+        modeHolidayBtn = makeModeChip("🎉 Holiday") {
+            activeTapMode = DayType.HOLIDAY
+            animateCellPop(modeHolidayBtn)
+            refreshAllViews(animateCharts = false)
+        }
 
         modeRow.addView(modeOfficeBtn)
         addHorizontalGap(modeRow, 6)
@@ -1760,7 +1923,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(locationSectionCard)
         addSpacer(root, 16)
 
-        // Priority-Ordered Preferred Weekdays Card
         val priorityCard = makeCardContainer()
         priorityCard.addView(makeSectionTitle("Auto-Plan Preferred Weekdays (Priority Order)"))
         val prioHint = TextView(this).apply {
@@ -1896,7 +2058,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(notifCard)
         addSpacer(root, 16)
 
-        // Upcoming Holidays & Leaves Manager + Bulk Importer
         val holidayCard = makeCardContainer()
         val holHeaderRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -2246,7 +2407,7 @@ class MainActivity : AppCompatActivity() {
                         gravity = Gravity.START
                         setLineSpacing(4f, 1.0f)
                         alpha = 0f
-                        translationY = 10f
+                        translationY = 14f
                         layoutParams = LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.MATCH_PARENT,
                             LinearLayout.LayoutParams.WRAP_CONTENT
@@ -2254,8 +2415,8 @@ class MainActivity : AppCompatActivity() {
                         animate()
                             .alpha(1f)
                             .translationY(0f)
-                            .setStartDelay((i * 45).toLong())
-                            .setDuration(180L)
+                            .setStartDelay((i * 55).toLong())
+                            .setDuration(220L)
                             .start()
                     }
                     searchResultsBox.addView(resultBtn)
@@ -2591,11 +2752,15 @@ class MainActivity : AppCompatActivity() {
             TrackingMode.BOTH -> store.getTargetSsids().isNotEmpty() || store.hasOfficeLocationConfigured()
         }
         if (trackingReady) {
-            dashServiceStatusView.text = "🟢 Auto-Tracking Active"
+            dashServiceStatusView.text = "Auto-Tracking Active"
             dashServiceStatusView.setTextColor(Color.parseColor("#10B981"))
+            heartbeatDotView.background = roundedBox("#10B981", "#10B981", 999f, 0)
+            startHeartbeatAnimation(true)
         } else {
-            dashServiceStatusView.text = "🟠 Setup Incomplete (Tap Settings)"
+            dashServiceStatusView.text = "Setup Incomplete (Tap Settings)"
             dashServiceStatusView.setTextColor(Color.parseColor("#F59E0B"))
+            heartbeatDotView.background = roundedBox("#F59E0B", "#F59E0B", 999f, 0)
+            startHeartbeatAnimation(false)
         }
 
         lockToggleBtn.text = if (isEditUnlocked) "🔓 Unlocked" else "🔒 Locked"
@@ -2619,6 +2784,8 @@ class MainActivity : AppCompatActivity() {
             TrackingMode.WIFI_ONLY -> "Not connected to office Wi-Fi"
             TrackingMode.BOTH -> "Not connected to office Wi-Fi or at office location"
         }
+
+        startLiveStripPulse(isOnOfficePresence)
 
         when {
             isOnOfficePresence -> {
@@ -3636,8 +3803,8 @@ class MainActivity : AppCompatActivity() {
             ringAnimator?.cancel()
             if (animate) {
                 ringAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-                    duration = 460L
-                    interpolator = DecelerateInterpolator()
+                    duration = 650L
+                    interpolator = DecelerateInterpolator(1.4f)
                     addUpdateListener { va ->
                         animFraction = va.animatedValue as Float
                         invalidate()
@@ -3685,8 +3852,8 @@ class MainActivity : AppCompatActivity() {
     private class TrendBarChartView(context: Context) : View(context) {
         private var items: List<MonthlyTrendPoint> = emptyList()
         private var dark = false
-        private var barFraction = 1f
-        private var barAnimator: ValueAnimator? = null
+        private var barFractions: FloatArray = FloatArray(0)
+        private val barAnimators = mutableListOf<ValueAnimator>()
 
         private val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
         private val targetLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -3708,19 +3875,32 @@ class MainActivity : AppCompatActivity() {
             this.items = points
             this.dark = isDark
 
-            barAnimator?.cancel()
+            barAnimators.forEach { it.cancel() }
+            barAnimators.clear()
+
+            if (points.isEmpty()) {
+                barFractions = FloatArray(0)
+                invalidate()
+                return
+            }
+
             if (animate) {
-                barAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-                    duration = 420L
-                    interpolator = DecelerateInterpolator()
-                    addUpdateListener { va ->
-                        barFraction = va.animatedValue as Float
-                        invalidate()
+                barFractions = FloatArray(points.size) { 0f }
+                points.indices.forEach { idx ->
+                    val va = ValueAnimator.ofFloat(0f, 1f).apply {
+                        startDelay = (idx * 55).toLong()
+                        duration = 460L
+                        interpolator = OvershootInterpolator(0.75f)
+                        addUpdateListener { anim ->
+                            barFractions[idx] = (anim.animatedValue as Float).coerceAtLeast(0f)
+                            invalidate()
+                        }
+                        start()
                     }
-                    start()
+                    barAnimators.add(va)
                 }
             } else {
-                barFraction = 1f
+                barFractions = FloatArray(points.size) { 1f }
                 invalidate()
             }
         }
@@ -3745,9 +3925,10 @@ class MainActivity : AppCompatActivity() {
             valuePaint.color = Color.parseColor(if (dark) "#F8FAFC" else "#0F172A")
 
             items.forEachIndexed { idx, pt ->
+                val frac = barFractions.getOrElse(idx) { 1f }
                 val cx = colWidth * idx + colWidth / 2f
                 val barHalfW = (colWidth * 0.26f).coerceAtMost(32f)
-                val ratio = ((pt.actualPercent / maxPct.toFloat()) * barFraction).coerceIn(0f, 1f)
+                val ratio = ((pt.actualPercent / maxPct.toFloat()) * frac).coerceIn(0f, 1.1f)
                 val barTop = topMargin + chartHeight * (1f - ratio)
                 val barBottom = topMargin + chartHeight
 
@@ -3757,7 +3938,7 @@ class MainActivity : AppCompatActivity() {
                 val barRect = RectF(cx - barHalfW, barTop.coerceAtMost(barBottom - 6f), cx + barHalfW, barBottom)
                 canvas.drawRoundRect(barRect, 10f, 10f, barPaint)
 
-                val shownPct = (pt.actualPercent * barFraction).roundToInt()
+                val shownPct = (pt.actualPercent * frac).roundToInt()
                 canvas.drawText("${shownPct}%", cx, barTop - 10f, valuePaint)
                 canvas.drawText(pt.shortMonth, cx, height - 12f, labelPaint)
             }
