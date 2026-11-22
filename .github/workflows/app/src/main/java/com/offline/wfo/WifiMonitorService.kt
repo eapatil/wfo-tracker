@@ -40,7 +40,6 @@ class WifiMonitorService : Service() {
 
     private lateinit var connectivityManager: ConnectivityManager
     private lateinit var store: AttendanceStore
-    private var isConnectedToOfficeWifi = false
     private var callbackRegistered = false
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback(
@@ -144,6 +143,9 @@ class WifiMonitorService : Service() {
         val activeCaps = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
         if (activeCaps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) {
             evaluateConnectedSsid(extractSsid(activeCaps))
+        } else if (store.wasConnectedToOfficeWifi()) {
+            // Wi-Fi dropped while service was stopped/restarting; capture disconnect now
+            handleWifiDisconnected()
         }
     }
 
@@ -168,8 +170,6 @@ class WifiMonitorService : Service() {
         val matched = targets.any { it.equals(connectedSsid, ignoreCase = true) }
 
         if (matched) {
-            isConnectedToOfficeWifi = true
-            // Immediately logs today as OFFICE on 1st connect; subsequent events update Last Connect
             val isNewToday = store.recordOfficePresence()
             updatePersistentNotification()
             WfoWidgetProvider.updateAllWidgets(this)
@@ -178,15 +178,15 @@ class WifiMonitorService : Service() {
             if (isNewToday) {
                 notifyCheckInSuccess(connectedSsid)
             }
-        } else {
+        } else if (store.wasConnectedToOfficeWifi()) {
+            // Switched directly from office Wi-Fi to another Wi-Fi network
             handleWifiDisconnected()
         }
     }
 
     private fun handleWifiDisconnected() {
-        if (isConnectedToOfficeWifi) {
-            store.updateLastSeenOnly()
-            isConnectedToOfficeWifi = false
+        val updated = store.recordOfficeDisconnect()
+        if (updated) {
             sendBroadcast(Intent(ACTION_DATA_UPDATED).setPackage(packageName))
         }
         updatePersistentNotification()
