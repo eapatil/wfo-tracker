@@ -200,6 +200,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showStatusPopup(success: Boolean, message: String) {
+        val prefix = if (success) "✅ Success: " else "❌ Failed: "
+        Toast.makeText(this, "$prefix$message", Toast.LENGTH_LONG).show()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = AttendanceStore(this)
@@ -281,25 +286,33 @@ class MainActivity : AppCompatActivity() {
                 if (resultCode == Activity.RESULT_OK) {
                     isEditUnlocked = true
                     showDashboardMode()
-                    Toast.makeText(this, "Edit mode unlocked", Toast.LENGTH_SHORT).show()
+                    showStatusPopup(true, "Edit mode unlocked")
+                } else {
+                    showStatusPopup(false, "Authentication cancelled or failed")
                 }
             }
             REQ_UNLOCK_SETUP -> {
                 if (resultCode == Activity.RESULT_OK) {
                     isEditUnlocked = true
                     showSetupMode()
+                } else {
+                    showStatusPopup(false, "Authentication cancelled or failed")
                 }
             }
             REQ_UNLOCK_APP -> {
                 if (resultCode == Activity.RESULT_OK) {
                     isAppAuthenticated = true
                     showDashboardMode()
+                } else {
+                    showStatusPopup(false, "Authentication required to open app")
                 }
             }
             REQ_PICK_PHOTO -> {
                 if (resultCode == Activity.RESULT_OK && data?.data != null) {
                     saveCompressedAvatar(data.data!!)
                     refreshAllViews()
+                } else {
+                    showStatusPopup(false, "Profile photo selection cancelled")
                 }
             }
             REQ_PICK_BACKUP_FOLDER -> {
@@ -318,21 +331,21 @@ class MainActivity : AppCompatActivity() {
                         activeLogFilter = LogFilter.ALL
                         syncBackgroundAndWidget()
                         refreshAllViews()
-                        Toast.makeText(
-                            this,
-                            "Found existing backup — restored $importedCount date(s)!",
-                            Toast.LENGTH_LONG
-                        ).show()
+                        showStatusPopup(true, "Found existing backup — restored $importedCount date(s)")
                     } else {
                         val synced = store.triggerSilentAutoBackup()
                         refreshAllViews()
-                        val msg = when {
-                            synced && hadLocalDataBefore -> "Auto-backup enabled & synced!"
-                            synced -> "Auto-backup folder ready!"
-                            else -> "Folder saved (will sync on next update)"
+                        if (synced) {
+                            showStatusPopup(
+                                true,
+                                if (hadLocalDataBefore) "Auto-backup folder linked & synced" else "Auto-backup folder configured"
+                            )
+                        } else {
+                            showStatusPopup(false, "Folder linked, but could not write backup file yet")
                         }
-                        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
                     }
+                } else {
+                    showStatusPopup(false, "Backup folder selection cancelled")
                 }
             }
             REQ_IMPORT_HOLIDAYS -> {
@@ -343,14 +356,17 @@ class MainActivity : AppCompatActivity() {
                         val modified = store.bulkImportHolidays(text)
                         if (modified.isNotEmpty()) {
                             showUndoBanner("Imported ${modified.size} holiday(s)", modified)
+                            showStatusPopup(true, "Imported ${modified.size} holiday(s)")
                         } else {
-                            Toast.makeText(this, "No new holiday dates found in file", Toast.LENGTH_SHORT).show()
+                            showStatusPopup(false, "No new holiday dates found in file")
                         }
                         syncBackgroundAndWidget()
                         refreshAllViews()
                     }.onFailure {
-                        Toast.makeText(this, "Could not read holiday file", Toast.LENGTH_SHORT).show()
+                        showStatusPopup(false, "Could not read holiday file")
                     }
+                } else {
+                    showStatusPopup(false, "Holiday import cancelled")
                 }
             }
             REQ_EXPORT_CSV -> {
@@ -359,10 +375,12 @@ class MainActivity : AppCompatActivity() {
                         contentResolver.openOutputStream(data.data!!)?.use { out ->
                             out.write(store.exportAllCsv().toByteArray(Charsets.UTF_8))
                         }
-                        Toast.makeText(this, "CSV backup saved!", Toast.LENGTH_SHORT).show()
+                        showStatusPopup(true, "CSV backup saved")
                     }.onFailure {
-                        Toast.makeText(this, "Failed to save CSV", Toast.LENGTH_SHORT).show()
+                        showStatusPopup(false, "Failed to write CSV backup")
                     }
+                } else {
+                    showStatusPopup(false, "CSV export cancelled")
                 }
             }
             REQ_IMPORT_CSV -> {
@@ -372,10 +390,16 @@ class MainActivity : AppCompatActivity() {
                         activeLogFilter = LogFilter.ALL
                         syncBackgroundAndWidget()
                         refreshAllViews()
-                        Toast.makeText(this, "Restored $count date(s)!", Toast.LENGTH_SHORT).show()
+                        if (count > 0) {
+                            showStatusPopup(true, "Restored $count date(s) from CSV")
+                        } else {
+                            showStatusPopup(false, "No valid attendance rows found in selected CSV")
+                        }
                     }.onFailure {
-                        Toast.makeText(this, "Could not read CSV file", Toast.LENGTH_SHORT).show()
+                        showStatusPopup(false, "Could not read selected CSV file")
                     }
+                } else {
+                    showStatusPopup(false, "CSV restore cancelled")
                 }
             }
         }
@@ -458,7 +482,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun ensureEditUnlocked(): Boolean {
         if (isEditUnlocked) return true
-        Toast.makeText(this, "Locked — Tap 🔒 at top to unlock edits", Toast.LENGTH_SHORT).show()
+        showStatusPopup(false, "Locked — Tap 🔒 at top to unlock edits")
         return false
     }
 
@@ -469,7 +493,7 @@ class MainActivity : AppCompatActivity() {
             startActivityForResult(intent, requestCode)
         } catch (e: Exception) {
             isAwaitingSystemIntent = false
-            Toast.makeText(this, "Unable to open system dialog", Toast.LENGTH_SHORT).show()
+            showStatusPopup(false, "Unable to open system picker")
         }
     }
 
@@ -480,7 +504,7 @@ class MainActivity : AppCompatActivity() {
             isEditUnlocked = true
             isAppAuthenticated = true
             if (requestCode == REQ_UNLOCK_SETUP) showSetupMode() else showDashboardMode()
-            Toast.makeText(this, "Unlocked (no device PIN set)", Toast.LENGTH_SHORT).show()
+            showStatusPopup(true, "Unlocked (no device PIN/biometric set)")
             return
         }
         val intent = km.createConfirmDeviceCredentialIntent(
@@ -554,7 +578,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(cTextPrimary())
         }
         val subtitle = TextView(this).apply {
-            text = "Personalize your profile, enable background permissions, and configure Wi-Fi or 500m–1500m location tracking."
+            text = "Personalize your profile, enable background permissions, and configure Wi-Fi or location tracking."
             textSize = 13f
             setTextColor(cTextSecondary())
             setPadding(0, 6, 0, 20)
@@ -594,7 +618,7 @@ class MainActivity : AppCompatActivity() {
             setOnClickListener {
                 store.deleteProfilePhoto()
                 refreshAllViews()
-                Toast.makeText(this@MainActivity, "Photo removed", Toast.LENGTH_SHORT).show()
+                showStatusPopup(true, "Profile photo removed")
             }
         }
         photoBtnCol.addView(pickPhotoBtn)
@@ -605,7 +629,7 @@ class MainActivity : AppCompatActivity() {
         addSpacer(profileCard, 14)
 
         setupNameInput = EditText(this).apply {
-            hint = "Your Name (e.g., Arjun)"
+            hint = "Your Name"
             setText(store.getUserName())
             setTextColor(cTextPrimary())
             setHintTextColor(cTextSecondary())
@@ -673,11 +697,7 @@ class MainActivity : AppCompatActivity() {
         val btnAddLive = makePillButton("➕ Auto-Detect Connected Wi-Fi", "#E0E7FF", "#3730A3") {
             val live = getConnectedWifiSsid()
             if (live.isEmpty()) {
-                Toast.makeText(
-                    this,
-                    "Connect to office Wi-Fi & turn ON Location above first",
-                    Toast.LENGTH_LONG
-                ).show()
+                showStatusPopup(false, "No connected Wi-Fi detected (check Wi-Fi & Location)")
             } else {
                 val existing = setupSsidInput.text.toString().split(",")
                     .map { it.trim() }.filter { it.isNotEmpty() }.toMutableList()
@@ -685,7 +705,7 @@ class MainActivity : AppCompatActivity() {
                     existing.add(live)
                     setupSsidInput.setText(existing.joinToString(", "))
                 }
-                Toast.makeText(this, "Added '$live'", Toast.LENGTH_SHORT).show()
+                showStatusPopup(true, "Added Wi-Fi SSID '$live'")
             }
         }
         setupSsidInput = EditText(this).apply {
@@ -702,7 +722,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(cTextPrimary())
             setPadding(0, 14, 0, 8)
         }
-        val btnSelectLocSetup = makePillButton("📍 Select Location (Maps / GPS / 500m List)", "#0284C7", "#FFFFFF") {
+        val btnSelectLocSetup = makePillButton("📍 Select Location (Search / GPS / Maps)", "#0284C7", "#FFFFFF") {
             showSelectLocationDialog()
         }
 
@@ -732,10 +752,12 @@ class MainActivity : AppCompatActivity() {
         val minusBtn = makeSmallChipButton("− 5%") {
             store.setTargetPercent(store.getTargetPercent() - 5)
             refreshAllViews()
+            showStatusPopup(true, "Mandate target set to ${store.getTargetPercent()}%")
         }
         val plusBtn = makeSmallChipButton("+ 5%") {
             store.setTargetPercent(store.getTargetPercent() + 5)
             refreshAllViews()
+            showStatusPopup(true, "Mandate target set to ${store.getTargetPercent()}%")
         }
         pctRow.addView(setupTargetPctView)
         pctRow.addView(minusBtn)
@@ -853,7 +875,7 @@ class MainActivity : AppCompatActivity() {
             isAppAuthenticated = true
             syncBackgroundAndWidget()
             showDashboardMode()
-            Toast.makeText(this, "Settings saved & locked!", Toast.LENGTH_SHORT).show()
+            showStatusPopup(true, "Settings saved & dashboard locked")
         }
         root.addView(saveFinishBtn)
 
@@ -909,7 +931,7 @@ class MainActivity : AppCompatActivity() {
             if (isEditUnlocked) {
                 isEditUnlocked = false
                 refreshAllViews()
-                Toast.makeText(this, "Dashboard locked", Toast.LENGTH_SHORT).show()
+                showStatusPopup(true, "Dashboard locked")
             } else {
                 promptDeviceCredential(REQ_UNLOCK_EDIT, "Unlock Edit Mode")
             }
@@ -960,7 +982,7 @@ class MainActivity : AppCompatActivity() {
                     undoBannerRow.visibility = View.GONE
                     syncBackgroundAndWidget()
                     refreshAllViews()
-                    Toast.makeText(this@MainActivity, "Action undone", Toast.LENGTH_SHORT).show()
+                    showStatusPopup(true, "Action undone")
                 }
             }
         }
@@ -1131,8 +1153,9 @@ class MainActivity : AppCompatActivity() {
             refreshAllViews()
             if (modified.isNotEmpty()) {
                 showUndoBanner("Auto-planned ${modified.size} office day(s)", modified)
+                showStatusPopup(true, "Auto-planned ${modified.size} office day(s)")
             } else {
-                Toast.makeText(this, "Monthly target already covered!", Toast.LENGTH_SHORT).show()
+                showStatusPopup(false, "No additional days needed to plan for this month")
             }
         }
         calHeaderRow.addView(calTitle)
@@ -1414,18 +1437,21 @@ class MainActivity : AppCompatActivity() {
             store.setTrackingMode(TrackingMode.WIFI_ONLY)
             syncBackgroundAndWidget()
             refreshAllViews()
+            showStatusPopup(true, "Tracking mode set to Wi-Fi Only")
         }
         modeLocOnlyBtn = makeModeChip("📍 Location") {
             if (!ensureEditUnlocked()) return@makeModeChip
             store.setTrackingMode(TrackingMode.LOCATION_ONLY)
             syncBackgroundAndWidget()
             refreshAllViews()
+            showStatusPopup(true, "Tracking mode set to Location Only")
         }
         modeBothBtn = makeModeChip("📶+📍 Both") {
             if (!ensureEditUnlocked()) return@makeModeChip
             store.setTrackingMode(TrackingMode.BOTH)
             syncBackgroundAndWidget()
             refreshAllViews()
+            showStatusPopup(true, "Tracking mode set to Wi-Fi + Location")
         }
         modeSelectorRow.addView(modeWifiOnlyBtn)
         addHorizontalGap(modeSelectorRow, 6)
@@ -1459,36 +1485,21 @@ class MainActivity : AppCompatActivity() {
         locationSectionCard.addView(selectedOfficeView)
         locationSectionCard.addView(officeDistanceView)
 
-        val selectLocBtn = makePillButton("🗺️ Select Location (Maps / GPS / 500m List)", "#0284C7", "#FFFFFF") {
+        val selectLocBtn = makePillButton("🗺️ Select Location (Search / GPS / Maps)", "#0284C7", "#FFFFFF") {
             if (!ensureEditUnlocked()) return@makePillButton
             showSelectLocationDialog()
         }
         locationSectionCard.addView(selectLocBtn)
 
         val radiusLabel = TextView(this).apply {
-            text = "Geofence Radius (up to 1500m):"
+            text = "Geofence Radius:"
             textSize = 12f
             setTypeface(null, Typeface.BOLD)
             setTextColor(cTextSecondary())
             setPadding(0, 14, 0, 8)
         }
         locationSectionCard.addView(radiusLabel)
-
-        val radiusRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-        }
-        radius250Btn = makeModeChip("250m") { applyRadiusSelection(250) }
-        radius500Btn = makeModeChip("500m") { applyRadiusSelection(500) }
-        radius1000Btn = makeModeChip("1000m") { applyRadiusSelection(1000) }
-        radius1500Btn = makeModeChip("1500m") { applyRadiusSelection(1500) }
-        radiusRow.addView(radius250Btn)
-        addHorizontalGap(radiusRow, 6)
-        radiusRow.addView(radius500Btn)
-        addHorizontalGap(radiusRow, 6)
-        radiusRow.addView(radius1000Btn)
-        addHorizontalGap(radiusRow, 6)
-        radiusRow.addView(radius1500Btn)
-        locationSectionCard.addView(radiusRow)
+        locationSectionCard.addView(buildRadiusSelectorRow())
 
         root.addView(locationSectionCard)
         addSpacer(root, 16)
@@ -1512,17 +1523,16 @@ class MainActivity : AppCompatActivity() {
             if (!ensureEditUnlocked()) return@makePillButton
             val liveSsid = getConnectedWifiSsid()
             if (liveSsid.isEmpty()) {
-                Toast.makeText(
-                    this,
-                    "Connect to office Wi-Fi & ensure Location is ON",
-                    Toast.LENGTH_LONG
-                ).show()
+                showStatusPopup(false, "Connect to office Wi-Fi & turn ON Location first")
             } else {
                 val added = store.addTargetSsid(liveSsid)
                 syncBackgroundAndWidget()
                 refreshAllViews()
-                val msg = if (added) "Added '$liveSsid'!" else "'$liveSsid' is already saved."
-                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                if (added) {
+                    showStatusPopup(true, "Added '$liveSsid' to office Wi-Fi list")
+                } else {
+                    showStatusPopup(false, "'$liveSsid' is already in your Wi-Fi list")
+                }
             }
         }
         wifiSectionCard.addView(addCurrentWifiBtn)
@@ -1544,13 +1554,15 @@ class MainActivity : AppCompatActivity() {
         val addManualSsidBtn = makeSmallChipButton("+ Add") {
             if (!ensureEditUnlocked()) return@makeSmallChipButton
             val typed = ssidInput.text.toString().trim()
-            if (typed.isNotEmpty()) {
-                typed.split(",").forEach { store.addTargetSsid(it) }
-                ssidInput.setText("")
-                syncBackgroundAndWidget()
-                refreshAllViews()
-                Toast.makeText(this, "Wi-Fi saved!", Toast.LENGTH_SHORT).show()
+            if (typed.isEmpty()) {
+                showStatusPopup(false, "Enter a Wi-Fi SSID before adding")
+                return@makeSmallChipButton
             }
+            typed.split(",").forEach { store.addTargetSsid(it) }
+            ssidInput.setText("")
+            syncBackgroundAndWidget()
+            refreshAllViews()
+            showStatusPopup(true, "Saved Wi-Fi SSID")
         }
         manualWifiRow.addView(ssidInput)
         addHorizontalGap(manualWifiRow, 10)
@@ -1565,21 +1577,27 @@ class MainActivity : AppCompatActivity() {
 
         notifConnectSwitch = makeSettingsSwitch("Connect Alert (Day Captured)") { checked ->
             store.setConnectAlertEnabled(checked)
+            showStatusPopup(true, "Connect alert ${if (checked) "enabled" else "disabled"}")
         }
         notifDisconnectSwitch = makeSettingsSwitch("Disconnect Alert (Left Wi-Fi / Zone)") { checked ->
             store.setDisconnectAlertEnabled(checked)
+            showStatusPopup(true, "Disconnect alert ${if (checked) "enabled" else "disabled"}")
         }
         notifPlannedSwitch = makeSettingsSwitch("Planned Day Alerts (Eve, Morning, Missed)") { checked ->
             store.setPlannedRemindersEnabled(checked)
+            showStatusPopup(true, "Planned day alerts ${if (checked) "enabled" else "disabled"}")
         }
         notifMorningSwitch = makeSettingsSwitch("Morning Pace Nudge on WFH Days") { checked ->
             store.setMorningNudgeEnabled(checked)
+            showStatusPopup(true, "Morning pace nudge ${if (checked) "enabled" else "disabled"}")
         }
         notifTargetBufferSwitch = makeSettingsSwitch("Monthly Target Met & Zero Buffer Alerts") { checked ->
             store.setTargetBufferAlertEnabled(checked)
+            showStatusPopup(true, "Target & buffer alerts ${if (checked) "enabled" else "disabled"}")
         }
         notifQuarterSwitch = makeSettingsSwitch("Quarter-End Pace Alert") { checked ->
             store.setQuarterPaceAlertEnabled(checked)
+            showStatusPopup(true, "Quarter-end pace alert ${if (checked) "enabled" else "disabled"}")
         }
 
         notifCard.addView(notifConnectSwitch)
@@ -1658,6 +1676,31 @@ class MainActivity : AppCompatActivity() {
         return scroll
     }
 
+    private fun buildRadiusSelectorRow(): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            radius250Btn = makeModeChip("250m") { applyRadiusSelection(250) }
+            radius500Btn = makeModeChip("500m") { applyRadiusSelection(500) }
+            radius1000Btn = makeModeChip("1000m") { applyRadiusSelection(1000) }
+            radius1500Btn = makeModeChip("1500m") { applyRadiusSelection(1500) }
+            addView(radius250Btn)
+            addHorizontalGap(this, 6)
+            addView(radius500Btn)
+            addHorizontalGap(this, 6)
+            addView(radius1000Btn)
+            addHorizontalGap(this, 6)
+            addView(radius1500Btn)
+        }
+    }
+
+    private fun syncRadiusChipHighlights() {
+        val radius = store.getGeofenceRadiusMeters()
+        if (::radius250Btn.isInitialized) styleModeChip(radius250Btn, radius == 250, "#0284C7")
+        if (::radius500Btn.isInitialized) styleModeChip(radius500Btn, radius == 500, "#0284C7")
+        if (::radius1000Btn.isInitialized) styleModeChip(radius1000Btn, radius == 1000, "#0284C7")
+        if (::radius1500Btn.isInitialized) styleModeChip(radius1500Btn, radius == 1500, "#0284C7")
+    }
+
     private fun makeSettingsSwitch(label: String, onToggle: (Boolean) -> Unit): Switch {
         return Switch(this).apply {
             text = label
@@ -1668,7 +1711,7 @@ class MainActivity : AppCompatActivity() {
                 if (!view.isPressed) return@setOnCheckedChangeListener
                 if (!isEditUnlocked) {
                     isChecked = !checked
-                    Toast.makeText(this@MainActivity, "Locked — Tap 🔒 at top to unlock edits", Toast.LENGTH_SHORT).show()
+                    showStatusPopup(false, "Locked — Tap 🔒 at top to unlock edits")
                     return@setOnCheckedChangeListener
                 }
                 onToggle(checked)
@@ -1682,11 +1725,12 @@ class MainActivity : AppCompatActivity() {
         store.setGeofenceRadiusMeters(meters)
         syncBackgroundAndWidget()
         refreshAllViews()
-        Toast.makeText(this, "Geofence radius set to ${meters}m", Toast.LENGTH_SHORT).show()
+        showStatusPopup(true, "Geofence radius updated to ${meters}m")
     }
 
-    // ==================== SELECT LOCATION (MAPS / GPS / 500M LIST) ====================
+    // ==================== SELECT LOCATION (SEARCH / GPS / MAPS / RADIUS) ====================
 
+    @Suppress("DEPRECATION")
     private fun showSelectLocationDialog() {
         var dialogRef: AlertDialog? = null
         val container = LinearLayout(this).apply {
@@ -1694,16 +1738,121 @@ class MainActivity : AppCompatActivity() {
             setPadding(44, 24, 44, 16)
         }
 
-        val searchInput = EditText(this).apply {
-            hint = "Search landmark in Google Maps (e.g., Deloitte Towers, Hyderabad)"
-            setText(store.getOfficeLocationName().ifEmpty { "Deloitte Towers, Hyderabad" })
+        val nameInput = EditText(this).apply {
+            hint = "Office / Place Name"
+            setText(store.getOfficeLocationName())
             setPadding(20, 14, 20, 14)
         }
-        container.addView(searchInput)
+        container.addView(nameInput)
+        addSpacer(container, 8)
+
+        val coordOrLinkInput = EditText(this).apply {
+            hint = "Coordinates (lat, lng) or Google Maps link"
+            if (store.hasOfficeLocationConfigured()) {
+                setText(
+                    String.format(
+                        Locale.US,
+                        "%.6f, %.6f",
+                        store.getOfficeLat(),
+                        store.getOfficeLng()
+                    )
+                )
+            }
+            setPadding(20, 14, 20, 14)
+        }
+        container.addView(coordOrLinkInput)
         addSpacer(container, 10)
 
-        val openMapsBtn = makePillButton("🗺️ Open Google Maps to Search", "#0284C7", "#FFFFFF") {
-            val query = searchInput.text.toString().trim().ifEmpty { "Deloitte Towers, Hyderabad" }
+        val searchResultsBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+
+        val searchByNameBtn = makePillButton("🔎 Search Place by Name", "#4F46E5", "#FFFFFF") {
+            val query = nameInput.text.toString().trim()
+            if (query.isEmpty()) {
+                showStatusPopup(false, "Enter a place or office name to search")
+                return@makePillButton
+            }
+            searchResultsBox.removeAllViews()
+            val matches = runCatching {
+                val geocoder = Geocoder(this, Locale.getDefault())
+                geocoder.getFromLocationName(query, 5).orEmpty()
+            }.getOrElse { emptyList() }
+
+            if (matches.isEmpty()) {
+                showStatusPopup(false, "No matching location found for '$query'")
+            } else {
+                matches.forEach { addr: Address ->
+                    val titleText = addr.featureName
+                        ?.takeIf { it.isNotBlank() && !it.all { ch -> ch.isDigit() } }
+                        ?: addr.locality
+                        ?: query
+                    val lineAddr = (0..addr.maxAddressLineIndex)
+                        .mapNotNull { idx -> addr.getAddressLine(idx) }
+                        .joinToString(", ")
+                        .ifEmpty { String.format(Locale.US, "%.5f, %.5f", addr.latitude, addr.longitude) }
+
+                    val resultBtn = makeSmallChipButton("📌 $titleText — $lineAddr") {
+                        val chosenRadius = store.getGeofenceRadiusMeters()
+                        store.setOfficeLocation(titleText, addr.latitude, addr.longitude, chosenRadius)
+                        nameInput.setText(titleText)
+                        coordOrLinkInput.setText(
+                            String.format(Locale.US, "%.6f, %.6f", addr.latitude, addr.longitude)
+                        )
+                        syncBackgroundAndWidget()
+                        refreshAllViews()
+                        showStatusPopup(true, "Selected '$titleText' (${chosenRadius}m)")
+                    }.apply {
+                        layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        ).apply { setMargins(0, 0, 0, 8) }
+                    }
+                    searchResultsBox.addView(resultBtn)
+                }
+                showStatusPopup(true, "Found ${matches.size} match(es) — tap one to apply")
+            }
+        }
+        container.addView(searchByNameBtn)
+        addSpacer(container, 8)
+        container.addView(searchResultsBox)
+
+        val useCurrentGpsBtn = makePillButton("📍 Use Current GPS + Auto Name", "#10B981", "#FFFFFF") {
+            val ok = captureCurrentLocationWithGeocoder()
+            if (ok) {
+                nameInput.setText(store.getOfficeLocationName())
+                coordOrLinkInput.setText(
+                    String.format(Locale.US, "%.6f, %.6f", store.getOfficeLat(), store.getOfficeLng())
+                )
+            }
+        }
+        container.addView(useCurrentGpsBtn)
+        addSpacer(container, 8)
+
+        val saveManualBtn = makePillButton("💾 Save Name & Coordinates", "#0284C7", "#FFFFFF") {
+            val rawCoord = coordOrLinkInput.text.toString().trim()
+            val parsed = parseLatLng(rawCoord)
+            if (parsed == null) {
+                showStatusPopup(false, "Enter valid 'lat, lng' or paste a Maps link with coordinates")
+                return@makePillButton
+            }
+            val (lat, lng) = parsed
+            val enteredName = nameInput.text.toString().trim()
+            val finalName = if (enteredName.isNotEmpty()) {
+                enteredName
+            } else {
+                resolvePlaceNameFromCoordinates(lat, lng)
+            }
+            store.setOfficeLocation(finalName, lat, lng, store.getGeofenceRadiusMeters())
+            syncBackgroundAndWidget()
+            refreshAllViews()
+            showStatusPopup(true, "Saved location '$finalName'")
+        }
+        container.addView(saveManualBtn)
+        addSpacer(container, 8)
+
+        val openMapsBtn = makePillButton("🗺️ Open Google Maps (Browse / Share)", "#334155", "#FFFFFF") {
+            val query = nameInput.text.toString().trim().ifEmpty { "Hyderabad" }
             val geoUri = Uri.parse("geo:0,0?q=${Uri.encode(query)}")
             val mapIntent = Intent(Intent.ACTION_VIEW, geoUri).apply {
                 setPackage("com.google.android.apps.maps")
@@ -1716,76 +1865,100 @@ class MainActivity : AppCompatActivity() {
                     startActivity(Intent(Intent.ACTION_VIEW, geoUri))
                 }.onFailure {
                     isAwaitingSystemIntent = false
-                    Toast.makeText(this, "No map app found", Toast.LENGTH_SHORT).show()
+                    showStatusPopup(false, "No map app available on device")
                 }
             }
         }
         container.addView(openMapsBtn)
-        addSpacer(container, 10)
-
-        val useCurrentGpsBtn = makePillButton("📍 Use Current Location + Auto Name", "#10B981", "#FFFFFF") {
-            captureCurrentLocationWithGeocoder()
-            dialogRef?.dismiss()
-        }
-        container.addView(useCurrentGpsBtn)
         addSpacer(container, 14)
 
-        val presetsHeader = TextView(this).apply {
-            text = "Offices & Campus Points (within 500m):"
+        val radiusHeader = TextView(this).apply {
+            text = "Select Geofence Range:"
             textSize = 13f
             setTypeface(null, Typeface.BOLD)
             setPadding(0, 0, 0, 8)
         }
-        container.addView(presetsHeader)
+        container.addView(radiusHeader)
 
-        val presets = store.getNearbyOfficePresets()
-        presets.forEach { preset ->
-            val presetBtn = makeSmallChipButton(
-                "🏢 ${preset.name} (${preset.radiusMeters}m)"
-            ) {
-                store.setOfficeLocation(preset.name, preset.lat, preset.lng, preset.radiusMeters)
+        val dialogRadiusRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        val d250 = makeModeChip("250m") {}
+        val d500 = makeModeChip("500m") {}
+        val d1000 = makeModeChip("1000m") {}
+        val d1500 = makeModeChip("1500m") {}
+
+        fun refreshDialogRadiusChips() {
+            val cur = store.getGeofenceRadiusMeters()
+            styleModeChip(d250, cur == 250, "#0284C7")
+            styleModeChip(d500, cur == 500, "#0284C7")
+            styleModeChip(d1000, cur == 1000, "#0284C7")
+            styleModeChip(d1500, cur == 1500, "#0284C7")
+        }
+
+        listOf(d250 to 250, d500 to 500, d1000 to 1000, d1500 to 1500).forEach { (chip, meters) ->
+            chip.setOnClickListener {
+                store.setGeofenceRadiusMeters(meters)
+                refreshDialogRadiusChips()
                 syncBackgroundAndWidget()
                 refreshAllViews()
-                dialogRef?.dismiss()
-                Toast.makeText(this, "Selected ${preset.name}", Toast.LENGTH_SHORT).show()
-            }.apply {
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { setMargins(0, 0, 0, 8) }
+                showStatusPopup(true, "Geofence range set to ${meters}m")
             }
-            container.addView(presetBtn)
         }
+        refreshDialogRadiusChips()
+
+        dialogRadiusRow.addView(d250)
+        addHorizontalGap(dialogRadiusRow, 6)
+        dialogRadiusRow.addView(d500)
+        addHorizontalGap(dialogRadiusRow, 6)
+        dialogRadiusRow.addView(d1000)
+        addHorizontalGap(dialogRadiusRow, 6)
+        dialogRadiusRow.addView(d1500)
+        container.addView(dialogRadiusRow)
 
         dialogRef = AlertDialog.Builder(this)
             .setTitle("Select Office Location")
             .setView(container)
-            .setNegativeButton("Close", null)
+            .setPositiveButton("Done") { _, _ ->
+                if (!store.hasOfficeLocationConfigured()) {
+                    showStatusPopup(false, "No office location saved yet")
+                }
+            }
             .show()
     }
 
-    private fun captureCurrentLocationWithGeocoder() {
+    private fun parseLatLng(input: String): Pair<Double, Double>? {
+        if (input.isBlank()) return null
+        val match = Regex("""(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)""").find(input)
+            ?: Regex("""@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)""").find(input)
+            ?: Regex("""[?&]q=(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)""").find(input)
+            ?: return null
+
+        val lat = match.groupValues[1].toDoubleOrNull() ?: return null
+        val lng = match.groupValues[2].toDoubleOrNull() ?: return null
+        if (lat !in -90.0..90.0 || lng !in -180.0..180.0) return null
+        return lat to lng
+    }
+
+    private fun captureCurrentLocationWithGeocoder(): Boolean {
         if (!hasLocationPermission()) {
             requestForegroundAndNotifPermissions()
-            Toast.makeText(this, "Grant Location permission first", Toast.LENGTH_SHORT).show()
-            return
+            showStatusPopup(false, "Location permission required")
+            return false
         }
         val loc = getBestLastKnownLocation()
         if (loc == null) {
-            Toast.makeText(
-                this,
-                "No GPS fix yet — open Google Maps or turn ON Location and try again",
-                Toast.LENGTH_LONG
-            ).show()
-            return
+            showStatusPopup(false, "No current GPS fix available — turn ON Location or try again")
+            return false
         }
 
         val resolvedName = resolvePlaceNameFromCoordinates(loc.latitude, loc.longitude)
-        val currentRadius = maxOf(500, store.getGeofenceRadiusMeters())
+        val currentRadius = store.getGeofenceRadiusMeters()
         store.setOfficeLocation(resolvedName, loc.latitude, loc.longitude, currentRadius)
         syncBackgroundAndWidget()
         refreshAllViews()
-        Toast.makeText(this, "Set office to: $resolvedName", Toast.LENGTH_SHORT).show()
+        showStatusPopup(true, "Location set to '$resolvedName' (${currentRadius}m)")
+        return true
     }
 
     @Suppress("DEPRECATION")
@@ -1798,8 +1971,8 @@ class MainActivity : AppCompatActivity() {
                 ?.takeIf { it.isNotBlank() && it != addr.subThoroughfare && !it.all { ch -> ch.isDigit() } }
                 ?: addr?.subLocality
                 ?: addr?.locality
-            candidate ?: "Current Office (${String.format(Locale.US, "%.4f, %.4f", lat, lng)})"
-        }.getOrDefault("Current Office (${String.format(Locale.US, "%.4f, %.4f", lat, lng)})")
+            candidate ?: String.format(Locale.US, "Office (%.4f, %.4f)", lat, lng)
+        }.getOrDefault(String.format(Locale.US, "Office (%.4f, %.4f)", lat, lng))
     }
 
     @SuppressLint("MissingPermission")
@@ -1830,11 +2003,13 @@ class MainActivity : AppCompatActivity() {
         }
         val liveSsid = getConnectedWifiSsid()
         val mode = store.getTrackingMode()
+        var logged = false
 
         if ((mode == TrackingMode.WIFI_ONLY || mode == TrackingMode.BOTH) && liveSsid.isNotEmpty()) {
             val targets = store.getTargetSsids()
             if (targets.any { it.equals(liveSsid, ignoreCase = true) }) {
                 val isNew = store.recordOfficePresence(liveSsid)
+                logged = true
                 if (isNew && store.isConnectAlertEnabled() && store.claimOnceFlag("notif_checkin_${LocalDate.now()}")) {
                     sendAlertNotification(this, "✅ Office Day Logged ($liveSsid)", "Connected to office Wi-Fi.")
                 }
@@ -1846,6 +2021,7 @@ class MainActivity : AppCompatActivity() {
             if (dist != null && dist <= store.getGeofenceRadiusMeters()) {
                 val label = store.getOfficeLocationName().ifEmpty { "Office Geofence" }
                 val isNew = store.recordOfficePresence(label)
+                logged = true
                 if (isNew && store.isConnectAlertEnabled() && store.claimOnceFlag("notif_checkin_${LocalDate.now()}")) {
                     sendAlertNotification(this, "✅ Office Day Logged ($label)", "Within ${store.getGeofenceRadiusMeters()}m office zone.")
                 }
@@ -1854,7 +2030,11 @@ class MainActivity : AppCompatActivity() {
 
         syncBackgroundAndWidget()
         refreshAllViews()
-        Toast.makeText(this, "Status refreshed", Toast.LENGTH_SHORT).show()
+        if (logged) {
+            showStatusPopup(true, "Office presence verified & refreshed")
+        } else {
+            showStatusPopup(true, "Status refreshed (not at office match)")
+        }
     }
 
     // ==================== 4. REFRESH LOGIC ====================
@@ -1906,8 +2086,11 @@ class MainActivity : AppCompatActivity() {
         } else {
             "Detected Wi-Fi: $liveSsid"
         }
-        setupLocationSummaryView.text =
+        setupLocationSummaryView.text = if (store.hasOfficeLocationConfigured()) {
             "Office Zone: ${store.getOfficeLocationName()} (${store.getGeofenceRadiusMeters()}m radius)"
+        } else {
+            "Office Zone: Not configured yet (${store.getGeofenceRadiusMeters()}m default radius)"
+        }
         setupTargetPctView.text = "Mandate Target: $targetPct%"
 
         val health = store.getBackupHealthInfo()
@@ -2166,31 +2349,32 @@ class MainActivity : AppCompatActivity() {
             if (mode == TrackingMode.WIFI_ONLY || mode == TrackingMode.BOTH) View.VISIBLE else View.GONE
 
         val radius = store.getGeofenceRadiusMeters()
-        selectedOfficeView.text = "📍 ${store.getOfficeLocationName()} (${radius}m radius)"
-
-        val lastLoc = getBestLastKnownLocation()
-        if (lastLoc != null) {
-            store.setLastKnownLocation(lastLoc.latitude, lastLoc.longitude)
-        }
-        val distMeters = store.distanceToOfficeMeters(
-            lastLoc?.latitude ?: store.getLastKnownLat(),
-            lastLoc?.longitude ?: store.getLastKnownLng()
-        )
-        officeDistanceView.text = if (distMeters != null && (lastLoc != null || store.hasLastKnownLocation())) {
-            val dInt = distMeters.toInt()
-            if (dInt <= radius) {
-                "✅ Inside ${radius}m office zone (~${dInt}m away)"
+        if (store.hasOfficeLocationConfigured()) {
+            selectedOfficeView.text = "📍 ${store.getOfficeLocationName()} (${radius}m radius)"
+            val lastLoc = getBestLastKnownLocation()
+            if (lastLoc != null) {
+                store.setLastKnownLocation(lastLoc.latitude, lastLoc.longitude)
+            }
+            val distMeters = store.distanceToOfficeMeters(
+                lastLoc?.latitude ?: store.getLastKnownLat(),
+                lastLoc?.longitude ?: store.getLastKnownLng()
+            )
+            officeDistanceView.text = if (distMeters != null && (lastLoc != null || store.hasLastKnownLocation())) {
+                val dInt = distMeters.toInt()
+                if (dInt <= radius) {
+                    "✅ Inside ${radius}m office zone (~${dInt}m away)"
+                } else {
+                    "ℹ️ Outside ${radius}m office zone (~${dInt}m away)"
+                }
             } else {
-                "ℹ️ Outside ${radius}m office zone (~${dInt}m away)"
+                "Coordinates: ${String.format(Locale.US, "%.4f, %.4f", store.getOfficeLat(), store.getOfficeLng())}"
             }
         } else {
-            "Coordinates: ${String.format(Locale.US, "%.4f, %.4f", store.getOfficeLat(), store.getOfficeLng())}"
+            selectedOfficeView.text = "📍 No office location selected (${radius}m radius)"
+            officeDistanceView.text = "Tap Select Location to search by name, use GPS, or paste coordinates."
         }
 
-        styleModeChip(radius250Btn, radius == 250, "#0284C7")
-        styleModeChip(radius500Btn, radius == 500, "#0284C7")
-        styleModeChip(radius1000Btn, radius == 1000, "#0284C7")
-        styleModeChip(radius1500Btn, radius == 1500, "#0284C7")
+        syncRadiusChipHighlights()
 
         notifConnectSwitch.isChecked = store.isConnectAlertEnabled()
         notifDisconnectSwitch.isChecked = store.isDisconnectAlertEnabled()
@@ -2255,7 +2439,7 @@ class MainActivity : AppCompatActivity() {
                     store.removeTargetSsid(ssid)
                     syncBackgroundAndWidget()
                     refreshAllViews()
-                    Toast.makeText(this@MainActivity, "Removed '$ssid'", Toast.LENGTH_SHORT).show()
+                    showStatusPopup(true, "Removed '$ssid'")
                 }
             }
             chipRow.addView(nameTv)
@@ -2368,7 +2552,7 @@ class MainActivity : AppCompatActivity() {
                         } else {
                             "Marked $dateStr as ${resulting.name}"
                         }
-                        Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+                        showStatusPopup(true, msg)
                     }
 
                     cell.setOnLongClickListener { view ->
@@ -2442,6 +2626,7 @@ class MainActivity : AppCompatActivity() {
                     syncBackgroundAndWidget()
                     refreshAllViews()
                     dialogRef?.dismiss()
+                    showStatusPopup(true, "Updated ${date.toString()}")
                 }
                 styleModeChip(chip, info.type == targetType, "#4F46E5")
                 quickStatusRow.addView(chip)
@@ -2496,7 +2681,7 @@ class MainActivity : AppCompatActivity() {
             builder.setPositiveButton("Save Note") { _, _ ->
                 store.setDayNote(date, noteInput.text.toString())
                 refreshAllViews()
-                Toast.makeText(this, "Note updated", Toast.LENGTH_SHORT).show()
+                showStatusPopup(true, "Note saved")
             }
         }
 
@@ -2520,9 +2705,9 @@ class MainActivity : AppCompatActivity() {
             FileOutputStream(store.getProfilePhotoFile()).use { out ->
                 scaled.compress(Bitmap.CompressFormat.JPEG, 90, out)
             }
-            Toast.makeText(this, "Profile photo updated!", Toast.LENGTH_SHORT).show()
+            showStatusPopup(true, "Profile photo updated")
         }.onFailure {
-            Toast.makeText(this, "Could not load selected image", Toast.LENGTH_SHORT).show()
+            showStatusPopup(false, "Could not load selected photo")
         }
     }
 
@@ -2694,14 +2879,14 @@ class MainActivity : AppCompatActivity() {
                 this, arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION), 11
             )
         } else {
-            Toast.makeText(this, "Background Location is already enabled!", Toast.LENGTH_SHORT).show()
+            showStatusPopup(true, "Background Location is already enabled")
         }
     }
 
     @SuppressLint("BatteryLife")
     private fun requestUnrestrictedBattery() {
         if (isBatteryUnrestricted()) {
-            Toast.makeText(this, "Battery is already unrestricted!", Toast.LENGTH_SHORT).show()
+            showStatusPopup(true, "Battery is already unrestricted")
             return
         }
         try {
