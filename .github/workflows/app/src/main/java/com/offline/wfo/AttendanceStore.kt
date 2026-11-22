@@ -6,9 +6,11 @@ import android.provider.DocumentsContract
 import java.io.File
 import java.time.DayOfWeek
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.time.temporal.WeekFields
@@ -68,7 +70,9 @@ data class QuarterStats(
     val requiredDays: Int,
     val attendedDays: Int,
     val remainingDays: Int,
-    val actualPercent: Int
+    val actualPercent: Int,
+    val holidayDays: Int,
+    val leaveDays: Int
 )
 
 data class WeeklyPaceStats(
@@ -81,6 +85,22 @@ data class WeeklyPaceStats(
 data class RhythmStats(
     val weeklyStreak: Int,
     val topDaysLabel: String
+)
+
+data class MonthlyTrendPoint(
+    val ym: YearMonth,
+    val shortMonth: String,
+    val actualPercent: Int,
+    val targetPercent: Int,
+    val attendedDays: Int,
+    val requiredDays: Int
+)
+
+data class BackupHealthInfo(
+    val configured: Boolean,
+    val folderLabel: String,
+    val healthy: Boolean,
+    val statusText: String
 )
 
 class AttendanceStore(private val context: Context) {
@@ -104,12 +124,15 @@ class AttendanceStore(private val context: Context) {
     fun isFullAppLockEnabled(): Boolean = prefs.getBoolean("full_app_lock", false)
     fun setFullAppLockEnabled(enabled: Boolean) = prefs.edit().putBoolean("full_app_lock", enabled).apply()
 
-    // ==================== AUTO-BACKUP FOLDER (SAF) ====================
+    // ==================== AUTO-BACKUP FOLDER & HEALTH (SAF) ====================
 
     fun getAutoBackupTreeUri(): String = prefs.getString("auto_backup_tree_uri", "") ?: ""
 
     fun setAutoBackupTreeUri(uriStr: String) {
-        prefs.edit().putString("auto_backup_tree_uri", uriStr).apply()
+        prefs.edit()
+            .putString("auto_backup_tree_uri", uriStr)
+            .putBoolean("last_auto_backup_ok", true)
+            .apply()
     }
 
     fun getAutoBackupFolderLabel(): String {
@@ -122,15 +145,55 @@ class AttendanceStore(private val context: Context) {
         }.getOrDefault("Selected Folder")
     }
 
-    /**
-     * Silently writes `wfo_auto_backup.csv` into the user-selected SAF directory
-     * (local storage or synced Google Drive folder) without showing any prompt.
-     */
+    fun getBackupHealthInfo(): BackupHealthInfo {
+        val rawUri = getAutoBackupTreeUri()
+        if (rawUri.isEmpty()) {
+            return BackupHealthInfo(
+                configured = false,
+                folderLabel = "Not configured",
+                healthy = false,
+                statusText = "⚪ Silent Auto-Backup: Off (Pick a local or Drive folder)"
+            )
+        }
+        val label = getAutoBackupFolderLabel()
+        val lastOk = prefs.getBoolean("last_auto_backup_ok", true)
+        val lastMs = prefs.getLong("last_auto_backup_ms", 0L)
+
+        if (!lastOk) {
+            return BackupHealthInfo(
+                configured = true,
+                folderLabel = label,
+                healthy = false,
+                statusText = "⚠️ Backup Folder Unreachable ($label) — Re-select folder below"
+            )
+        }
+
+        val timeLabel = if (lastMs > 0L) {
+            val zdt = Instant.ofEpochMilli(lastMs).atZone(ZoneId.systemDefault())
+            val d = zdt.toLocalDate()
+            val t = zdt.toLocalTime().format(timeFmt)
+            when (d) {
+                LocalDate.now() -> "Today, $t"
+                LocalDate.now().minusDays(1) -> "Yesterday, $t"
+                else -> "${d.format(DateTimeFormatter.ofPattern("dd MMM"))}, $t"
+            }
+        } else {
+            "Ready"
+        }
+
+        return BackupHealthInfo(
+            configured = true,
+            folderLabel = label,
+            healthy = true,
+            statusText = "✅ Auto-Backup Active ($label) • Last synced: $timeLabel"
+        )
+    }
+
     fun triggerSilentAutoBackup(): Boolean {
         val rawUri = getAutoBackupTreeUri()
         if (rawUri.isEmpty()) return false
 
-        return runCatching {
+        val ok = runCatching {
             val treeUri = Uri.parse(rawUri)
             val treeDocId = DocumentsContract.getTreeDocumentId(treeUri)
             val parentDocUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocId)
@@ -171,10 +234,19 @@ class AttendanceStore(private val context: Context) {
                 context.contentResolver.openOutputStream(uri, "wt")?.use { out ->
                     out.write(exportAllCsv().toByteArray(Charsets.UTF_8))
                 }
-                prefs.edit().putLong("last_auto_backup_ms", System.currentTimeMillis()).apply()
                 true
             } ?: false
         }.getOrDefault(false)
+
+        if (ok) {
+            prefs.edit()
+                .putBoolean("last_auto_backup_ok", true)
+                .putLong("last_auto_backup_ms", System.currentTimeMillis())
+                .apply()
+        } else {
+            prefs.edit().putBoolean("last_auto_backup_ok", false).apply()
+        }
+        return ok
     }
 
     // ==================== POLICY & WI-FI SETTINGS ====================
@@ -182,7 +254,6 @@ class AttendanceStore(private val context: Context) {
     fun getTargetPercent(): Int = prefs.getInt("target_percent", 40)
     fun setTargetPercent(pct: Int) = prefs.edit().putInt("target_percent", pct.coerceIn(5, 100)).apply()
 
-    // Default true: 21 weekdays * 40% = 8.4 -> 9 days
     fun isRoundUpEnabled(): Boolean = prefs.getBoolean("round_up", true)
     fun setRoundUpEnabled(roundUp: Boolean) = prefs.edit().putBoolean("round_up", roundUp).apply()
 
@@ -264,12 +335,6 @@ class AttendanceStore(private val context: Context) {
         triggerSilentAutoBackup()
     }
 
-    /**
-     * Immediately logs the day as OFFICE upon connecting to office Wi-Fi.
-     * Preserves the 1st connect timestamp of the day and updates the latest timestamp.
-     * Upgrades PLANNED -> OFFICE automatically.
-     * Returns true if this is the first confirmed OFFICE check-in today.
-     */
     fun recordOfficePresence(
         ssid: String = "",
         date: LocalDate = LocalDate.now(),
@@ -303,9 +368,6 @@ class AttendanceStore(private val context: Context) {
         return isNewOfficeToday
     }
 
-    /**
-     * Captures the exact disconnect timestamp when the device leaves office Wi-Fi.
-     */
     fun recordOfficeDisconnect(
         date: LocalDate = LocalDate.now(),
         time: LocalTime = LocalTime.now()
@@ -327,27 +389,19 @@ class AttendanceStore(private val context: Context) {
         return wasConnected
     }
 
-    /**
-     * Sets or toggles a specific DayType when the user taps a date in Edit Mode.
-     * If the date already has `targetType`, it clears it back to NONE.
-     * Returns the resulting DayType.
-     */
-    fun applyManualDayType(date: LocalDate, targetType: DayType): DayType {
+    fun setExplicitDayType(date: LocalDate, targetType: DayType, customDetail: String? = null) {
         val key = date.toString()
         val dates = getAllMarkedDates()
-        val current = getDayType(key)
-
-        val result = if (current == targetType || targetType == DayType.NONE) {
+        if (targetType == DayType.NONE) {
             dates.remove(key)
             prefs.edit()
                 .putStringSet("all_marked_dates", dates)
                 .remove("day_type_$key")
                 .remove("times_$key")
                 .apply()
-            DayType.NONE
         } else {
             dates.add(key)
-            val detail = when (targetType) {
+            val detail = customDetail ?: when (targetType) {
                 DayType.OFFICE -> "Manual Check-In"
                 DayType.PLANNED -> "Planned Office"
                 DayType.LEAVE -> "Personal / Sick Leave"
@@ -359,30 +413,58 @@ class AttendanceStore(private val context: Context) {
                 .putString("day_type_$key", targetType.name)
                 .putString("times_$key", detail)
                 .apply()
-            targetType
         }
         triggerSilentAutoBackup()
-        return result
+    }
+
+    fun applyManualDayType(date: LocalDate, targetType: DayType): DayType {
+        val current = getDayType(date)
+        return if (current == targetType || targetType == DayType.NONE) {
+            setExplicitDayType(date, DayType.NONE)
+            DayType.NONE
+        } else {
+            setExplicitDayType(date, targetType)
+            targetType
+        }
     }
 
     /**
-     * One-tap Auto-Plan Month:
-     * Schedules PLANNED office days on future unmarked weekdays in `ym` to cover any
-     * remaining mandate gap, prioritizing the user's historical top office weekdays first.
-     * Returns the number of newly planned days added.
+     * Reverts a batch of dates back to their prior DayTypes (for Undo support).
+     */
+    fun restoreBatchDates(previousStates: Map<LocalDate, DayType>) {
+        if (previousStates.isEmpty()) return
+        val dates = getAllMarkedDates()
+        val editor = prefs.edit()
+        for ((date, prevType) in previousStates) {
+            val key = date.toString()
+            if (prevType == DayType.NONE) {
+                dates.remove(key)
+                editor.remove("day_type_$key").remove("times_$key")
+            } else {
+                dates.add(key)
+                editor.putString("day_type_$key", prevType.name)
+                editor.putString("times_$key", getFormattedDetail(key, prevType))
+            }
+        }
+        editor.putStringSet("all_marked_dates", dates).apply()
+        triggerSilentAutoBackup()
+    }
+
+    /**
+     * One-tap Auto-Plan Month: returns a map of modified dates -> prior DayTypes so the caller
+     * can offer an immediate Undo button.
      */
     fun autoPlanRemainingDaysForMonth(
         ym: YearMonth = YearMonth.now(),
         today: LocalDate = LocalDate.now()
-    ): Int {
+    ): Map<LocalDate, DayType> {
         val stats = getMonthStats(ym, today)
         val neededToPlan = maxOf(0, stats.remainingDays - stats.futurePlannedDays)
-        if (neededToPlan == 0) return 0
+        if (neededToPlan == 0) return emptyMap()
 
         val currentYm = YearMonth.from(today)
-        if (ym.isBefore(currentYm)) return 0
+        if (ym.isBefore(currentYm)) return emptyMap()
 
-        // Rank user's preferred weekdays from office history (default Tue, Wed, Thu)
         val officeDates = getAllMarkedDates()
             .filter { getDayType(it) == DayType.OFFICE }
             .mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }
@@ -397,7 +479,6 @@ class AttendanceStore(private val context: Context) {
             listOf(DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY)
         }
 
-        // Collect all eligible future weekdays in the target month
         val candidates = mutableListOf<LocalDate>()
         for (day in 1..ym.lengthOfMonth()) {
             val d = ym.atDay(day)
@@ -408,9 +489,8 @@ class AttendanceStore(private val context: Context) {
             }
         }
 
-        if (candidates.isEmpty()) return 0
+        if (candidates.isEmpty()) return emptyMap()
 
-        // Sort candidates: preferred weekdays first (by rank), then chronologically
         val sortedCandidates = candidates.sortedWith(
             compareBy(
                 { d ->
@@ -422,9 +502,12 @@ class AttendanceStore(private val context: Context) {
         )
 
         val toMark = sortedCandidates.take(neededToPlan)
+        val previousStates = mutableMapOf<LocalDate, DayType>()
         val dates = getAllMarkedDates()
         val editor = prefs.edit()
+
         for (d in toMark) {
+            previousStates[d] = getDayType(d)
             val key = d.toString()
             dates.add(key)
             editor.putString("day_type_$key", DayType.PLANNED.name)
@@ -435,7 +518,84 @@ class AttendanceStore(private val context: Context) {
         if (toMark.isNotEmpty()) {
             triggerSilentAutoBackup()
         }
-        return toMark.size
+        return previousStates
+    }
+
+    /**
+     * Bulk imports holidays from either an `.ics` calendar file (DTSTART entries + SUMMARY)
+     * or a CSV file (`YYYY-MM-DD,Holiday Name`).
+     * Never overwrites already confirmed OFFICE days.
+     * Returns a map of modified dates -> prior DayTypes for Undo support.
+     */
+    fun bulkImportHolidays(rawContent: String): Map<LocalDate, DayType> {
+        val parsedHolidays = mutableListOf<Pair<LocalDate, String>>()
+        val trimmedAll = rawContent.trim()
+
+        if (trimmedAll.contains("BEGIN:VCALENDAR", ignoreCase = true) ||
+            trimmedAll.contains("DTSTART", ignoreCase = true)
+        ) {
+            var currentDate: LocalDate? = null
+            var currentSummary = "Company Holiday"
+            val basicDateFmt = DateTimeFormatter.BASIC_ISO_DATE // yyyyMMdd
+
+            trimmedAll.lineSequence().forEach { rawLine ->
+                val line = rawLine.trim()
+                when {
+                    line.startsWith("BEGIN:VEVENT", ignoreCase = true) -> {
+                        currentDate = null
+                        currentSummary = "Company Holiday"
+                    }
+                    line.startsWith("DTSTART", ignoreCase = true) -> {
+                        val valuePart = line.substringAfter(':').trim()
+                        val digits = valuePart.take(8)
+                        currentDate = runCatching { LocalDate.parse(digits, basicDateFmt) }.getOrNull()
+                    }
+                    line.startsWith("SUMMARY", ignoreCase = true) -> {
+                        val sum = line.substringAfter(':').trim()
+                        if (sum.isNotEmpty()) currentSummary = sum
+                    }
+                    line.startsWith("END:VEVENT", ignoreCase = true) -> {
+                        currentDate?.let { d ->
+                            parsedHolidays.add(d to currentSummary)
+                        }
+                        currentDate = null
+                    }
+                }
+            }
+        } else {
+            // CSV or plain date list format: YYYY-MM-DD[,Holiday Name]
+            trimmedAll.lineSequence().forEach { rawLine ->
+                val line = rawLine.trim()
+                if (line.isEmpty() || line.startsWith("Date", ignoreCase = true)) return@forEach
+                val parts = line.split(",")
+                val dateToken = parts[0].trim()
+                val parsed = runCatching { LocalDate.parse(dateToken) }.getOrNull() ?: return@forEach
+                val label = parts.getOrNull(1)?.trim().orEmpty().ifEmpty { "Company Holiday" }
+                parsedHolidays.add(parsed to label)
+            }
+        }
+
+        if (parsedHolidays.isEmpty()) return emptyMap()
+
+        val previousStates = mutableMapOf<LocalDate, DayType>()
+        val dates = getAllMarkedDates()
+        val editor = prefs.edit()
+
+        for ((date, label) in parsedHolidays) {
+            val existing = getDayType(date)
+            if (existing == DayType.OFFICE || existing == DayType.HOLIDAY) continue
+            previousStates[date] = existing
+            val key = date.toString()
+            dates.add(key)
+            editor.putString("day_type_$key", DayType.HOLIDAY.name)
+            editor.putString("times_$key", label.replace(",", " "))
+        }
+
+        editor.putStringSet("all_marked_dates", dates).apply()
+        if (previousStates.isNotEmpty()) {
+            triggerSilentAutoBackup()
+        }
+        return previousStates
     }
 
     fun getFormattedDetail(dateStr: String, type: DayType): String {
@@ -539,11 +699,13 @@ class AttendanceStore(private val context: Context) {
         return true
     }
 
-    // ==================== ANALYTICS & ROLLUPS ====================
+    // ==================== ANALYTICS, TRENDS & SIMULATOR ====================
 
     fun getMonthStats(
         ym: YearMonth = YearMonth.now(),
-        today: LocalDate = LocalDate.now()
+        today: LocalDate = LocalDate.now(),
+        extraSimulatedLeaves: Int = 0,
+        extraSimulatedHolidays: Int = 0
     ): MonthStats {
         val prefix = ym.toString()
         val currentYm = YearMonth.from(today)
@@ -585,13 +747,18 @@ class AttendanceStore(private val context: Context) {
             }
         }
 
+        val totalHolidays = holidayWeekdays + maxOf(0, extraSimulatedHolidays)
+        val totalLeaves = leaveWeekdays + maxOf(0, extraSimulatedLeaves)
+        val simExtraDaysOut = maxOf(0, extraSimulatedHolidays) + maxOf(0, extraSimulatedLeaves)
+        availableWeekdaysLeft = maxOf(0, availableWeekdaysLeft - simExtraDaysOut)
+
         val exclHolidays = isExcludeHolidaysEnabled()
         val exclLeaves = isExcludeLeavesEnabled()
         val effectiveWorkingDays = maxOf(
             0,
             totalCalendarWeekdays -
-                (if (exclHolidays) holidayWeekdays else 0) -
-                (if (exclLeaves) leaveWeekdays else 0)
+                (if (exclHolidays) totalHolidays else 0) -
+                (if (exclLeaves) totalLeaves else 0)
         )
 
         val targetPct = getTargetPercent()
@@ -626,8 +793,8 @@ class AttendanceStore(private val context: Context) {
             targetPercent = targetPct,
             roundUp = roundUp,
             totalCalendarWeekdays = totalCalendarWeekdays,
-            holidayWeekdays = holidayWeekdays,
-            leaveWeekdays = leaveWeekdays,
+            holidayWeekdays = totalHolidays,
+            leaveWeekdays = totalLeaves,
             effectiveWorkingDays = effectiveWorkingDays,
             requiredDays = requiredDays,
             attendedDays = attendedDays,
@@ -659,10 +826,14 @@ class AttendanceStore(private val context: Context) {
 
         var totalEff = 0
         var totalAttended = 0
+        var totalHolidays = 0
+        var totalLeaves = 0
         for (m in months) {
             val ms = getMonthStats(m, today)
             totalEff += ms.effectiveWorkingDays
             totalAttended += ms.attendedDays
+            totalHolidays += ms.holidayWeekdays
+            totalLeaves += ms.leaveWeekdays
         }
 
         val targetPct = getTargetPercent()
@@ -677,8 +848,31 @@ class AttendanceStore(private val context: Context) {
             requiredDays = reqDays,
             attendedDays = totalAttended,
             remainingDays = remDays,
-            actualPercent = pct
+            actualPercent = pct,
+            holidayDays = totalHolidays,
+            leaveDays = totalLeaves
         )
+    }
+
+    fun getMultiMonthTrend(
+        anchorYm: YearMonth = YearMonth.now(),
+        monthsCount: Int = 6,
+        today: LocalDate = LocalDate.now()
+    ): List<MonthlyTrendPoint> {
+        val targetPct = getTargetPercent()
+        return (monthsCount - 1 downTo 0).map { offset ->
+            val m = anchorYm.minusMonths(offset.toLong())
+            val ms = getMonthStats(m, today)
+            val shortName = m.month.getDisplayName(TextStyle.SHORT, Locale.getDefault())
+            MonthlyTrendPoint(
+                ym = m,
+                shortMonth = shortName,
+                actualPercent = ms.actualPercent,
+                targetPercent = targetPct,
+                attendedDays = ms.attendedDays,
+                requiredDays = ms.requiredDays
+            )
+        }
     }
 
     fun getWeeklyPaceStats(today: LocalDate = LocalDate.now()): WeeklyPaceStats {
@@ -754,7 +948,7 @@ class AttendanceStore(private val context: Context) {
         return RhythmStats(weeklyStreak = streak, topDaysLabel = topDaysLabel)
     }
 
-    // ==================== CSV EXPORT, RESTORE & SUMMARY REPORT ====================
+    // ==================== CSV EXPORT, RESTORE & REPORTS ====================
 
     fun exportAllCsv(): String {
         val sb = StringBuilder("Date,Day,Status,Connected_Time,Disconnected_Time,Notes\n")
@@ -852,6 +1046,46 @@ class AttendanceStore(private val context: Context) {
             sb.appendLine("Marked Holidays (${holidayLogs.size}): " + holidayLogs.joinToString(", ") { it.dateStr })
         }
 
+        return sb.toString().trim()
+    }
+
+    fun buildAnnualSummaryReport(year: Int = LocalDate.now().year): String {
+        val nameHeader = if (getUserName().isNotEmpty()) " (${getUserName()})" else ""
+        val r = getRhythmStats()
+
+        var totalEff = 0
+        var totalAttended = 0
+        var totalReq = 0
+        var totalLeaves = 0
+        var totalHolidays = 0
+
+        val monthlyLines = mutableListOf<String>()
+        for (m in 1..12) {
+            val ym = YearMonth.of(year, m)
+            val ms = getMonthStats(ym)
+            totalEff += ms.effectiveWorkingDays
+            totalAttended += ms.attendedDays
+            totalReq += ms.requiredDays
+            totalLeaves += ms.leaveWeekdays
+            totalHolidays += ms.holidayWeekdays
+            if (ms.attendedDays > 0 || ms.leaveWeekdays > 0 || ms.holidayWeekdays > 0) {
+                monthlyLines.add(
+                    "  • ${ym.month.getDisplayName(TextStyle.SHORT, Locale.getDefault())}: ${ms.attendedDays}/${ms.requiredDays} days (${ms.actualPercent}%)"
+                )
+            }
+        }
+
+        val annualPct = if (totalEff > 0) (totalAttended * 100) / totalEff else 0
+        val sb = StringBuilder()
+        sb.appendLine("WFO Annual Year-in-Review$nameHeader — $year")
+        sb.appendLine("========================================")
+        sb.appendLine("• Total Office Days: $totalAttended / $totalReq required ($annualPct% of $totalEff working days)")
+        sb.appendLine("• Current Weekly Streak: ${r.weeklyStreak} week(s)  |  Top Days: ${r.topDaysLabel}")
+        sb.appendLine("• Total Leaves: $totalLeaves  |  Total Holidays: $totalHolidays")
+        if (monthlyLines.isNotEmpty()) {
+            sb.appendLine("\nMonthly Breakdown:")
+            monthlyLines.forEach { sb.appendLine(it) }
+        }
         return sb.toString().trim()
     }
 }
