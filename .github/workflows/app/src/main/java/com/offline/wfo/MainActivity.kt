@@ -12,6 +12,9 @@ import android.app.Activity
 import android.app.AlarmManager
 import android.app.AlertDialog
 import android.app.KeyguardManager
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -58,6 +61,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -82,6 +87,9 @@ class MainActivity : AppCompatActivity() {
         private const val REQ_UNLOCK_APP = 206
         private const val REQ_PICK_BACKUP_FOLDER = 207
         private const val REQ_IMPORT_HOLIDAYS = 208
+
+        private const val CHANNEL_ALERTS_ID = "wfo_live_alerts_channel"
+        private const val NOTIF_STATUS_PING_ID = 9042
     }
 
     private enum class ActiveTab { HOME, ANALYTICS, SETTINGS }
@@ -103,10 +111,14 @@ class MainActivity : AppCompatActivity() {
     private var isDark: Boolean = false
     private var hasPlayedOpenEntrance: Boolean = false
 
-    // Lock Screen Live Animation State
+    // Lock Screen Live Animation & Status Card State
     private lateinit var lockIconView: TextView
     private lateinit var lockOuterHaloView: View
     private lateinit var lockInnerHaloView: View
+    private lateinit var lockStatusCardView: LinearLayout
+    private lateinit var lockStatusDotView: View
+    private lateinit var lockStatusTitleView: TextView
+    private lateinit var lockStatusSummaryView: TextView
     private var lockRunningAnimSet: AnimatorSet? = null
 
     // Live Tracking Heartbeat & Active Presence Pulse State
@@ -241,6 +253,7 @@ class MainActivity : AppCompatActivity() {
         store = AttendanceStore(this)
         isDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
             Configuration.UI_MODE_NIGHT_YES
+        ensureAlertNotificationChannel()
 
         val frameRoot = FrameLayout(this).apply {
             setBackgroundColor(cBg())
@@ -464,7 +477,70 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ==================== ANIMATIONS (HEARTBEAT, LOCK, UNLOCK & ENTRANCE) ====================
+    // ==================== NOTIFICATIONS WITH LIVE MOTION & ACTIONS ====================
+
+    private fun ensureAlertNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ALERTS_ID,
+                "WFO Live Status & Alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Animated heads-up alerts and live presence notifications"
+                enableVibration(true)
+            }
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.createNotificationChannel(channel)
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun postAnimatedStatusNotification(title: String, body: String, activePresence: Boolean) {
+        if (!hasNotificationPermission()) return
+
+        val openIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val openPending = PendingIntent.getActivity(
+            this,
+            701,
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val refreshIntent = Intent(this, WifiMonitorService::class.java).apply {
+            action = WifiMonitorService.ACTION_REFRESH_STATUS
+        }
+        val refreshPending = PendingIntent.getService(
+            this,
+            702,
+            refreshIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val builder = NotificationCompat.Builder(this, CHANNEL_ALERTS_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_my_calendar)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setAutoCancel(true)
+            .setContentIntent(openPending)
+            .addAction(android.R.drawable.ic_popup_sync, "Refresh Check", refreshPending)
+
+        if (activePresence) {
+            builder.setUsesChronometer(true)
+                .setWhen(System.currentTimeMillis())
+                .setOngoing(false)
+        }
+
+        runCatching {
+            NotificationManagerCompat.from(this).notify(NOTIF_STATUS_PING_ID, builder.build())
+        }
+    }
+
+    // ==================== ANIMATIONS (HEARTBEAT, LOCK STATUS CARD & UNLOCK) ====================
 
     private fun stopAllLoopingAnimations() {
         stopLockScreenRunningAnimation()
@@ -485,8 +561,8 @@ class MainActivity : AppCompatActivity() {
         heartbeatDotView.alpha = 1f
         val beat = ObjectAnimator.ofPropertyValuesHolder(
             heartbeatDotView,
-            PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.36f, 1.06f, 1.28f, 1f),
-            PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.36f, 1.06f, 1.28f, 1f),
+            PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.38f, 1.06f, 1.3f, 1f),
+            PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.38f, 1.06f, 1.3f, 1f),
             PropertyValuesHolder.ofFloat(View.ALPHA, 1f, 0.7f, 1f, 0.75f, 1f)
         ).apply {
             duration = 1400L
@@ -538,9 +614,48 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun updateLockScreenStatusCard() {
+        if (!::lockStatusTitleView.isInitialized || !::lockStatusSummaryView.isInitialized || !::lockStatusDotView.isInitialized) return
+
+        val locOk = hasLocationPermission()
+        val gpsOk = isSystemLocationEnabled()
+        val mode = store.getTrackingMode()
+        val trackingReady = locOk && gpsOk && when (mode) {
+            TrackingMode.WIFI_ONLY -> store.getTargetSsids().isNotEmpty()
+            TrackingMode.LOCATION_ONLY -> store.hasOfficeLocationConfigured()
+            TrackingMode.BOTH -> store.getTargetSsids().isNotEmpty() || store.hasOfficeLocationConfigured()
+        }
+
+        val isConnected = store.wasConnectedToOfficeWifi()
+        val activeSrc = store.getActiveOfficeSsid()
+        val stats = store.getMonthStats(YearMonth.now())
+
+        when {
+            isConnected -> {
+                lockStatusTitleView.text = if (activeSrc.isNotEmpty()) "Connected: $activeSrc" else "In Office Zone"
+                lockStatusTitleView.setTextColor(Color.parseColor("#10B981"))
+                lockStatusDotView.background = roundedBox("#10B981", "#10B981", 999f, 0)
+            }
+            trackingReady -> {
+                lockStatusTitleView.text = "Auto-Tracking Running"
+                lockStatusTitleView.setTextColor(Color.parseColor("#10B981"))
+                lockStatusDotView.background = roundedBox("#10B981", "#10B981", 999f, 0)
+            }
+            else -> {
+                lockStatusTitleView.text = "Background Monitoring Paused"
+                lockStatusTitleView.setTextColor(Color.parseColor("#F59E0B"))
+                lockStatusDotView.background = roundedBox("#F59E0B", "#F59E0B", 999f, 0)
+            }
+        }
+
+        lockStatusSummaryView.text =
+            "${stats.monthLabel}: ${stats.attendedDays}/${stats.requiredDays} days (${stats.actualPercent}%) • ${maxOf(0, stats.bufferDays)} buffer left"
+    }
+
     private fun startLockScreenRunningAnimation() {
         if (!::lockIconView.isInitialized || !::lockOuterHaloView.isInitialized || !::lockInnerHaloView.isInitialized) return
         stopLockScreenRunningAnimation()
+        updateLockScreenStatusCard()
 
         lockIconView.text = "🔒"
         lockIconView.rotation = 0f
@@ -579,8 +694,33 @@ class MainActivity : AppCompatActivity() {
             interpolator = AccelerateDecelerateInterpolator()
         }
 
+        val dotBeat = if (::lockStatusDotView.isInitialized) {
+            ObjectAnimator.ofPropertyValuesHolder(
+                lockStatusDotView,
+                PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.4f, 1.08f, 1.32f, 1f),
+                PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.4f, 1.08f, 1.32f, 1f)
+            ).apply {
+                duration = 1400L
+                repeatCount = ValueAnimator.INFINITE
+                interpolator = AccelerateDecelerateInterpolator()
+            }
+        } else null
+
+        val cardBreath = if (::lockStatusCardView.isInitialized) {
+            ObjectAnimator.ofPropertyValuesHolder(
+                lockStatusCardView,
+                PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.02f, 1f),
+                PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.02f, 1f)
+            ).apply {
+                duration = 2400L
+                repeatCount = ValueAnimator.INFINITE
+                interpolator = AccelerateDecelerateInterpolator()
+            }
+        } else null
+
+        val anims = listOfNotNull(outerRadar, innerPulse, pendulumRock, dotBeat, cardBreath)
         lockRunningAnimSet = AnimatorSet().apply {
-            playTogether(outerRadar, innerPulse, pendulumRock)
+            playTogether(anims)
             start()
         }
     }
@@ -604,6 +744,14 @@ class MainActivity : AppCompatActivity() {
             lockIconView.scaleY = 1f
             lockIconView.rotation = 0f
         }
+        if (::lockStatusDotView.isInitialized) {
+            lockStatusDotView.scaleX = 1f
+            lockStatusDotView.scaleY = 1f
+        }
+        if (::lockStatusCardView.isInitialized) {
+            lockStatusCardView.scaleX = 1f
+            lockStatusCardView.scaleY = 1f
+        }
     }
 
     private fun playUnlockTransitionThenDashboard() {
@@ -625,16 +773,33 @@ class MainActivity : AppCompatActivity() {
             interpolator = OvershootInterpolator(1.2f)
         }
 
+        val cardSlideOut = if (::lockStatusCardView.isInitialized) {
+            ObjectAnimator.ofPropertyValuesHolder(
+                lockStatusCardView,
+                PropertyValuesHolder.ofFloat(View.TRANSLATION_Y, 0f, 36f),
+                PropertyValuesHolder.ofFloat(View.ALPHA, 1f, 0f)
+            ).apply {
+                duration = 260L
+                startDelay = 120L
+                interpolator = DecelerateInterpolator()
+            }
+        } else null
+
         val fadeOverlay = ObjectAnimator.ofFloat(appLockOverlay, View.ALPHA, 1f, 0f).apply {
             duration = 260L
             startDelay = 200L
         }
 
+        val group = listOfNotNull(pop, cardSlideOut, fadeOverlay)
         AnimatorSet().apply {
-            playTogether(pop, fadeOverlay)
+            playTogether(group)
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
                     appLockOverlay.alpha = 1f
+                    if (::lockStatusCardView.isInitialized) {
+                        lockStatusCardView.alpha = 1f
+                        lockStatusCardView.translationY = 0f
+                    }
                     showDashboardMode(playEntrance = true)
                 }
             })
@@ -741,6 +906,7 @@ class MainActivity : AppCompatActivity() {
         appLockOverlay.visibility = View.VISIBLE
         setupScroll.visibility = View.GONE
         mainScaffold.visibility = View.GONE
+        updateLockScreenStatusCard()
         startLockScreenRunningAnimation()
     }
 
@@ -851,24 +1017,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ==================== 1. FULL-APP LOCK OVERLAY WITH RADAR & LOCK MOTION ====================
+    // ==================== 1. FULL-APP LOCK OVERLAY WITH STATUS CARD ====================
 
     private fun buildAppLockOverlay(): LinearLayout {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setBackgroundColor(cBg())
-            setPadding(48, 48, 48, 48)
+            setPadding(44, 40, 44, 44)
             visibility = View.GONE
 
             val animStage = FrameLayout(this@MainActivity).apply {
-                layoutParams = LinearLayout.LayoutParams(220, 220).apply {
+                layoutParams = LinearLayout.LayoutParams(210, 210).apply {
                     gravity = Gravity.CENTER_HORIZONTAL
                 }
             }
 
             lockOuterHaloView = View(this@MainActivity).apply {
-                layoutParams = FrameLayout.LayoutParams(184, 184).apply {
+                layoutParams = FrameLayout.LayoutParams(178, 178).apply {
                     gravity = Gravity.CENTER
                 }
                 background = roundedBox(
@@ -881,7 +1047,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             lockInnerHaloView = View(this@MainActivity).apply {
-                layoutParams = FrameLayout.LayoutParams(144, 144).apply {
+                layoutParams = FrameLayout.LayoutParams(138, 138).apply {
                     gravity = Gravity.CENTER
                 }
                 background = roundedBox(
@@ -895,7 +1061,7 @@ class MainActivity : AppCompatActivity() {
 
             lockIconView = TextView(this@MainActivity).apply {
                 text = "🔒"
-                textSize = 50f
+                textSize = 48f
                 gravity = Gravity.CENTER
                 layoutParams = FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -914,15 +1080,49 @@ class MainActivity : AppCompatActivity() {
                 setTypeface(null, Typeface.BOLD)
                 setTextColor(cTextPrimary())
                 gravity = Gravity.CENTER
-                setPadding(0, 16, 0, 8)
+                setPadding(0, 12, 0, 6)
             }
             val sub = TextView(this@MainActivity).apply {
-                text = "Authenticate with Fingerprint, Face, or PIN to view your attendance."
-                textSize = 14f
+                text = "Authenticate with Fingerprint, Face, or PIN to open your dashboard."
+                textSize = 13f
                 setTextColor(cTextSecondary())
                 gravity = Gravity.CENTER
-                setPadding(0, 0, 0, 32)
+                setPadding(0, 0, 0, 20)
             }
+
+            lockStatusCardView = makeCardContainer().apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(0, 0, 0, 24) }
+            }
+            val topStatusLine = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            lockStatusDotView = View(this@MainActivity).apply {
+                layoutParams = LinearLayout.LayoutParams(18, 18).apply {
+                    setMargins(0, 0, 12, 0)
+                }
+                background = roundedBox("#10B981", "#10B981", 999f, 0)
+            }
+            lockStatusTitleView = TextView(this@MainActivity).apply {
+                text = "Auto-Tracking Running"
+                textSize = 14f
+                setTypeface(null, Typeface.BOLD)
+                setTextColor(Color.parseColor("#10B981"))
+            }
+            topStatusLine.addView(lockStatusDotView)
+            topStatusLine.addView(lockStatusTitleView)
+
+            lockStatusSummaryView = TextView(this@MainActivity).apply {
+                textSize = 12f
+                setTextColor(cTextSecondary())
+                setPadding(0, 8, 0, 0)
+            }
+            lockStatusCardView.addView(topStatusLine)
+            lockStatusCardView.addView(lockStatusSummaryView)
+
             val unlockBtn = makePillButton("Unlock Now", "#4F46E5", "#FFFFFF") {
                 promptDeviceCredential(REQ_UNLOCK_APP, "Unlock WFO Tracker")
             }
@@ -930,6 +1130,7 @@ class MainActivity : AppCompatActivity() {
             addView(animStage)
             addView(title)
             addView(sub)
+            addView(lockStatusCardView)
             addView(unlockBtn)
         }
     }
@@ -2631,6 +2832,7 @@ class MainActivity : AppCompatActivity() {
                 if (isNew && store.isConnectAlertEnabled() && store.claimOnceFlag("notif_checkin_${LocalDate.now()}")) {
                     sendAlertNotification(this, "✅ Office Day Logged ($liveSsid)", "Connected to office Wi-Fi.")
                 }
+                postAnimatedStatusNotification("✅ Office Presence Active", "Matched Wi-Fi: $liveSsid", activePresence = true)
             }
         }
 
@@ -2643,6 +2845,7 @@ class MainActivity : AppCompatActivity() {
                 if (isNew && store.isConnectAlertEnabled() && store.claimOnceFlag("notif_checkin_${LocalDate.now()}")) {
                     sendAlertNotification(this, "✅ Office Day Logged ($label)", "Within ${store.getGeofenceRadiusMeters()}m office zone.")
                 }
+                postAnimatedStatusNotification("✅ Office Presence Active", "Inside ${store.getGeofenceRadiusMeters()}m zone ($label)", activePresence = true)
             }
         }
 
@@ -2658,6 +2861,8 @@ class MainActivity : AppCompatActivity() {
     // ==================== 4. REFRESH LOGIC ====================
 
     private fun refreshAllViews(animateCharts: Boolean = false) {
+        updateLockScreenStatusCard()
+
         val locOk = hasLocationPermission()
         val notifOk = hasNotificationPermission()
         val bgLocOk = hasBackgroundLocationPermission()
