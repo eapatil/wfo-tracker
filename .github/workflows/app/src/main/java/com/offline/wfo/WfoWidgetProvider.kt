@@ -132,23 +132,23 @@ class WfoWidgetProvider : AppWidgetProvider() {
                 views.setTextViewText(viewId, letter)
                 when (t) {
                     DayType.OFFICE -> {
-                        views.setTextColor(viewId, Color.WHITE)
+                        views.setInt(viewId, "setTextColor", Color.WHITE)
                         views.setInt(viewId, "setBackgroundResource", R.drawable.widget_day_office)
                     }
                     DayType.PLANNED -> {
-                        views.setTextColor(Color.parseColor("#3730A3"))
+                        views.setInt(viewId, "setTextColor", Color.parseColor("#3730A3"))
                         views.setInt(viewId, "setBackgroundResource", R.drawable.widget_day_planned)
                     }
                     DayType.LEAVE -> {
-                        views.setTextColor(Color.WHITE)
+                        views.setInt(viewId, "setTextColor", Color.WHITE)
                         views.setInt(viewId, "setBackgroundResource", R.drawable.widget_day_leave)
                     }
                     DayType.HOLIDAY -> {
-                        views.setTextColor(Color.WHITE)
+                        views.setInt(viewId, "setTextColor", Color.WHITE)
                         views.setInt(viewId, "setBackgroundResource", R.drawable.widget_day_holiday)
                     }
                     DayType.NONE -> {
-                        views.setTextColor(Color.parseColor("#64748B"))
+                        views.setInt(viewId, "setTextColor", Color.parseColor("#64748B"))
                         views.setInt(viewId, "setBackgroundResource", R.drawable.widget_day_none)
                     }
                 }
