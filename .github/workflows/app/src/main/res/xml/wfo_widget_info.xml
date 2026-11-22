@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:initialLayout="@layout/widget_wfo"
-    android:minWidth="140dp"
-    android:minHeight="60dp"
+    android:description="@string/app_name"
+    android:initialLayout="@layout/wfo_widget"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="180dp"
+    android:minResizeHeight="90dp"
     android:resizeMode="horizontal|vertical"
-    android:targetCellWidth="2"
-    android:targetCellHeight="1"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
     android:updatePeriodMillis="1800000"
-    android:widgetCategory="home_screen" />
+    android:widgetCategory="home_screen|keyguard" />
