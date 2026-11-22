@@ -1,6 +1,8 @@
 package com.offline.wfo
 
 import android.content.Context
+import android.net.Uri
+import android.provider.DocumentsContract
 import java.io.File
 import java.time.DayOfWeek
 import java.time.Duration
@@ -102,6 +104,79 @@ class AttendanceStore(private val context: Context) {
     fun isFullAppLockEnabled(): Boolean = prefs.getBoolean("full_app_lock", false)
     fun setFullAppLockEnabled(enabled: Boolean) = prefs.edit().putBoolean("full_app_lock", enabled).apply()
 
+    // ==================== AUTO-BACKUP FOLDER (SAF) ====================
+
+    fun getAutoBackupTreeUri(): String = prefs.getString("auto_backup_tree_uri", "") ?: ""
+
+    fun setAutoBackupTreeUri(uriStr: String) {
+        prefs.edit().putString("auto_backup_tree_uri", uriStr).apply()
+    }
+
+    fun getAutoBackupFolderLabel(): String {
+        val raw = getAutoBackupTreeUri()
+        if (raw.isEmpty()) return "Not configured"
+        return runCatching {
+            val uri = Uri.parse(raw)
+            val docId = DocumentsContract.getTreeDocumentId(uri)
+            docId.substringAfterLast(':').ifEmpty { docId }
+        }.getOrDefault("Selected Folder")
+    }
+
+    /**
+     * Silently writes `wfo_auto_backup.csv` into the user-selected SAF directory
+     * (local storage or synced Google Drive folder) without showing any prompt.
+     */
+    fun triggerSilentAutoBackup(): Boolean {
+        val rawUri = getAutoBackupTreeUri()
+        if (rawUri.isEmpty()) return false
+
+        return runCatching {
+            val treeUri = Uri.parse(rawUri)
+            val treeDocId = DocumentsContract.getTreeDocumentId(treeUri)
+            val parentDocUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocId)
+            val fileName = "wfo_auto_backup.csv"
+
+            var targetFileUri: Uri? = null
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, treeDocId)
+            context.contentResolver.query(
+                childrenUri,
+                arrayOf(
+                    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME
+                ),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                while (cursor.moveToNext()) {
+                    val docId = cursor.getString(0)
+                    val name = cursor.getString(1)
+                    if (name == fileName) {
+                        targetFileUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
+                        break
+                    }
+                }
+            }
+
+            if (targetFileUri == null) {
+                targetFileUri = DocumentsContract.createDocument(
+                    context.contentResolver,
+                    parentDocUri,
+                    "text/csv",
+                    fileName
+                )
+            }
+
+            targetFileUri?.let { uri ->
+                context.contentResolver.openOutputStream(uri, "wt")?.use { out ->
+                    out.write(exportAllCsv().toByteArray(Charsets.UTF_8))
+                }
+                prefs.edit().putLong("last_auto_backup_ms", System.currentTimeMillis()).apply()
+                true
+            } ?: false
+        }.getOrDefault(false)
+    }
+
     // ==================== POLICY & WI-FI SETTINGS ====================
 
     fun getTargetPercent(): Int = prefs.getInt("target_percent", 40)
@@ -152,8 +227,13 @@ class AttendanceStore(private val context: Context) {
 
     fun wasConnectedToOfficeWifi(): Boolean = prefs.getBoolean("was_on_office_wifi", false)
 
-    fun setConnectedToOfficeWifi(connected: Boolean) {
-        prefs.edit().putBoolean("was_on_office_wifi", connected).apply()
+    fun getActiveOfficeSsid(): String = prefs.getString("active_office_ssid", "") ?: ""
+
+    fun setConnectedToOfficeWifi(connected: Boolean, ssid: String = "") {
+        prefs.edit()
+            .putBoolean("was_on_office_wifi", connected)
+            .putString("active_office_ssid", if (connected) ssid else "")
+            .apply()
     }
 
     // ==================== DATE, NOTES & ATTENDANCE OPERATIONS ====================
@@ -181,6 +261,7 @@ class AttendanceStore(private val context: Context) {
             editor.putString("note_$key", clean)
         }
         editor.apply()
+        triggerSilentAutoBackup()
     }
 
     /**
@@ -190,6 +271,7 @@ class AttendanceStore(private val context: Context) {
      * Returns true if this is the first confirmed OFFICE check-in today.
      */
     fun recordOfficePresence(
+        ssid: String = "",
         date: LocalDate = LocalDate.now(),
         time: LocalTime = LocalTime.now()
     ): Boolean {
@@ -204,6 +286,7 @@ class AttendanceStore(private val context: Context) {
             .putStringSet("all_marked_dates", dates)
             .putString("day_type_$key", DayType.OFFICE.name)
             .putBoolean("was_on_office_wifi", true)
+            .putString("active_office_ssid", ssid)
 
         if (isNewOfficeToday) {
             editor.putString("times_$key", "$nowStr|$nowStr")
@@ -214,19 +297,21 @@ class AttendanceStore(private val context: Context) {
         }
 
         editor.apply()
+        if (isNewOfficeToday) {
+            triggerSilentAutoBackup()
+        }
         return isNewOfficeToday
     }
 
     /**
      * Captures the exact disconnect timestamp when the device leaves office Wi-Fi.
-     * Updates the end of the `firstConnect|disconnectTime` span for today.
      */
     fun recordOfficeDisconnect(
         date: LocalDate = LocalDate.now(),
         time: LocalTime = LocalTime.now()
     ): Boolean {
         val wasConnected = wasConnectedToOfficeWifi()
-        setConnectedToOfficeWifi(false)
+        setConnectedToOfficeWifi(false, "")
 
         val key = date.toString()
         if (getDayType(key) != DayType.OFFICE) return false
@@ -236,6 +321,7 @@ class AttendanceStore(private val context: Context) {
         if (existing.contains("|")) {
             val firstSeen = existing.substringBefore("|")
             prefs.edit().putString("times_$key", "$firstSeen|$nowStr").apply()
+            triggerSilentAutoBackup()
             return true
         }
         return wasConnected
@@ -251,7 +337,7 @@ class AttendanceStore(private val context: Context) {
         val dates = getAllMarkedDates()
         val current = getDayType(key)
 
-        return if (current == targetType || targetType == DayType.NONE) {
+        val result = if (current == targetType || targetType == DayType.NONE) {
             dates.remove(key)
             prefs.edit()
                 .putStringSet("all_marked_dates", dates)
@@ -275,6 +361,81 @@ class AttendanceStore(private val context: Context) {
                 .apply()
             targetType
         }
+        triggerSilentAutoBackup()
+        return result
+    }
+
+    /**
+     * One-tap Auto-Plan Month:
+     * Schedules PLANNED office days on future unmarked weekdays in `ym` to cover any
+     * remaining mandate gap, prioritizing the user's historical top office weekdays first.
+     * Returns the number of newly planned days added.
+     */
+    fun autoPlanRemainingDaysForMonth(
+        ym: YearMonth = YearMonth.now(),
+        today: LocalDate = LocalDate.now()
+    ): Int {
+        val stats = getMonthStats(ym, today)
+        val neededToPlan = maxOf(0, stats.remainingDays - stats.futurePlannedDays)
+        if (neededToPlan == 0) return 0
+
+        val currentYm = YearMonth.from(today)
+        if (ym.isBefore(currentYm)) return 0
+
+        // Rank user's preferred weekdays from office history (default Tue, Wed, Thu)
+        val officeDates = getAllMarkedDates()
+            .filter { getDayType(it) == DayType.OFFICE }
+            .mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }
+
+        val preferredDays: List<DayOfWeek> = if (officeDates.isNotEmpty()) {
+            officeDates.groupingBy { it.dayOfWeek }
+                .eachCount()
+                .entries
+                .sortedWith(compareBy({ -it.value }, { it.key.value }))
+                .map { it.key }
+        } else {
+            listOf(DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY)
+        }
+
+        // Collect all eligible future weekdays in the target month
+        val candidates = mutableListOf<LocalDate>()
+        for (day in 1..ym.lengthOfMonth()) {
+            val d = ym.atDay(day)
+            val isFutureOrToday = if (ym == currentYm) !d.isBefore(today) else true
+            val isWeekday = d.dayOfWeek != DayOfWeek.SATURDAY && d.dayOfWeek != DayOfWeek.SUNDAY
+            if (isFutureOrToday && isWeekday && getDayType(d) == DayType.NONE) {
+                candidates.add(d)
+            }
+        }
+
+        if (candidates.isEmpty()) return 0
+
+        // Sort candidates: preferred weekdays first (by rank), then chronologically
+        val sortedCandidates = candidates.sortedWith(
+            compareBy(
+                { d ->
+                    val idx = preferredDays.indexOf(d.dayOfWeek)
+                    if (idx >= 0) idx else 99
+                },
+                { it.dayOfMonth }
+            )
+        )
+
+        val toMark = sortedCandidates.take(neededToPlan)
+        val dates = getAllMarkedDates()
+        val editor = prefs.edit()
+        for (d in toMark) {
+            val key = d.toString()
+            dates.add(key)
+            editor.putString("day_type_$key", DayType.PLANNED.name)
+            editor.putString("times_$key", "Auto-Planned Office")
+        }
+        editor.putStringSet("all_marked_dates", dates).apply()
+
+        if (toMark.isNotEmpty()) {
+            triggerSilentAutoBackup()
+        }
+        return toMark.size
     }
 
     fun getFormattedDetail(dateStr: String, type: DayType): String {
@@ -655,6 +816,7 @@ class AttendanceStore(private val context: Context) {
         }
 
         editor.putStringSet("all_marked_dates", dates).apply()
+        triggerSilentAutoBackup()
         return count
     }
 
