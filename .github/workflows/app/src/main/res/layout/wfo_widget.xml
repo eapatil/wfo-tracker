@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_card_bg"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <!-- Row 1: Month Title + Live Status Pill + Manual Refresh Button -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_month_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="WFO • Nov 2026"
+            android:textColor="@color/widget_text_primary"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_status_pill"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/widget_pill_neutral"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:paddingStart="9dp"
+            android:paddingTop="3dp"
+            android:paddingEnd="9dp"
+            android:paddingBottom="3dp"
+            android:text="🏠 WFH Today"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_refresh_btn"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:background="@drawable/widget_pill_neutral"
+            android:gravity="center"
+            android:text="🔄"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- Row 2: Hero Attendance Ratio + Pace Line -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_hero_ratio"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0 / 9 days (0%)"
+            android:textColor="@color/widget_text_primary"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_pace_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:gravity="end"
+            android:maxLines="1"
+            android:text="9 needed • 11 buffer"
+            android:textColor="@color/widget_text_secondary"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Row 3: Progress Bar -->
+    <ProgressBar
+        android:id="@+id/widget_progress_bar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="8dp"
+        android:layout_marginTop="6dp"
+        android:max="9"
+        android:progress="0"
+        android:progressDrawable="@drawable/widget_progress_drawable" />
+
+    <!-- Row 4: This Week (M T W T F) Bubbles + Last Updated Time -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_day_mon"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/widget_day_none"
+            android:gravity="center"
+            android:text="M"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_day_tue"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/widget_day_none"
+            android:gravity="center"
+            android:text="T"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_day_wed"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/widget_day_none"
+            android:gravity="center"
+            android:text="W"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_day_thu"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/widget_day_none"
+            android:gravity="center"
+            android:text="T"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_day_fri"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:background="@drawable/widget_day_none"
+            android:gravity="center"
+            android:text="F"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_updated_time"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="end"
+            android:text="Updated 09:00"
+            android:textColor="@color/widget_text_secondary"
+            android:textSize="10sp" />
+    </LinearLayout>
+</LinearLayout>
