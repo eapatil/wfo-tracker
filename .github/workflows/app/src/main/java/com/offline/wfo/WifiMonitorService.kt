@@ -32,6 +32,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.YearMonth
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
 class WifiMonitorService : Service() {
@@ -117,12 +118,15 @@ class WifiMonitorService : Service() {
             return START_NOT_STICKY
         }
 
+        store.performDailyRolloverIfNeeded()
         registerLocationUpdatesIfNeeded()
 
         when (intent?.action) {
             ACTION_QUICK_LOG_TODAY -> {
                 if (shouldShowQuickLogAction()) {
                     val isNew = store.recordOfficePresence("Manual Quick-Log")
+                    store.setWasConnectedToOfficeWifi(true)
+                    store.setActiveOfficeSsid("Manual Quick-Log")
                     if (isNew && store.isConnectAlertEnabled()) {
                         notifyCheckInSuccess("Manual Quick-Log")
                     }
@@ -168,9 +172,15 @@ class WifiMonitorService : Service() {
 
     @SuppressLint("MissingPermission")
     private fun registerLocationUpdatesIfNeeded() {
-        if (locationListenerRegistered || !hasLocationPermission()) return
-        val intervalMs = 15 * 60 * 1000L // 15 minutes for low battery overhead
-        val minDistMeters = 50f
+        if (!hasLocationPermission()) return
+        if (locationListenerRegistered) {
+            runCatching { locationManager.removeUpdates(locationListener) }
+            locationListenerRegistered = false
+        }
+
+        val inCommuteWindow = store.isInSmartCommuteWindow()
+        val intervalMs = if (inCommuteWindow) 5 * 60 * 1000L else 15 * 60 * 1000L
+        val minDistMeters = if (inCommuteWindow) 25f else 50f
 
         val providers = buildList {
             if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
@@ -255,7 +265,11 @@ class WifiMonitorService : Service() {
             ssidNow.isNotEmpty() &&
             store.getTargetSsids().any { it.equals(ssidNow, ignoreCase = true) }
 
-        val loc = latestLocation ?: getBestLastKnownLocation()
+        val loc = if (mode == TrackingMode.WIFI_ONLY && wifiMatched) {
+            null
+        } else {
+            latestLocation ?: getBestLastKnownLocation()
+        }
         if (loc != null) {
             store.setLastKnownLocation(loc.latitude, loc.longitude)
         }
@@ -267,14 +281,17 @@ class WifiMonitorService : Service() {
 
         val isPresentNow = wifiMatched || locationMatched
         val wasPresentBefore = store.wasConnectedToOfficeWifi()
+        val prevSource = store.getActiveOfficeSsid()
         val sourceLabel = when {
             wifiMatched && ssidNow.isNotEmpty() -> ssidNow
-            locationMatched -> store.getOfficeLocationName()
+            locationMatched -> store.getOfficeLocationName().ifEmpty { "Office Zone" }
             else -> ""
         }
 
         if (isPresentNow) {
             val isNewToday = store.recordOfficePresence(sourceLabel)
+            store.setWasConnectedToOfficeWifi(true)
+            store.setActiveOfficeSsid(sourceLabel)
             updatePersistentNotification()
             WfoWidgetProvider.updateAllWidgets(this)
             sendBroadcast(Intent(ACTION_DATA_UPDATED).setPackage(packageName))
@@ -283,19 +300,19 @@ class WifiMonitorService : Service() {
                 notifyCheckInSuccess(sourceLabel)
             }
         } else if (wasPresentBefore) {
-            val updated = store.recordOfficeDisconnect()
+            store.updateLastSeenTimestamp(prevSource)
+            store.setWasConnectedToOfficeWifi(false)
+            store.setActiveOfficeSsid("")
             updatePersistentNotification()
             WfoWidgetProvider.updateAllWidgets(this)
-            if (updated) {
-                sendBroadcast(Intent(ACTION_DATA_UPDATED).setPackage(packageName))
-                if (store.isDisconnectAlertEnabled()) {
-                    val leaveMsg = when (mode) {
-                        TrackingMode.LOCATION_ONLY -> "Left ${store.getOfficeLocationName()} (${radiusMeters}m zone). Departure time recorded."
-                        TrackingMode.WIFI_ONLY -> "Disconnected from office Wi-Fi. Disconnect time recorded."
-                        TrackingMode.BOTH -> "Left office Wi-Fi / ${radiusMeters}m zone. Disconnect time recorded."
-                    }
-                    sendAlertNotification(this, "🔌 Office Disconnected", leaveMsg)
+            sendBroadcast(Intent(ACTION_DATA_UPDATED).setPackage(packageName))
+            if (store.isDisconnectAlertEnabled()) {
+                val leaveMsg = when (mode) {
+                    TrackingMode.LOCATION_ONLY -> "Left ${store.getOfficeLocationName()} (${radiusMeters}m zone). Departure time recorded."
+                    TrackingMode.WIFI_ONLY -> "Disconnected from office Wi-Fi. Disconnect time recorded."
+                    TrackingMode.BOTH -> "Left office Wi-Fi / ${radiusMeters}m zone. Disconnect time recorded."
                 }
+                sendAlertNotification(this, "🔌 Office Disconnected", leaveMsg)
             }
         } else {
             updatePersistentNotification()
@@ -348,7 +365,7 @@ class WifiMonitorService : Service() {
     }
 
     private fun buildPersistentNotification(overrideText: String? = null): Notification {
-        val stats = store.getMonthStats()
+        val stats = store.getMonthStats(YearMonth.now())
         val openIntent = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
         )
@@ -449,6 +466,7 @@ fun sendAlertNotification(
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
+            AttendanceStore(context).performDailyRolloverIfNeeded()
             val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
             val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
             if (fine == PackageManager.PERMISSION_GRANTED || coarse == PackageManager.PERMISSION_GRANTED) {
@@ -466,6 +484,7 @@ class ReminderReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent?) {
         val store = AttendanceStore(context)
+        store.performDailyRolloverIfNeeded()
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         when (intent?.action) {
@@ -473,7 +492,8 @@ class ReminderReceiver : BroadcastReceiver() {
                 val dateStr = intent.getStringExtra(WifiMonitorService.EXTRA_DATE_STR) ?: LocalDate.now().toString()
                 val notifId = intent.getIntExtra(WifiMonitorService.EXTRA_NOTIF_ID, -1)
                 runCatching { LocalDate.parse(dateStr) }.getOrNull()?.let { targetDate ->
-                    store.setExplicitDayType(targetDate, DayType.LEAVE, "Leave (from Alert)")
+                    store.setExplicitDayType(targetDate, DayType.LEAVE)
+                    store.setDayNote(targetDate, "Leave (from Alert)")
                 }
                 if (notifId != -1) nm.cancel(notifId)
                 WfoWidgetProvider.updateAllWidgets(context)
@@ -490,7 +510,8 @@ class ReminderReceiver : BroadcastReceiver() {
                         nextDay = nextDay.plusDays(1)
                     }
                     if (store.getDayType(nextDay) == DayType.NONE) {
-                        store.setExplicitDayType(nextDay, DayType.PLANNED, "Rescheduled Office")
+                        store.setExplicitDayType(nextDay, DayType.PLANNED)
+                        store.setDayNote(nextDay, "Rescheduled Office")
                     }
                 }
                 if (notifId != -1) nm.cancel(notifId)
@@ -538,7 +559,7 @@ class ReminderReceiver : BroadcastReceiver() {
                 )
             }
 
-            // 2. Morning Pace Nudge on Unscheduled WFH Days (08:30 - 10:30)
+            // 2. Morning Pace & WFH Briefing on Unscheduled Weekdays (08:30 - 10:30)
             if (store.isMorningNudgeEnabled() &&
                 isWeekday &&
                 todayType == DayType.NONE &&
@@ -546,15 +567,15 @@ class ReminderReceiver : BroadcastReceiver() {
                 now.isBefore(LocalTime.of(10, 30))
             ) {
                 val stats = store.getMonthStats(YearMonth.from(today), today)
-                if (stats.remainingDays > 0 && stats.bufferDays <= 2 &&
-                    store.claimOnceFlag("notif_pace_nudge_$today")
-                ) {
-                    val bufTxt = if (stats.bufferDays <= 0) "no WFH buffer left" else "only ${stats.bufferDays} WFH buffer day(s) left"
-                    sendAlertNotification(
-                        context,
-                        "⏱️ ${stats.targetPercent}% WFO Pace Nudge",
-                        "You still need ${stats.remainingDays} office day(s) this month ($bufTxt)."
-                    )
+                val rhythm = store.getRhythmStats(today)
+                if ((stats.remainingDays > 0 && stats.bufferDays <= 2) || rhythm.consecutiveWfhWeekdays >= 3) {
+                    if (store.claimOnceFlag("notif_pace_nudge_$today")) {
+                        sendAlertNotification(
+                            context,
+                            "🧭 ${rhythm.safeToWfhVerdict}",
+                            rhythm.safeToWfhDetail
+                        )
+                    }
                 }
             }
 
@@ -598,7 +619,7 @@ class ReminderReceiver : BroadcastReceiver() {
                 )
             }
 
-            // 4. Night-Before Prep & Quarter-End Pace Alert (20:00 - 22:00)
+            // 4. Night-Before Prep, Month-End Recovery & Quarter-End Pace Alert (20:00 - 22:00)
             val tomorrow = today.plusDays(1)
             if (store.isPlannedRemindersEnabled() &&
                 store.getDayType(tomorrow) == DayType.PLANNED &&
@@ -613,6 +634,28 @@ class ReminderReceiver : BroadcastReceiver() {
                 )
             }
 
+            val ym = YearMonth.from(today)
+            val daysLeftInMonth = ym.atEndOfMonth().dayOfMonth - today.dayOfMonth
+            if (store.isTargetBufferAlertEnabled() &&
+                daysLeftInMonth in 0..7 &&
+                !now.isBefore(LocalTime.of(20, 0)) &&
+                now.isBefore(LocalTime.of(22, 0))
+            ) {
+                val mStats = store.getMonthStats(ym, today)
+                if (mStats.remainingDays > 0 && mStats.recoverySuggestedDates.isNotEmpty() &&
+                    store.claimOnceFlag("notif_month_recovery_$today")
+                ) {
+                    val datesText = mStats.recoverySuggestedDates.joinToString(", ") {
+                        it.format(DateTimeFormatter.ofPattern("dd MMM"))
+                    }
+                    sendAlertNotification(
+                        context,
+                        "📌 ${mStats.monthLabel} Recovery Needed",
+                        "Need ${mStats.remainingDays} more office day(s). Suggested dates: $datesText."
+                    )
+                }
+            }
+
             if (store.isQuarterPaceAlertEnabled() && !now.isBefore(LocalTime.of(20, 0)) && now.isBefore(LocalTime.of(22, 0))) {
                 val qIndex = (today.monthValue - 1) / 3
                 val qEndMonth = YearMonth.of(today.year, qIndex * 3 + 3)
@@ -620,13 +663,14 @@ class ReminderReceiver : BroadcastReceiver() {
                 val daysToQEnd = ChronoUnit.DAYS.between(today, qEndDate)
                 if (daysToQEnd in 1..21) {
                     val qStats = store.getQuarterStats(YearMonth.from(today), today)
-                    if (qStats.remainingDays > 0 &&
+                    val qRemaining = maxOf(0, qStats.requiredDays - qStats.attendedDays)
+                    if (qRemaining > 0 &&
                         store.claimOnceFlag("notif_qend_${today.year}_Q${qIndex + 1}_$today")
                     ) {
                         sendAlertNotification(
                             context,
                             "📊 ${qStats.quarterLabel} Pace Alert",
-                            "Only $daysToQEnd day(s) left in the quarter — you need ${qStats.remainingDays} more office day(s) (${qStats.attendedDays}/${qStats.requiredDays})."
+                            "Only $daysToQEnd day(s) left in the quarter — you need $qRemaining more office day(s) (${qStats.attendedDays}/${qStats.requiredDays})."
                         )
                     }
                 }
@@ -634,7 +678,9 @@ class ReminderReceiver : BroadcastReceiver() {
 
             // 5. Auto-End-of-Day Disconnect Safety Net (23:50 - 23:59)
             if (!now.isBefore(LocalTime.of(23, 50)) && store.wasConnectedToOfficeWifi()) {
-                store.recordOfficeDisconnect(today, now)
+                store.updateLastSeenTimestamp(store.getActiveOfficeSsid(), today, now)
+                store.setWasConnectedToOfficeWifi(false)
+                store.setActiveOfficeSsid("")
                 context.sendBroadcast(Intent(WifiMonitorService.ACTION_DATA_UPDATED).setPackage(context.packageName))
             }
         }
