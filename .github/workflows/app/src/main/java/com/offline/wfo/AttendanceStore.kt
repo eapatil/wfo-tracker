@@ -4,12 +4,13 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.location.Location
 import android.net.Uri
-import androidx.documentfile.provider.DocumentFile
+import android.provider.DocumentsContract
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -191,7 +192,7 @@ class AttendanceStore(private val context: Context) {
 
     private fun recordArrivalMinuteSample(time: LocalTime) {
         val minutesFromMidnight = time.hour * 60 + time.minute
-        if (minutesFromMidnight !in 360..840) return // 06:00 to 14:00 reasonable arrival window
+        if (minutesFromMidnight !in 360..840) return
         val raw = prefs.getString(KEY_ARRIVAL_MINUTES_SAMPLES, "") ?: ""
         val samples = raw.split(",").mapNotNull { it.trim().toIntOrNull() }.toMutableList()
         samples.add(minutesFromMidnight)
@@ -204,7 +205,7 @@ class AttendanceStore(private val context: Context) {
     fun getLearnedArrivalWindowMinutes(): Pair<Int, Int> {
         val raw = prefs.getString(KEY_ARRIVAL_MINUTES_SAMPLES, "") ?: ""
         val samples = raw.split(",").mapNotNull { it.trim().toIntOrNull() }
-        if (samples.isEmpty()) return 540 to 630 // Default 09:00 to 10:30
+        if (samples.isEmpty()) return 540 to 630
         val avg = samples.average().roundToInt()
         val start = (avg - 45).coerceIn(360, 720)
         val end = (avg + 60).coerceIn(start + 30, 900)
@@ -1241,11 +1242,40 @@ class AttendanceStore(private val context: Context) {
 
     fun getAutoBackupTreeUri(): String = prefs.getString(KEY_BACKUP_TREE_URI, "") ?: ""
 
+    private fun findDocumentUriInTree(treeUri: Uri, displayName: String): Uri? {
+        val treeDocId = runCatching { DocumentsContract.getTreeDocumentId(treeUri) }.getOrNull() ?: return null
+        val childrenUri = runCatching {
+            DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, treeDocId)
+        }.getOrNull() ?: return null
+
+        return runCatching {
+            context.contentResolver.query(
+                childrenUri,
+                arrayOf(
+                    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME
+                ),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                val nameCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                while (cursor.moveToNext()) {
+                    val name = if (nameCol >= 0) cursor.getString(nameCol) else null
+                    val docId = if (idCol >= 0) cursor.getString(idCol) else null
+                    if (name == displayName && !docId.isNullOrBlank()) {
+                        return@use DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
+                    }
+                }
+                null
+            }
+        }.getOrNull()
+    }
+
     fun restoreExistingBackupFromFolder(treeUri: Uri): Int {
-        val docDir = DocumentFile.fromTreeUri(context, treeUri) ?: return 0
-        val existing = docDir.findFile(AUTO_BACKUP_FILENAME) ?: return 0
-        if (!existing.isFile) return 0
-        val text = context.contentResolver.openInputStream(existing.uri)?.use { stream ->
+        val existingUri = findDocumentUriInTree(treeUri, AUTO_BACKUP_FILENAME) ?: return 0
+        val text = context.contentResolver.openInputStream(existingUri)?.use { stream ->
             BufferedReader(InputStreamReader(stream)).readText()
         } ?: return 0
         return importCsvText(text, autoBackupAfter = false)
@@ -1256,17 +1286,19 @@ class AttendanceStore(private val context: Context) {
         if (uriStr.isBlank()) return false
         val ok = runCatching {
             val treeUri = Uri.parse(uriStr)
-            val docDir = DocumentFile.fromTreeUri(context, treeUri) ?: return@runCatching false
-            val targetFile = docDir.findFile(AUTO_BACKUP_FILENAME)
-                ?: docDir.createFile("text/csv", AUTO_BACKUP_FILENAME)
+            val treeDocId = DocumentsContract.getTreeDocumentId(treeUri)
+            val dirUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocId)
+            val targetUri = findDocumentUriInTree(treeUri, AUTO_BACKUP_FILENAME)
+                ?: DocumentsContract.createDocument(context.contentResolver, dirUri, "text/csv", AUTO_BACKUP_FILENAME)
                 ?: return@runCatching false
-            context.contentResolver.openOutputStream(targetFile.uri, "wt")?.use { out ->
+
+            context.contentResolver.openOutputStream(targetUri, "wt")?.use { out ->
                 out.write(exportAllCsv().toByteArray(Charsets.UTF_8))
             } ?: return@runCatching false
             true
         }.getOrDefault(false)
 
-        val nowStr = java.time.LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd MMM HH:mm"))
+        val nowStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd MMM HH:mm"))
         prefs.edit()
             .putString(KEY_LAST_BACKUP_TIME, nowStr)
             .putBoolean(KEY_LAST_BACKUP_OK, ok)
