@@ -2470,54 +2470,202 @@ class MainActivity : AppCompatActivity() {
         return scroll
     }
 
-    private fun showHelpGuideDialog() {
-        val scrollView = ScrollView(this)
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(44, 24, 44, 20)
-        }
-        scrollView.addView(content)
+        private fun showHelpGuideDialog() {
+        var dialogRef: AlertDialog? = null
 
-        val guideSections = listOf(
-            "1. How Auto-Tracking Works" to
-                "• Runs in the background via WifiMonitorService when Location permission is granted.\n" +
-                "• Supports Wi-Fi SSID matching, GPS Geofence radius, or Both.\n" +
-                "• Automatically records first_seen on arrival, refreshes last_seen while connected, and logs your departure timestamp when you leave.\n" +
-                "• Learns your typical arrival window over time and tightens location checks during your commute window.",
-            "2. Monthly Mandate, Buffer & Recovery" to
-                "• Attendance is evaluated strictly on a monthly basis (no quarterly carryover).\n" +
-                "• Effective working days exclude weekends and (when enabled in Setup) marked Holidays and Leaves.\n" +
-                "• WFH Buffer shows how many non-office weekdays remain after subtracting the office days you still need.\n" +
-                "• Near month-end, recovery suggestions highlight remaining eligible weekdays ranked by your preferred weekday priority.",
-            "3. Required Android Permissions" to
-                "• Location (Fine/Coarse) & \"Allow all the time\": Required for background geofence checks and Wi-Fi SSID visibility on Android.\n" +
-                "• Phone Location (GPS) Switch ON: Android may hide connected Wi-Fi SSIDs if system location is off.\n" +
-                "• Notifications & Exact Alarms: Ensures check-in, disconnect, and reminder alerts arrive on time.\n" +
-                "• Unrestricted Battery: Prevents Android from sleeping the background monitor.",
-            "4. Backup, Restore & Safe Reinstalls" to
-                "• Link an Auto-Backup Folder in Settings so OfficePace maintains wfo_attendance_autobackup.csv (including date, type, source, first_seen, last_seen, duration_hours, auto_logged, and note).\n" +
-                "• Before reinstalling or switching phones, verify your backup folder has the latest CSV, or use Save CSV / Restore CSV anytime."
+        val scrollView = ScrollView(this).apply {
+            isFillViewport = true
+        }
+        val rootContent = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(36, 28, 36, 24)
+        }
+        scrollView.addView(rootContent)
+
+        // Top Live Readiness Pill
+        val permsReady = hasLocationPermission() && hasBackgroundLocationPermission() && isSystemLocationEnabled()
+        val backupHealthy = store.getBackupHealthInfo().healthy
+        val readinessRow = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = roundedBox(
+                if (permsReady && backupHealthy) (if (isDark) "#064E3B" else "#ECFDF5")
+                else (if (isDark) "#451A03" else "#FFFBEB"),
+                if (permsReady && backupHealthy) "#10B981" else "#F59E0B",
+                16f,
+                1
+            )
+            setPadding(22, 16, 22, 16)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 0, 0, 16) }
+        }
+        val readinessTitle = TextView(this).apply {
+            text = if (permsReady && backupHealthy) {
+                "✅ System Ready: Auto-Tracking & CSV Backup Active"
+            } else {
+                "⚡ Quick Readiness Check"
+            }
+            textSize = 13f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(
+                if (permsReady && backupHealthy) Color.parseColor("#10B981")
+                else Color.parseColor("#F59E0B")
+            )
+        }
+        val readinessSub = TextView(this).apply {
+            val pTxt = if (permsReady) "Permissions OK" else "Check Location / Background Permissions"
+            val bTxt = if (backupHealthy) "Backup Synced" else "Link Auto-Backup Folder"
+            text = "$pTxt   •   $bTxt"
+            textSize = 12f
+            setTextColor(cTextSecondary())
+            setPadding(0, 4, 0, 0)
+        }
+        readinessRow.addView(readinessTitle)
+        readinessRow.addView(readinessSub)
+
+        if (!permsReady || !backupHealthy) {
+            val actionRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(0, 10, 0, 0)
+            }
+            if (!permsReady) {
+                val permShortcut = makeSmallChipButton("Fix Permissions") {
+                    dialogRef?.dismiss()
+                    if (isEditUnlocked) showSetupMode() else promptDeviceCredential(REQ_UNLOCK_SETUP, "Unlock Setup")
+                }
+                actionRow.addView(permShortcut)
+                if (!backupHealthy) addHorizontalGap(actionRow, 8)
+            }
+            if (!backupHealthy) {
+                val backupShortcut = makeSmallChipButton("Link Backup Folder") {
+                    dialogRef?.dismiss()
+                    if (ensureEditUnlocked()) launchBackupFolderPicker()
+                }
+                actionRow.addView(backupShortcut)
+            }
+            readinessRow.addView(actionRow)
+        }
+        rootContent.addView(readinessRow)
+
+        val sections = listOf(
+            Triple(
+                "1. How Auto-Tracking Works",
+                "#4F46E5",
+                listOf(
+                    "Background Monitor: Runs automatically via WifiMonitorService once Location permission is allowed.",
+                    "Flexible Matching: Tracks via Office Wi-Fi SSID, GPS Geofence radius, or Both.",
+                    "Smart Timestamps: Logs arrival (first_seen), refreshes active presence (last_seen), and records departure when you leave.",
+                    "Commute Learning: Learns your typical arrival window and tightens checks around your commute."
+                )
+            ),
+            Triple(
+                "2. Monthly Mandate & Buffer",
+                "#10B981",
+                listOf(
+                    "Strictly Monthly: Calculated per calendar month with zero quarterly carryover.",
+                    "Working Days: Excludes weekends and (when enabled) marked Holidays and Leaves.",
+                    "WFH Buffer: Shows remaining non-office weekdays after subtracting days still needed.",
+                    "Recovery Suggestions: Near month-end, ranks remaining weekdays using your preferred weekday priority."
+                )
+            ),
+            Triple(
+                "3. Required Android Permissions",
+                "#F59E0B",
+                listOf(
+                    "Location (Allow all the time): Needed for background geofence checks and Wi-Fi SSID visibility.",
+                    "Phone Location (GPS) ON: Android hides connected Wi-Fi SSIDs if system GPS is turned off.",
+                    "Notifications & Exact Alarms: Delivers check-in, departure, and planned-day reminders on time.",
+                    "Unrestricted Battery: Prevents Android from sleeping the background monitor."
+                )
+            ),
+            Triple(
+                "4. Backup & Safe Reinstalls",
+                "#0284C7",
+                listOf(
+                    "Auto-Backup CSV: Link a folder in Settings to keep officepace_attendance_autobackup.csv synced automatically.",
+                    "Exported Columns: Includes date, type, source, first_seen, last_seen, duration_hours, auto_logged, and note.",
+                    "Before Reinstalling: Confirm your linked folder has the latest CSV, or use Save CSV / Restore CSV anytime."
+                )
+            )
         )
 
-        guideSections.forEachIndexed { index, (heading, body) ->
-            val hTv = TextView(this).apply {
+        sections.forEachIndexed { idx, (heading, accentHex, bullets) ->
+            val cardWrapper = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                background = roundedBox(cInputBg(), cBorder(), 18f, 1)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    if (idx < sections.lastIndex) setMargins(0, 0, 0, 14)
+                }
+            }
+
+            val accentStripe = View(this).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    12,
+                    LinearLayout.LayoutParams.MATCH_PARENT
+                )
+                background = roundedBox(accentHex, accentHex, 8f, 0)
+            }
+            cardWrapper.addView(accentStripe)
+
+            val cardBody = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(22, 18, 22, 18)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+
+            val headerTv = TextView(this).apply {
                 text = heading
-                textSize = 15f
+                textSize = 14f
                 setTypeface(null, Typeface.BOLD)
-                setTextColor(cTextPrimary())
-                setPadding(0, if (index == 0) 0 else 14, 0, 4)
+                setTextColor(Color.parseColor(accentHex))
+                setPadding(0, 0, 0, 10)
             }
-            val bTv = TextView(this).apply {
-                text = body
-                textSize = 13f
-                setTextColor(cTextSecondary())
-                setLineSpacing(6f, 1.0f)
+            cardBody.addView(headerTv)
+
+            bullets.forEachIndexed { bIdx, line ->
+                val bulletRow = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    setPadding(0, if (bIdx == 0) 0 else 8, 0, 0)
+                }
+                val dotTv = TextView(this).apply {
+                    text = "•  "
+                    textSize = 13f
+                    setTypeface(null, Typeface.BOLD)
+                    setTextColor(Color.parseColor(accentHex))
+                }
+
+                val spannable = android.text.SpannableString(line)
+                val colonIdx = line.indexOf(':')
+                if (colonIdx > 0) {
+                    spannable.setSpan(
+                        android.text.style.StyleSpan(Typeface.BOLD),
+                        0,
+                        colonIdx + 1,
+                        android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                    )
+                }
+
+                val textTv = TextView(this).apply {
+                    text = spannable
+                    textSize = 12.5f
+                    setTextColor(cTextPrimary())
+                    setLineSpacing(4f, 1.0f)
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                }
+                bulletRow.addView(dotTv)
+                bulletRow.addView(textTv)
+                cardBody.addView(bulletRow)
             }
-            content.addView(hTv)
-            content.addView(bTv)
+
+            cardWrapper.addView(cardBody)
+            rootContent.addView(cardWrapper)
         }
 
-        AlertDialog.Builder(this)
+        dialogRef = AlertDialog.Builder(this)
             .setTitle("📖 OfficePace Guide")
             .setView(scrollView)
             .setPositiveButton("Got It", null)
