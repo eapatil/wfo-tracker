@@ -107,6 +107,8 @@ class MainActivity : AppCompatActivity() {
     private var activeTab: ActiveTab = ActiveTab.HOME
     private var activeLogFilter: LogFilter = LogFilter.ALL
     private var isMonthlyLogExpanded: Boolean = false
+    private var isNotificationsSectionExpanded: Boolean = false
+    private var isUpcomingHolidaysSectionExpanded: Boolean = false
     private var simLeaves: Int = 0
     private var simHolidays: Int = 0
     private var lastUndoBatch: Map<LocalDate, DayType> = emptyMap()
@@ -240,6 +242,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var radius1000Btn: TextView
     private lateinit var radius1500Btn: TextView
     private lateinit var priorityWeekdaysContainer: LinearLayout
+    private lateinit var notifSummaryTv: TextView
+    private lateinit var notifArrowTv: TextView
+    private lateinit var notifBodyView: LinearLayout
     private lateinit var settingsExactAlarmStatusView: TextView
     private lateinit var notifConnectSwitch: Switch
     private lateinit var notifDisconnectSwitch: Switch
@@ -247,6 +252,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var notifMorningSwitch: Switch
     private lateinit var notifTargetBufferSwitch: Switch
     private lateinit var notifQuarterSwitch: Switch
+    private lateinit var holidaySummaryTv: TextView
+    private lateinit var holidayArrowTv: TextView
+    private lateinit var holidayBodyView: LinearLayout
     private lateinit var upcomingHolLeaveSummaryView: TextView
     private lateinit var upcomingHolLeaveListView: LinearLayout
     private lateinit var autoBackupStatusView: TextView
@@ -425,6 +433,7 @@ class MainActivity : AppCompatActivity() {
                             ?.bufferedReader()?.use { it.readText() } ?: ""
                         val modified = store.bulkImportHolidays(text)
                         if (modified.isNotEmpty()) {
+                            isUpcomingHolidaysSectionExpanded = true
                             showUndoBanner("Imported ${modified.size} holiday(s)", modified)
                             showStatusPopup(true, "Imported ${modified.size} holiday(s)")
                         } else {
@@ -2348,23 +2357,58 @@ class MainActivity : AppCompatActivity() {
         root.addView(wifiSectionCard)
         addSpacer(root, 16)
 
+        // Collapsible Notifications & Exact Alarm Status Card
         val notifCard = makeCardContainer()
-        notifCard.addView(makeSectionTitle("Notifications & Exact Alarm Status"))
-        addSpacer(notifCard, 8)
+        val notifHeaderRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isClickable = true
+            isFocusable = true
+            setPadding(0, 2, 0, 2)
+        }
+        val notifTitleCol = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val notifTitleTv = makeSectionTitle("Notifications & Exact Alarm Status")
+        notifSummaryTv = TextView(this).apply {
+            textSize = 12f
+            setTextColor(cTextSecondary())
+            setPadding(0, 2, 0, 0)
+        }
+        notifTitleCol.addView(notifTitleTv)
+        notifTitleCol.addView(notifSummaryTv)
+
+        notifArrowTv = TextView(this).apply {
+            text = "▼"
+            textSize = 14f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(cTextSecondary())
+            setPadding(12, 4, 4, 4)
+        }
+        notifHeaderRow.addView(notifTitleCol)
+        notifHeaderRow.addView(notifArrowTv)
+        notifCard.addView(notifHeaderRow)
+
+        notifBodyView = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+            setPadding(0, 10, 0, 0)
+        }
 
         settingsExactAlarmStatusView = TextView(this).apply {
             textSize = 12f
             setTypeface(null, Typeface.BOLD)
             setPadding(16, 12, 16, 12)
         }
-        notifCard.addView(settingsExactAlarmStatusView)
-        addSpacer(notifCard, 8)
+        notifBodyView.addView(settingsExactAlarmStatusView)
+        addSpacer(notifBodyView, 8)
 
         val openAlarmBtn = makeSmallChipButton("⏰ Check / Open Exact Alarm Settings") {
             openExactAlarmSettings()
         }
-        notifCard.addView(openAlarmBtn)
-        addSpacer(notifCard, 8)
+        notifBodyView.addView(openAlarmBtn)
+        addSpacer(notifBodyView, 8)
 
         notifConnectSwitch = makeSettingsSwitch("Connect Alert (Day Captured)") { checked ->
             store.setConnectAlertEnabled(checked)
@@ -2391,25 +2435,69 @@ class MainActivity : AppCompatActivity() {
             showStatusPopup(true, "Quarter-end pace alert ${if (checked) "enabled" else "disabled"}")
         }
 
-        notifCard.addView(notifConnectSwitch)
-        notifCard.addView(notifDisconnectSwitch)
-        notifCard.addView(notifPlannedSwitch)
-        notifCard.addView(notifMorningSwitch)
-        notifCard.addView(notifTargetBufferSwitch)
-        notifCard.addView(notifQuarterSwitch)
+        notifBodyView.addView(notifConnectSwitch)
+        notifBodyView.addView(notifDisconnectSwitch)
+        notifBodyView.addView(notifPlannedSwitch)
+        notifBodyView.addView(notifMorningSwitch)
+        notifBodyView.addView(notifTargetBufferSwitch)
+        notifBodyView.addView(notifQuarterSwitch)
+        notifCard.addView(notifBodyView)
+
+        notifHeaderRow.setOnClickListener {
+            isNotificationsSectionExpanded = !notifBodyView.isShown
+            syncCollapsibleSections()
+            if (notifBodyView.isShown) animateTabReveal(notifBodyView)
+        }
         root.addView(notifCard)
         addSpacer(root, 16)
 
+        // Collapsible Upcoming Holidays & Leaves Card
         val holidayCard = makeCardContainer()
         val holHeaderRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            isClickable = true
+            isFocusable = true
+            setPadding(0, 2, 0, 2)
         }
-        val holTitle = makeSectionTitle("Upcoming Holidays & Leaves").apply {
+        val holTitleCol = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
-        val clearUpcomingBtn = makeSmallChipButton("Clear Upcoming") {
-            if (!ensureEditUnlocked()) return@makeSmallChipButton
+        val holTitle = makeSectionTitle("Upcoming Holidays & Leaves")
+        holidaySummaryTv = TextView(this).apply {
+            textSize = 12f
+            setTextColor(cTextSecondary())
+            setPadding(0, 2, 0, 0)
+        }
+        holTitleCol.addView(holTitle)
+        holTitleCol.addView(holidaySummaryTv)
+
+        holidayArrowTv = TextView(this).apply {
+            text = "▼"
+            textSize = 14f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(cTextSecondary())
+            setPadding(12, 4, 4, 4)
+        }
+        holHeaderRow.addView(holTitleCol)
+        holHeaderRow.addView(holidayArrowTv)
+        holidayCard.addView(holHeaderRow)
+
+        holidayBodyView = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+            setPadding(0, 10, 0, 0)
+        }
+
+        val clearUpcomingBtn = makeSmallChipButton("Clear Upcoming").apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { gravity = Gravity.END }
+        }
+        clearUpcomingBtn.setOnClickListener {
+            if (!ensureEditUnlocked()) return@setOnClickListener
             val removedBatch = store.clearUpcomingHolidaysAndLeaves()
             if (removedBatch.isNotEmpty()) {
                 syncBackgroundAndWidget()
@@ -2420,9 +2508,7 @@ class MainActivity : AppCompatActivity() {
                 showStatusPopup(false, "No upcoming holidays or leaves to clear")
             }
         }
-        holHeaderRow.addView(holTitle)
-        holHeaderRow.addView(clearUpcomingBtn)
-        holidayCard.addView(holHeaderRow)
+        holidayBodyView.addView(clearUpcomingBtn)
 
         upcomingHolLeaveSummaryView = TextView(this).apply {
             textSize = 12f
@@ -2433,13 +2519,13 @@ class MainActivity : AppCompatActivity() {
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { setMargins(0, 8, 0, 10) }
         }
-        holidayCard.addView(upcomingHolLeaveSummaryView)
+        holidayBodyView.addView(upcomingHolLeaveSummaryView)
 
         upcomingHolLeaveListView = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
         }
-        holidayCard.addView(upcomingHolLeaveListView)
-        addSpacer(holidayCard, 10)
+        holidayBodyView.addView(upcomingHolLeaveListView)
+        addSpacer(holidayBodyView, 10)
 
         val holHint = TextView(this).apply {
             text = "Import an .ics calendar file or CSV (YYYY-MM-DD,Holiday Name) to mark holidays across the year."
@@ -2451,8 +2537,15 @@ class MainActivity : AppCompatActivity() {
             if (!ensureEditUnlocked()) return@makePillButton
             launchHolidayImport()
         }
-        holidayCard.addView(holHint)
-        holidayCard.addView(importHolBtn)
+        holidayBodyView.addView(holHint)
+        holidayBodyView.addView(importHolBtn)
+        holidayCard.addView(holidayBodyView)
+
+        holHeaderRow.setOnClickListener {
+            isUpcomingHolidaysSectionExpanded = !holidayBodyView.isShown
+            syncCollapsibleSections()
+            if (holidayBodyView.isShown) animateTabReveal(holidayBodyView)
+        }
         root.addView(holidayCard)
         addSpacer(root, 16)
 
@@ -2512,6 +2605,34 @@ class MainActivity : AppCompatActivity() {
         root.addView(makePersonalFooterView())
 
         return scroll
+    }
+
+    private fun syncCollapsibleSections() {
+        val items = store.getUpcomingHolidaysAndLeaves()
+        val holCount = items.count { it.type == DayType.HOLIDAY }
+        val leaveCount = items.count { it.type == DayType.LEAVE }
+
+        if (::notifBodyView.isInitialized && ::notifSummaryTv.isInitialized && ::notifArrowTv.isInitialized) {
+            val shouldExpandNotif = isNotificationsSectionExpanded || !canScheduleExactAlarms()
+            notifBodyView.visibility = if (shouldExpandNotif) View.VISIBLE else View.GONE
+            notifArrowTv.text = if (shouldExpandNotif) "▲" else "▼"
+            val enabledCount = listOf(
+                store.isConnectAlertEnabled(),
+                store.isDisconnectAlertEnabled(),
+                store.isPlannedRemindersEnabled(),
+                store.isMorningNudgeEnabled(),
+                store.isTargetBufferAlertEnabled(),
+                store.isQuarterPaceAlertEnabled()
+            ).count { it }
+            val alarmTag = if (canScheduleExactAlarms()) "Exact Alarms Ready" else "Exact Alarm Check Needed"
+            notifSummaryTv.text = "$enabledCount/6 alerts active • $alarmTag"
+        }
+
+        if (::holidayBodyView.isInitialized && ::holidaySummaryTv.isInitialized && ::holidayArrowTv.isInitialized) {
+            holidayBodyView.visibility = if (isUpcomingHolidaysSectionExpanded) View.VISIBLE else View.GONE
+            holidayArrowTv.text = if (isUpcomingHolidaysSectionExpanded) "▲" else "▼"
+            holidaySummaryTv.text = "$holCount holiday(s) • $leaveCount leave(s)"
+        }
     }
 
     private fun showHelpGuideDialog() {
@@ -3613,6 +3734,7 @@ class MainActivity : AppCompatActivity() {
         syncRadiusChipHighlights()
         renderPriorityWeekdays()
         renderUpcomingHolidaysAndLeaves()
+        syncCollapsibleSections()
 
         notifConnectSwitch.isChecked = store.isConnectAlertEnabled()
         notifDisconnectSwitch.isChecked = store.isDisconnectAlertEnabled()
