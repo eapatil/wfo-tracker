@@ -49,10 +49,10 @@ class WfoWidgetProvider : AppWidgetProvider() {
 
             val views = RemoteViews(context.packageName, R.layout.wfo_widget)
 
-            // Header: Month & Sync Timestamp
+            // Header: App Name, Dynamic Month & Sync Timestamp
             val shortMonthYear = ym.format(DateTimeFormatter.ofPattern("MMM yyyy"))
             val nowTime = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
-            views.setTextViewText(R.id.widget_month_title, "WFO • $shortMonthYear")
+            views.setTextViewText(R.id.widget_month_title, "OfficePace • $shortMonthYear")
             views.setTextViewText(R.id.widget_updated_time, "Updated $nowTime")
 
             // Dedicated Sub-Line for Long Office / Wi-Fi Name
