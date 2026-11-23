@@ -3992,9 +3992,9 @@ class MainActivity : AppCompatActivity() {
     private fun cTextPrimary(): Int = Color.parseColor(if (isDark) "#F8FAFC" else "#0F172A")
     private fun cTextSecondary(): Int = Color.parseColor(if (isDark) "#94A3B8" else "#64748B")
 
-    private fun makePersonalFooterView(): TextView {
+        private fun makePersonalFooterView(): TextView {
         return TextView(this).apply {
-            text = "Crafted by Eleazer Patil"
+            text = "Developed by Eleazer Patil • Local-First, Privacy-Focused"
             textSize = 11f
             setTextColor(cTextSecondary())
             gravity = Gravity.CENTER
