@@ -15,9 +15,11 @@ import android.app.KeyguardManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.appwidget.AppWidgetManager
 import android.content.BroadcastReceiver
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -1496,6 +1498,12 @@ class MainActivity : AppCompatActivity() {
         root.addView(saveFinishBtn)
         addSpacer(root, 12)
 
+        val setupPinWidgetBtn = makePillButton("📌 Pin Home Screen Widget", "#334155", "#FFFFFF") {
+            requestPinOfficePaceWidget()
+        }
+        root.addView(setupPinWidgetBtn)
+        addSpacer(root, 12)
+
         val setupHelpBtn = makePillButton("📖 How It Works & Configuration Guide", "#0284C7", "#FFFFFF") {
             showHelpGuideDialog()
         }
@@ -2550,12 +2558,18 @@ class MainActivity : AppCompatActivity() {
         addSpacer(root, 16)
 
         val backupCard = makeCardContainer()
-        backupCard.addView(makeSectionTitle("Backup & Data Portability"))
+        backupCard.addView(makeSectionTitle("Backup, Widget & Data Portability"))
         autoBackupStatusView = TextView(this).apply {
             textSize = 12f
             setPadding(0, 6, 0, 12)
         }
         backupCard.addView(autoBackupStatusView)
+
+        val pinWidgetBtn = makePillButton("📌 Pin Home Screen Widget", "#4F46E5", "#FFFFFF") {
+            requestPinOfficePaceWidget()
+        }
+        backupCard.addView(pinWidgetBtn)
+        addSpacer(backupCard, 10)
 
         val autoFolderBtn = makePillButton("🔄 Configure Auto-Backup Folder (Reuses Existing File)", "#0284C7", "#FFFFFF") {
             if (!ensureEditUnlocked()) return@makePillButton
@@ -3974,7 +3988,7 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.HORIZONTAL
                 setPadding(0, 0, 0, 14)
             }
-                        val options = listOf(
+            val options = listOf(
                 "🏢" to DayType.OFFICE,
                 "📅" to DayType.PLANNED,
                 "🌴" to DayType.LEAVE,
@@ -3982,13 +3996,12 @@ class MainActivity : AppCompatActivity() {
                 "Clear" to DayType.NONE
             )
             options.forEachIndexed { idx, (lbl, targetType) ->
-                val chip = makeModeChip(lbl) {}
-                chip.setOnClickListener {
+                val chip = makeModeChip(lbl) {
                     store.setExplicitDayType(date, targetType)
                     syncBackgroundAndWidget()
                     refreshAllViews(animateCharts = false)
                     dialogRef?.dismiss()
-                    showStatusPopup(true, "Updated $date")
+                    showStatusPopup(true, "Updated ${date}")
                 }
                 styleModeChip(chip, info.type == targetType, "#4F46E5")
                 quickStatusRow.addView(chip)
@@ -4108,7 +4121,25 @@ class MainActivity : AppCompatActivity() {
         return output
     }
 
-    // ==================== 6. SYSTEM & SERVICE HELPERS ====================
+    // ==================== 6. SYSTEM, WIDGET & SERVICE HELPERS ====================
+
+    private fun requestPinOfficePaceWidget() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            showStatusPopup(false, "Long-press home screen → Widgets to add OfficePace Glance")
+            return
+        }
+        val awm = AppWidgetManager.getInstance(this)
+        val provider = ComponentName(this, WfoWidgetProvider::class.java)
+        if (!awm.isRequestPinAppWidgetSupported) {
+            showStatusPopup(false, "Launcher does not support in-app widget pinning")
+            return
+        }
+        WfoWidgetProvider.updateAllWidgets(this)
+        val accepted = awm.requestPinAppWidget(provider, null, null)
+        if (!accepted) {
+            showStatusPopup(false, "Could not open pin prompt — add via home screen Widgets")
+        }
+    }
 
     private fun canScheduleExactAlarms(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
