@@ -15,7 +15,6 @@ import java.time.LocalTime
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
-import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.roundToInt
@@ -60,6 +59,7 @@ data class MonthStats(
     val planFollowThroughPercent: Int,
     val plannedTotalCount: Int,
     val plannedFulfilledCount: Int,
+    val avgOfficeHours: Double,
     val bufferTrajectoryLabel: String,
     val recoverySuggestedDates: List<LocalDate>,
     val dayTypeMap: Map<String, DayType>,
@@ -696,7 +696,11 @@ class AttendanceStore(private val context: Context) {
         }
 
         val durationLabel = when {
-            isActiveToday && firstSeen != null -> "Active Span: Ongoing (since $firstSeen)"
+            isActiveToday && firstSeen != null -> {
+                val nowHhMm = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+                val mins = computeMinutesDiff(firstSeen, nowHhMm)
+                "Active Span: ${mins / 60}h ${mins % 60}m (Ongoing)"
+            }
             firstSeen != null && lastSeen != null && firstSeen != lastSeen -> {
                 val mins = computeMinutesDiff(firstSeen, lastSeen)
                 if (mins > 0) {
@@ -730,6 +734,19 @@ class AttendanceStore(private val context: Context) {
         }.getOrDefault(0)
     }
 
+    private fun computeSpanHours(startHhMm: String?, endHhMm: String?): Double {
+        if (startHhMm.isNullOrBlank() || endHhMm.isNullOrBlank()) return 0.0
+        val mins = computeMinutesDiff(startHhMm, endHhMm)
+        return ((mins / 60.0) * 100.0).roundToInt() / 100.0
+    }
+
+    private fun formatSpanShort(mins: Int): String {
+        if (mins <= 0) return ""
+        val h = mins / 60
+        val m = mins % 60
+        return "${h}h ${m}m"
+    }
+
     fun getMonthStats(
         ym: YearMonth,
         today: LocalDate = LocalDate.now(),
@@ -749,6 +766,7 @@ class AttendanceStore(private val context: Context) {
         val autoSet = getAutoLoggedSet()
         val currentlyConnected = wasConnectedToOfficeWifi()
         val todayStr = today.toString()
+        val nowHhMm = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
 
         var totalWeekdays = 0
         var holidayCount = 0
@@ -758,6 +776,8 @@ class AttendanceStore(private val context: Context) {
         var plannedTotalCount = 0
         var plannedFulfilledCount = 0
         var availableWeekdaysLeft = 0
+        var totalOfficeMinutes = 0
+        var daysWithOfficeHours = 0
 
         val monthDayMap = mutableMapOf<String, DayType>()
         val logs = mutableListOf<DayLogEntry>()
@@ -783,6 +803,15 @@ class AttendanceStore(private val context: Context) {
                 if (autoSet.contains(dStr)) {
                     plannedFulfilledCount++
                 }
+                val fTime = firstSeen[dStr]
+                val lTime = if (dStr == todayStr && currentlyConnected) nowHhMm else lastSeen[dStr]
+                if (fTime != null && lTime != null) {
+                    val mins = computeMinutesDiff(fTime, lTime)
+                    if (mins > 0) {
+                        totalOfficeMinutes += mins
+                        daysWithOfficeHours++
+                    }
+                }
             }
             if (t == DayType.PLANNED) {
                 plannedTotalCount++
@@ -800,8 +829,16 @@ class AttendanceStore(private val context: Context) {
                 val isActiveToday = dStr == todayStr && currentlyConnected
 
                 val timePart = when {
-                    isActiveToday && fTime != null -> " [$fTime–Active]"
-                    fTime != null && lTime != null && fTime != lTime -> " [$fTime–$lTime]"
+                    isActiveToday && fTime != null -> {
+                        val liveMins = computeMinutesDiff(fTime, nowHhMm)
+                        val durStr = formatSpanShort(liveMins)
+                        if (durStr.isNotEmpty()) " [$fTime–Active • $durStr]" else " [$fTime–Active]"
+                    }
+                    fTime != null && lTime != null && fTime != lTime -> {
+                        val mins = computeMinutesDiff(fTime, lTime)
+                        val durStr = formatSpanShort(mins)
+                        if (durStr.isNotEmpty()) " [$fTime–$lTime • $durStr]" else " [$fTime–$lTime]"
+                    }
                     fTime != null -> " [$fTime]"
                     else -> ""
                 }
@@ -850,6 +887,12 @@ class AttendanceStore(private val context: Context) {
             100
         } else {
             ((plannedFulfilledCount.toDouble() / plannedTotalCount.toDouble()) * 100.0).roundToInt().coerceIn(0, 100)
+        }
+
+        val avgHours = if (daysWithOfficeHours == 0) {
+            0.0
+        } else {
+            (((totalOfficeMinutes / daysWithOfficeHours.toDouble()) / 60.0) * 10.0).roundToInt() / 10.0
         }
 
         val trajectoryLabel = when {
@@ -901,6 +944,7 @@ class AttendanceStore(private val context: Context) {
             planFollowThroughPercent = followThroughPct,
             plannedTotalCount = plannedTotalCount,
             plannedFulfilledCount = plannedFulfilledCount,
+            avgOfficeHours = avgHours,
             bufferTrajectoryLabel = trajectoryLabel,
             recoverySuggestedDates = recoveryDates,
             dayTypeMap = monthDayMap,
@@ -1107,7 +1151,7 @@ class AttendanceStore(private val context: Context) {
             appendLine("Name: $uName")
             appendLine("Attended: ${s.attendedDays} / ${s.requiredDays} required days (${s.actualPercent}% of ${s.effectiveWorkingDays} working days)")
             appendLine("Target Mandate: ${s.targetPercent}% (Monthly) | Remaining Needed: ${s.remainingDays} | WFH Buffer: ${maxOf(0, s.bufferDays)}")
-            appendLine("Run-Rate Needed: ${String.format(Locale.US, "%.2f", s.requiredDailyRunRate)}/weekday | Plan Follow-Through: ${s.planFollowThroughPercent}%")
+            appendLine("Avg Office Span: ${String.format(Locale.US, "%.1f", s.avgOfficeHours)}h | Run-Rate: ${String.format(Locale.US, "%.2f", s.requiredDailyRunRate)}/weekday | Follow-Through: ${s.planFollowThroughPercent}%")
             appendLine("Leaves: ${s.leaveDays} | Holidays: ${s.holidayDays}")
             appendLine("Suggested Recovery Dates: $recoveryLine")
         }.trim()
@@ -1153,15 +1197,19 @@ class AttendanceStore(private val context: Context) {
 
         val allKeys = (types.keys + notes.keys + firstSeen.keys + lastSeen.keys).toSortedSet()
         return buildString {
-            appendLine("date,type,source,first_seen,last_seen,auto_logged,note")
+            appendLine("date,type,source,first_seen,last_seen,duration_hours,auto_logged,note")
             for (k in allKeys) {
                 val t = types[k] ?: DayType.NONE
                 val src = csvEscape(sources[k] ?: "")
-                val fs = csvEscape(firstSeen[k] ?: "")
-                val ls = csvEscape(lastSeen[k] ?: "")
+                val fsRaw = firstSeen[k] ?: ""
+                val lsRaw = lastSeen[k] ?: ""
+                val hrs = computeSpanHours(fsRaw, lsRaw)
+                val hrsStr = if (hrs > 0.0) String.format(Locale.US, "%.2f", hrs) else "0.00"
+                val fs = csvEscape(fsRaw)
+                val ls = csvEscape(lsRaw)
                 val auto = if (autoSet.contains(k)) "true" else "false"
                 val nt = csvEscape(notes[k] ?: "")
-                appendLine("$k,${t.name},$src,$fs,$ls,$auto,$nt")
+                appendLine("$k,${t.name},$src,$fs,$ls,$hrsStr,$auto,$nt")
             }
         }
     }
@@ -1184,25 +1232,64 @@ class AttendanceStore(private val context: Context) {
         val sources = getStringMap(KEY_SOURCE_MAP).toMutableMap()
         val autoSet = getAutoLoggedSet().toMutableSet()
 
+        var idxDate = 0
+        var idxType = 1
+        var idxSource = 2
+        var idxFirst = 3
+        var idxLast = 4
+        var idxAuto = 6
+        var idxNote = 7
+
+        val firstCols = parseCsvLine(lines.first()).map { it.trim().lowercase(Locale.US) }
+        val hasHeader = firstCols.contains("date") && (firstCols.contains("type") || firstCols.contains("status"))
+        if (hasHeader) {
+            firstCols.indexOf("date").takeIf { it >= 0 }?.let { idxDate = it }
+            (firstCols.indexOf("type").takeIf { it >= 0 } ?: firstCols.indexOf("status").takeIf { it >= 0 })
+                ?.let { idxType = it }
+            idxSource = firstCols.indexOf("source")
+            (firstCols.indexOf("first_seen").takeIf { it >= 0 } ?: firstCols.indexOf("connected_time").takeIf { it >= 0 })
+                ?.let { idxFirst = it }
+            (firstCols.indexOf("last_seen").takeIf { it >= 0 } ?: firstCols.indexOf("disconnected_time").takeIf { it >= 0 })
+                ?.let { idxLast = it }
+            idxAuto = firstCols.indexOf("auto_logged")
+            (firstCols.indexOf("note").takeIf { it >= 0 } ?: firstCols.indexOf("notes").takeIf { it >= 0 })
+                ?.let { idxNote = it }
+        } else if (parseCsvLine(lines.first()).size == 7) {
+            idxAuto = 5
+            idxNote = 6
+        }
+
         var importedCount = 0
         for ((idx, line) in lines.withIndex()) {
-            if (idx == 0 && line.startsWith("date,", ignoreCase = true)) continue
+            if (idx == 0 && hasHeader) continue
             val cols = parseCsvLine(line)
-            if (cols.size < 2) continue
-            val dateStr = cols[0].trim()
+            val maxNeeded = maxOf(idxDate, idxType)
+            if (cols.size <= maxNeeded) continue
+
+            val dateStr = cols[idxDate].trim()
             if (runCatching { LocalDate.parse(dateStr) }.isFailure) continue
 
-            val type = runCatching { DayType.valueOf(cols[1].trim().uppercase(Locale.US)) }.getOrNull() ?: continue
+            val type = runCatching { DayType.valueOf(cols[idxType].trim().uppercase(Locale.US)) }.getOrNull() ?: continue
             if (type == DayType.NONE) {
                 types.remove(dateStr)
             } else {
                 types[dateStr] = type
             }
-            if (cols.size >= 3 && cols[2].isNotBlank()) sources[dateStr] = cols[2].trim()
-            if (cols.size >= 4 && cols[3].isNotBlank()) firstSeen[dateStr] = cols[3].trim()
-            if (cols.size >= 5 && cols[4].isNotBlank()) lastSeen[dateStr] = cols[4].trim()
-            if (cols.size >= 6 && cols[5].equals("true", ignoreCase = true)) autoSet.add(dateStr)
-            if (cols.size >= 7 && cols[6].isNotBlank()) notes[dateStr] = cols[6].trim()
+            if (idxSource >= 0 && cols.size > idxSource && cols[idxSource].isNotBlank()) {
+                sources[dateStr] = cols[idxSource].trim()
+            }
+            if (idxFirst >= 0 && cols.size > idxFirst && cols[idxFirst].isNotBlank()) {
+                firstSeen[dateStr] = cols[idxFirst].trim()
+            }
+            if (idxLast >= 0 && cols.size > idxLast && cols[idxLast].isNotBlank()) {
+                lastSeen[dateStr] = cols[idxLast].trim()
+            }
+            if (idxAuto >= 0 && cols.size > idxAuto && cols[idxAuto].equals("true", ignoreCase = true)) {
+                autoSet.add(dateStr)
+            }
+            if (idxNote >= 0 && cols.size > idxNote && cols[idxNote].isNotBlank()) {
+                notes[dateStr] = cols[idxNote].trim()
+            }
             importedCount++
         }
 
