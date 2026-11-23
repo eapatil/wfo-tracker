@@ -3985,7 +3985,13 @@ class MainActivity : AppCompatActivity() {
         val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         val raw = wifiManager.connectionInfo?.ssid ?: ""
         if (raw.isEmpty() || raw == "<unknown ssid>") return ""
-        return sanitizeImportedText(raw.removePrefix("\"").removeSuffix("\""))
+        return raw.removePrefix("\"").removeSuffix("\"")
+            .replace("\u00E2\u2014\u201A", "-")
+            .replace("\u00E2\u2014\u20AC", "-")
+            .replace("â\u0094\u0080", "-")
+            .replace("\u2013", "-")
+            .replace("\u2014", "-")
+            .replace("\u2212", "-")
     }
 
     // ==================== 7. THEME & COMPONENT STYLING ====================
