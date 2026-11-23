@@ -186,12 +186,11 @@ class MainActivity : AppCompatActivity() {
     // Tab 1: Home Views
     private lateinit var todayJumpBtn: TextView
     private lateinit var monthTitleView: TextView
-    private lateinit var paceBannerView: TextView
-    private lateinit var weeklyPacePillView: TextView
-    private lateinit var morningBriefingCardView: LinearLayout
-    private lateinit var morningBriefingTitleView: TextView
-    private lateinit var morningBriefingDetailView: TextView
-    private lateinit var recoveryStripView: TextView
+    private lateinit var briefingCardView: LinearLayout
+    private lateinit var briefingHeadlineView: TextView
+    private lateinit var briefingSubView: TextView
+    private lateinit var briefingWeeklyView: TextView
+    private lateinit var briefingRecoveryView: TextView
     private lateinit var circularRingView: CircularProgressRingView
     private lateinit var heroSubView: TextView
     private lateinit var heroProjectedView: TextView
@@ -1511,21 +1510,21 @@ class MainActivity : AppCompatActivity() {
 
         topHeaderBar = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(28, 20, 28, 12)
+            setPadding(28, 18, 28, 10)
         }
 
         val profileHeader = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 0, 0, 12)
+            setPadding(0, 0, 0, 10)
         }
         dashAvatarView = ImageView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(96, 96)
+            layoutParams = LinearLayout.LayoutParams(92, 92)
             scaleType = ImageView.ScaleType.CENTER_CROP
         }
         val greetingCol = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(16, 0, 8, 0)
+            setPadding(14, 0, 8, 0)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         dashGreetingView = TextView(this).apply {
@@ -1537,11 +1536,11 @@ class MainActivity : AppCompatActivity() {
         val statusRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 3, 0, 0)
+            setPadding(0, 2, 0, 0)
         }
         heartbeatDotView = View(this).apply {
-            layoutParams = LinearLayout.LayoutParams(18, 18).apply {
-                setMargins(0, 0, 10, 0)
+            layoutParams = LinearLayout.LayoutParams(16, 16).apply {
+                setMargins(0, 0, 8, 0)
             }
             background = roundedBox("#10B981", "#10B981", 999f, 0)
         }
@@ -1577,10 +1576,10 @@ class MainActivity : AppCompatActivity() {
         topHeaderBar.addView(profileHeader)
 
         todayLiveStripView = TextView(this).apply {
-            textSize = 13f
+            textSize = 12.5f
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
-            setPadding(18, 14, 18, 14)
+            setPadding(16, 12, 16, 12)
         }
         topHeaderBar.addView(todayLiveStripView)
 
@@ -1670,21 +1669,21 @@ class MainActivity : AppCompatActivity() {
         return scaffold
     }
 
-    // ==================== TAB 1: HOME (TODAY & CALENDAR) ====================
+    // ==================== TAB 1: HOME (CLEAN UNIFIED BRIEFING & CALENDAR) ====================
 
     @SuppressLint("ClickableViewAccessibility")
     private fun buildHomeTab(): ScrollView {
         val scroll = ScrollView(this)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(28, 8, 28, 48)
+            setPadding(28, 6, 28, 44)
         }
         scroll.addView(root)
 
         val navRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 0, 0, 14)
+            setPadding(0, 0, 0, 12)
         }
         val prevBtn = makeSmallChipButton("◀") {
             selectedMonth = selectedMonth.minusMonths(1)
@@ -1715,53 +1714,50 @@ class MainActivity : AppCompatActivity() {
         navRow.addView(nextBtn)
         root.addView(navRow)
 
-        morningBriefingCardView = makeCardContainer().apply {
-            setPadding(20, 14, 20, 14)
+        // Single Unified Briefing Card (combines Today Verdict, Monthly Pace, Weekly Quota & Recovery)
+        briefingCardView = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(22, 16, 22, 16)
         }
-        morningBriefingTitleView = TextView(this).apply {
-            textSize = 13f
+        briefingHeadlineView = TextView(this).apply {
+            textSize = 14f
             setTypeface(null, Typeface.BOLD)
-            setTextColor(cTextPrimary())
         }
-        morningBriefingDetailView = TextView(this).apply {
-            textSize = 12f
-            setTextColor(cTextSecondary())
-            setPadding(0, 4, 0, 0)
+        briefingSubView = TextView(this).apply {
+            textSize = 12.5f
+            setPadding(0, 4, 0, 8)
+            setLineSpacing(3f, 1.0f)
         }
-        morningBriefingCardView.addView(morningBriefingTitleView)
-        morningBriefingCardView.addView(morningBriefingDetailView)
-        root.addView(morningBriefingCardView)
-        addSpacer(root, 10)
-
-        paceBannerView = TextView(this).apply {
-            textSize = 13f
-            setTypeface(null, Typeface.BOLD)
-            gravity = Gravity.CENTER
-            setPadding(24, 18, 24, 18)
-        }
-        root.addView(paceBannerView)
-        addSpacer(root, 10)
-
-        weeklyPacePillView = TextView(this).apply {
+        briefingWeeklyView = TextView(this).apply {
             textSize = 12f
             setTypeface(null, Typeface.BOLD)
-            gravity = Gravity.CENTER
-            setPadding(20, 14, 20, 14)
+            setPadding(0, 6, 0, 0)
         }
-        root.addView(weeklyPacePillView)
-        addSpacer(root, 10)
-
-        recoveryStripView = TextView(this).apply {
+        briefingRecoveryView = TextView(this).apply {
             textSize = 12f
-            setPadding(18, 12, 18, 12)
+            setPadding(0, 6, 0, 0)
+            setLineSpacing(3f, 1.0f)
             visibility = View.GONE
         }
-        root.addView(recoveryStripView)
-        addSpacer(root, 12)
+        val divider = View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1)
+            setBackgroundColor(Color.parseColor(cBorder()))
+            alpha = 0.45f
+        }
+        briefingCardView.addView(briefingHeadlineView)
+        briefingCardView.addView(briefingSubView)
+        briefingCardView.addView(divider)
+        briefingCardView.addView(briefingWeeklyView)
+        briefingCardView.addView(briefingRecoveryView)
+        root.addView(briefingCardView)
+        addSpacer(root, 14)
 
-        heroCardContainer = makeCardContainer()
+        // Progress Ring & Key Monthly Numbers Card
+        heroCardContainer = makeCardContainer().apply {
+            setPadding(24, 18, 24, 18)
+        }
         circularRingView = CircularProgressRingView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(340, 340).apply {
+            layoutParams = LinearLayout.LayoutParams(290, 290).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
             }
         }
@@ -1769,24 +1765,23 @@ class MainActivity : AppCompatActivity() {
             textSize = 13f
             setTextColor(cTextSecondary())
             gravity = Gravity.CENTER
-            setPadding(0, 8, 0, 6)
+            setPadding(0, 6, 0, 4)
         }
         heroProjectedView = TextView(this).apply {
             textSize = 12f
             setTypeface(null, Typeface.BOLD)
             setTextColor(Color.parseColor("#4F46E5"))
             gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 12)
+            setPadding(0, 0, 0, 10)
         }
         heroCardContainer.addView(circularRingView)
         heroCardContainer.addView(heroSubView)
         heroCardContainer.addView(heroProjectedView)
-        addSpacer(heroCardContainer, 12)
 
         val kpiRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             background = roundedBox(cInputBg(), cBorder(), 16f, 1)
-            setPadding(12, 14, 12, 14)
+            setPadding(12, 12, 12, 12)
         }
         kpiWorkingView = makeKpiColumnView()
         kpiRemainingView = makeKpiColumnView()
@@ -1796,9 +1791,12 @@ class MainActivity : AppCompatActivity() {
         kpiRow.addView(kpiBufferView)
         heroCardContainer.addView(kpiRow)
         root.addView(heroCardContainer)
-        addSpacer(root, 16)
+        addSpacer(root, 14)
 
-        calendarCardContainer = makeCardContainer()
+        // Calendar Card with Swipe Navigation & Mode Selector
+        calendarCardContainer = makeCardContainer().apply {
+            setPadding(22, 18, 22, 18)
+        }
         val calHeaderRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -1825,16 +1823,16 @@ class MainActivity : AppCompatActivity() {
         calendarCardContainer.addView(calHeaderRow)
 
         val calHint = TextView(this).apply {
-            text = "Swipe left/right for months • Tap when locked to inspect • Unlock 🔒 to mark:"
+            text = "Swipe left/right for months • Tap day to inspect or mark"
             textSize = 12f
             setTextColor(cTextSecondary())
-            setPadding(0, 6, 0, 12)
+            setPadding(0, 4, 0, 12)
         }
         calendarCardContainer.addView(calHint)
 
         val modeRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(0, 0, 0, 14)
+            setPadding(0, 0, 0, 12)
         }
         modeOfficeBtn = makeModeChip("🏢 Office") {
             activeTapMode = DayType.OFFICE
@@ -1942,16 +1940,19 @@ class MainActivity : AppCompatActivity() {
             textSize = 11f
             setTextColor(cTextSecondary())
             gravity = Gravity.CENTER
-            setPadding(0, 12, 0, 0)
+            setPadding(0, 10, 0, 0)
         }
         calendarCardContainer.addView(legendView)
         root.addView(calendarCardContainer)
-        addSpacer(root, 16)
+        addSpacer(root, 14)
 
-        val logCard = makeCardContainer()
+        // Collapsible Monthly Log Drawer
+        val logCard = makeCardContainer().apply {
+            setPadding(22, 16, 22, 16)
+        }
         logHeaderToggleView = TextView(this).apply {
             text = "Monthly Log & Timestamps   ▼"
-            textSize = 16f
+            textSize = 15f
             setTypeface(null, Typeface.BOLD)
             setTextColor(cTextPrimary())
             isClickable = true
@@ -3398,70 +3399,68 @@ class MainActivity : AppCompatActivity() {
 
         monthTitleView.text = s.monthLabel
 
-        if (::morningBriefingTitleView.isInitialized && ::morningBriefingDetailView.isInitialized) {
-            morningBriefingTitleView.text = "🧭 ${r.safeToWfhVerdict}"
-            morningBriefingDetailView.text = "${r.safeToWfhDetail} • Window ${r.learnedArrivalWindowLabel}"
-        }
-
         val progressColorHex: String
+        val cardFillHex: String
+        val cardStrokeHex: String
+        val headlineColor: Int
+        val subColor: Int
+
         when {
             s.remainingDays == 0 -> {
-                paceBannerView.text = "🎉 ${s.targetPercent}% Target Met! (${s.attendedDays}/${s.requiredDays} days) — Safe to WFH"
-                paceBannerView.setTextColor(Color.parseColor("#065F46"))
-                paceBannerView.background = roundedBox("#D1FAE5", "#6EE7B7", 18f, 1)
                 progressColorHex = "#10B981"
+                cardFillHex = if (isDark) "#064E3B" else "#ECFDF5"
+                cardStrokeHex = "#10B981"
+                headlineColor = if (isDark) Color.parseColor("#A7F3D0") else Color.parseColor("#065F46")
+                subColor = if (isDark) Color.parseColor("#D1FAE5") else Color.parseColor("#047857")
             }
-            s.bufferDays < 0 -> {
-                paceBannerView.text = "⚠️ Shortfall: Need ${s.remainingDays} day(s), only ${s.availableWeekdaysLeft} working day(s) left"
-                paceBannerView.setTextColor(Color.parseColor("#991B1B"))
-                paceBannerView.background = roundedBox("#FEE2E2", "#FCA5A5", 18f, 1)
+            s.bufferDays <= 0 -> {
                 progressColorHex = "#EF4444"
-            }
-            s.bufferDays == 0 -> {
-                paceBannerView.text = "🚨 Zero Buffer: Attend all ${s.availableWeekdaysLeft} remaining working day(s)!"
-                paceBannerView.setTextColor(Color.parseColor("#991B1B"))
-                paceBannerView.background = roundedBox("#FEE2E2", "#FCA5A5", 18f, 1)
-                progressColorHex = "#EF4444"
+                cardFillHex = if (isDark) "#450A0A" else "#FEF2F2"
+                cardStrokeHex = "#EF4444"
+                headlineColor = if (isDark) Color.parseColor("#FECACA") else Color.parseColor("#991B1B")
+                subColor = if (isDark) Color.parseColor("#FEE2E2") else Color.parseColor("#B91C1C")
             }
             else -> {
-                paceBannerView.text = "On Track • ${s.bufferDays} WFH buffer day(s) left this month"
-                paceBannerView.setTextColor(Color.parseColor("#92400E"))
-                paceBannerView.background = roundedBox("#FEF3C7", "#FCD34D", 18f, 1)
                 progressColorHex = "#4F46E5"
+                cardFillHex = if (isDark) "#1E293B" else "#FFFBEB"
+                cardStrokeHex = if (isDark) "#475569" else "#FCD34D"
+                headlineColor = if (isDark) Color.parseColor("#FDE68A") else Color.parseColor("#92400E")
+                subColor = if (isDark) Color.parseColor("#CBD5E1") else Color.parseColor("#78350F")
             }
         }
 
-        if (::recoveryStripView.isInitialized) {
+        if (::briefingCardView.isInitialized) {
+            briefingCardView.background = roundedBox(cardFillHex, cardStrokeHex, 18f, 1)
+            briefingHeadlineView.text = r.safeToWfhVerdict
+            briefingHeadlineView.setTextColor(headlineColor)
+
+            val monthlySummary = when {
+                s.remainingDays == 0 -> "${s.targetPercent}% monthly mandate met (${s.attendedDays}/${s.requiredDays} days)"
+                s.bufferDays < 0 -> "Shortfall: ${s.remainingDays} day(s) needed across ${s.availableWeekdaysLeft} left"
+                s.bufferDays == 0 -> "Zero buffer: all ${s.availableWeekdaysLeft} working day(s) needed"
+                else -> "On track • ${s.bufferDays} WFH buffer day(s) left"
+            }
+            briefingSubView.text = "$monthlySummary • Window ${r.learnedArrivalWindowLabel}"
+            briefingSubView.setTextColor(subColor)
+
+            briefingWeeklyView.text = if (w.remainingThisWeek == 0) {
+                "📆 This Week: ${w.attendedThisWeek}/${w.weeklyQuota} days done (pace met)"
+            } else {
+                "📆 This Week: ${w.attendedThisWeek}/${w.weeklyQuota} days done • Need ${w.remainingThisWeek} more (${w.weekdaysLeftThisWeek} left)"
+            }
+            briefingWeeklyView.setTextColor(cTextPrimary())
+
             val daysLeftInMonth = selectedMonth.atEndOfMonth().dayOfMonth - today.dayOfMonth
             if (selectedMonth == YearMonth.from(today) && s.remainingDays > 0 && daysLeftInMonth in 0..7 && s.recoverySuggestedDates.isNotEmpty()) {
                 val dateList = s.recoverySuggestedDates.joinToString(", ") {
                     it.format(DateTimeFormatter.ofPattern("dd MMM (EEE)"))
                 }
-                recoveryStripView.visibility = View.VISIBLE
-                recoveryStripView.background = roundedBox(
-                    if (isDark) "#451A03" else "#FFFBEB",
-                    "#F59E0B",
-                    14f,
-                    1
-                )
-                recoveryStripView.setTextColor(if (isDark) Color.parseColor("#FDE68A") else Color.parseColor("#92400E"))
-                recoveryStripView.text = "📌 Month-End Recovery: Suggest $dateList (${String.format(Locale.US, "%.2f", s.requiredDailyRunRate)}/weekday needed)"
+                briefingRecoveryView.visibility = View.VISIBLE
+                briefingRecoveryView.setTextColor(subColor)
+                briefingRecoveryView.text = "📌 Suggested dates: $dateList (${String.format(Locale.US, "%.2f", s.requiredDailyRunRate)}/wkday)"
             } else {
-                recoveryStripView.visibility = View.GONE
+                briefingRecoveryView.visibility = View.GONE
             }
-        }
-
-        weeklyPacePillView.background = roundedBox(
-            if (isDark) "#1E293B" else "#EEF2FF",
-            if (isDark) "#334155" else "#C7D2FE",
-            14f,
-            1
-        )
-        weeklyPacePillView.setTextColor(if (isDark) Color.parseColor("#C7D2FE") else Color.parseColor("#3730A3"))
-        weeklyPacePillView.text = if (w.remainingThisWeek == 0) {
-            "✅ Weekly Pace Met: ${w.attendedThisWeek}/${w.weeklyQuota} office days logged this week"
-        } else {
-            "📆 This Week: ${w.attendedThisWeek}/${w.weeklyQuota} days done • Need ${w.remainingThisWeek} more (${w.weekdaysLeftThisWeek} weekday(s) left)"
         }
 
         circularRingView.setData(
@@ -3701,7 +3700,7 @@ class MainActivity : AppCompatActivity() {
                 setTextColor(cTextSecondary())
                 gravity = Gravity.CENTER
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                setPadding(0, 4, 0, 10)
+                setPadding(0, 4, 0, 8)
             }
             headerRow.addView(tv)
         }
@@ -3714,13 +3713,13 @@ class MainActivity : AppCompatActivity() {
         while (currentDay <= daysInMonth) {
             val weekRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
-                setPadding(0, 4, 0, 4)
+                setPadding(0, 3, 0, 3)
             }
             for (col in 0..6) {
                 val cell = TextView(this).apply {
                     gravity = Gravity.CENTER
                     textSize = 13f
-                    layoutParams = LinearLayout.LayoutParams(0, 92, 1f).apply {
+                    layoutParams = LinearLayout.LayoutParams(0, 88, 1f).apply {
                         setMargins(4, 0, 4, 0)
                     }
                 }
