@@ -73,32 +73,32 @@ class WfoWidgetProvider : AppWidgetProvider() {
             when {
                 isOnOffice -> {
                     views.setTextViewText(R.id.widget_status_pill, "🟢 At Office")
-                    views.setTextColor(R.id.widget_status_pill, Color.parseColor("#065F46"))
+                    views.setInt(R.id.widget_status_pill, "setTextColor", Color.parseColor("#065F46"))
                     views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_green)
                 }
                 todayType == DayType.OFFICE -> {
                     views.setTextViewText(R.id.widget_status_pill, "✅ Office Logged")
-                    views.setTextColor(R.id.widget_status_pill, Color.parseColor("#065F46"))
+                    views.setInt(R.id.widget_status_pill, "setTextColor", Color.parseColor("#065F46"))
                     views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_green)
                 }
                 todayType == DayType.PLANNED -> {
                     views.setTextViewText(R.id.widget_status_pill, "📅 Planned Office")
-                    views.setTextColor(R.parseColor("#3730A3"))
+                    views.setInt(R.id.widget_status_pill, "setTextColor", Color.parseColor("#3730A3"))
                     views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_indigo)
                 }
                 todayType == DayType.LEAVE -> {
                     views.setTextViewText(R.id.widget_status_pill, "🌴 On Leave")
-                    views.setTextColor(R.parseColor("#92400E"))
+                    views.setInt(R.id.widget_status_pill, "setTextColor", Color.parseColor("#92400E"))
                     views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_amber)
                 }
                 todayType == DayType.HOLIDAY -> {
                     views.setTextViewText(R.id.widget_status_pill, "🎉 Holiday")
-                    views.setTextColor(R.parseColor("#5B21B6"))
+                    views.setInt(R.id.widget_status_pill, "setTextColor", Color.parseColor("#5B21B6"))
                     views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_purple)
                 }
                 else -> {
                     views.setTextViewText(R.id.widget_status_pill, "🏠 $disconnectedHint")
-                    views.setTextColor(R.parseColor("#475569"))
+                    views.setInt(R.id.widget_status_pill, "setTextColor", Color.parseColor("#475569"))
                     views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_neutral)
                 }
             }
