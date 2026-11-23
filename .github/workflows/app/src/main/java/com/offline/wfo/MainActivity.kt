@@ -3994,7 +3994,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun makePersonalFooterView(): TextView {
         return TextView(this).apply {
-            text = "Built by Eleazer Patil for personal use"
+            text = "Crafted by Eleazer Patil"
             textSize = 11f
             setTextColor(cTextSecondary())
             gravity = Gravity.CENTER
