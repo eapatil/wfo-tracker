@@ -15,6 +15,7 @@ import java.time.LocalTime
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.roundToInt
@@ -668,6 +669,7 @@ class AttendanceStore(private val context: Context) {
         val src = getStringMap(KEY_SOURCE_MAP)[dateStr]
         val note = getDayNote(dateStr)
         val isAuto = getAutoLoggedSet().contains(dateStr)
+        val isActiveToday = date == LocalDate.now() && wasConnectedToOfficeWifi()
 
         val statusLabel = when (type) {
             DayType.OFFICE -> if (isAuto) "🏢 Office Day (Auto-Tracked)" else "🏢 Office Day (Manual)"
@@ -678,6 +680,10 @@ class AttendanceStore(private val context: Context) {
         }
 
         val timeWindowLabel = when {
+            isActiveToday && firstSeen != null -> {
+                val via = if (!src.isNullOrEmpty()) " via $src" else ""
+                "Window: $firstSeen → Active$via"
+            }
             firstSeen != null && lastSeen != null && firstSeen != lastSeen -> {
                 val via = if (!src.isNullOrEmpty()) " via $src" else ""
                 "Window: $firstSeen → $lastSeen$via"
@@ -689,17 +695,19 @@ class AttendanceStore(private val context: Context) {
             else -> "No arrival/departure timestamp recorded"
         }
 
-        val durationLabel = if (firstSeen != null && lastSeen != null && firstSeen != lastSeen) {
-            val mins = computeMinutesDiff(firstSeen, lastSeen)
-            if (mins > 0) {
-                val h = mins / 60
-                val m = mins % 60
-                "Active Span: ${h}h ${m}m"
-            } else {
-                "Active Span: Recorded"
+        val durationLabel = when {
+            isActiveToday && firstSeen != null -> "Active Span: Ongoing (since $firstSeen)"
+            firstSeen != null && lastSeen != null && firstSeen != lastSeen -> {
+                val mins = computeMinutesDiff(firstSeen, lastSeen)
+                if (mins > 0) {
+                    val h = mins / 60
+                    val m = mins % 60
+                    "Active Span: ${h}h ${m}m"
+                } else {
+                    "Active Span: Recorded"
+                }
             }
-        } else {
-            "Active Span: —"
+            else -> "Active Span: —"
         }
 
         return DayInspectorInfo(
@@ -739,6 +747,8 @@ class AttendanceStore(private val context: Context) {
         val sourceMap = getStringMap(KEY_SOURCE_MAP)
         val notesMap = getStringMap(KEY_DAY_NOTES)
         val autoSet = getAutoLoggedSet()
+        val currentlyConnected = wasConnectedToOfficeWifi()
+        val todayStr = today.toString()
 
         var totalWeekdays = 0
         var holidayCount = 0
@@ -787,8 +797,10 @@ class AttendanceStore(private val context: Context) {
                 val lTime = lastSeen[dStr]
                 val src = sourceMap[dStr]
                 val note = notesMap[dStr]?.takeIf { it.isNotEmpty() }
+                val isActiveToday = dStr == todayStr && currentlyConnected
 
                 val timePart = when {
+                    isActiveToday && fTime != null -> " [$fTime–Active]"
                     fTime != null && lTime != null && fTime != lTime -> " [$fTime–$lTime]"
                     fTime != null -> " [$fTime]"
                     else -> ""
