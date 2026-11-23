@@ -155,7 +155,6 @@ class AttendanceStore(private val context: Context) {
 
         private const val AUTO_BACKUP_FILENAME = "officepace_attendance_autobackup.csv"
         private const val LEGACY_AUTO_BACKUP_FILENAME = "wfo_attendance_autobackup.csv"
-
     }
 
     init {
@@ -1358,7 +1357,7 @@ class AttendanceStore(private val context: Context) {
 
     fun getAutoBackupTreeUri(): String = prefs.getString(KEY_BACKUP_TREE_URI, "") ?: ""
 
-    private fun findDocumentUriInTree(treeUri: Uri, displayName: String): Uri? {
+    private fun findExistingBackupUriInTree(treeUri: Uri): Uri? {
         val treeDocId = runCatching { DocumentsContract.getTreeDocumentId(treeUri) }.getOrNull() ?: return null
         val childrenUri = runCatching {
             DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, treeDocId)
@@ -1377,22 +1376,45 @@ class AttendanceStore(private val context: Context) {
             )?.use { cursor ->
                 val idCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
                 val nameCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+
+                var exactNewDocId: String? = null
+                var exactLegacyDocId: String? = null
+                var fuzzyBackupDocId: String? = null
+
                 while (cursor.moveToNext()) {
-                    val name = if (nameCol >= 0) cursor.getString(nameCol) else null
+                    val name = if (nameCol >= 0) cursor.getString(nameCol)?.trim() else null
                     val docId = if (idCol >= 0) cursor.getString(idCol) else null
-                    if (name == displayName && !docId.isNullOrBlank()) {
-                        return@use DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
+                    if (name.isNullOrBlank() || docId.isNullOrBlank()) continue
+
+                    when {
+                        name.equals(AUTO_BACKUP_FILENAME, ignoreCase = true) -> {
+                            exactNewDocId = docId
+                            break
+                        }
+                        name.equals(LEGACY_AUTO_BACKUP_FILENAME, ignoreCase = true) -> {
+                            exactLegacyDocId = docId
+                        }
+                        (name.startsWith("officepace_attendance_autobackup", ignoreCase = true) ||
+                            name.startsWith("wfo_attendance_autobackup", ignoreCase = true)) &&
+                            name.endsWith(".csv", ignoreCase = true) &&
+                            fuzzyBackupDocId == null -> {
+                            fuzzyBackupDocId = docId
+                        }
                     }
                 }
-                null
+
+                val chosenDocId = exactNewDocId ?: exactLegacyDocId ?: fuzzyBackupDocId
+                if (!chosenDocId.isNullOrBlank()) {
+                    DocumentsContract.buildDocumentUriUsingTree(treeUri, chosenDocId)
+                } else {
+                    null
+                }
             }
         }.getOrNull()
     }
 
-        fun restoreExistingBackupFromFolder(treeUri: Uri): Int {
-        val existingUri = findDocumentUriInTree(treeUri, AUTO_BACKUP_FILENAME)
-            ?: findDocumentUriInTree(treeUri, LEGACY_AUTO_BACKUP_FILENAME)
-            ?: return 0
+    fun restoreExistingBackupFromFolder(treeUri: Uri): Int {
+        val existingUri = findExistingBackupUriInTree(treeUri) ?: return 0
         val text = context.contentResolver.openInputStream(existingUri)?.use { stream ->
             BufferedReader(InputStreamReader(stream)).readText()
         } ?: return 0
@@ -1404,15 +1426,34 @@ class AttendanceStore(private val context: Context) {
         if (uriStr.isBlank()) return false
         val ok = runCatching {
             val treeUri = Uri.parse(uriStr)
-            val treeDocId = DocumentsContract.getTreeDocumentId(treeUri)
-            val dirUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocId)
-            val targetUri = findDocumentUriInTree(treeUri, AUTO_BACKUP_FILENAME)
-                ?: DocumentsContract.createDocument(context.contentResolver, dirUri, "text/csv", AUTO_BACKUP_FILENAME)
-                ?: return@runCatching false
+            val existingUri = findExistingBackupUriInTree(treeUri)
+            val targetUri = if (existingUri != null) {
+                existingUri
+            } else {
+                val treeDocId = DocumentsContract.getTreeDocumentId(treeUri)
+                val dirUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocId)
+                DocumentsContract.createDocument(
+                    context.contentResolver,
+                    dirUri,
+                    "text/csv",
+                    AUTO_BACKUP_FILENAME
+                ) ?: return@runCatching false
+            }
 
-            context.contentResolver.openOutputStream(targetUri, "wt")?.use { out ->
-                out.write(exportAllCsv().toByteArray(Charsets.UTF_8))
-            } ?: return@runCatching false
+            val payload = exportAllCsv().toByteArray(Charsets.UTF_8)
+            val wrote = runCatching {
+                context.contentResolver.openOutputStream(targetUri, "wt")?.use { out ->
+                    out.write(payload)
+                    out.flush()
+                } != null
+            }.getOrDefault(false)
+
+            if (!wrote) {
+                context.contentResolver.openOutputStream(targetUri, "w")?.use { out ->
+                    out.write(payload)
+                    out.flush()
+                } ?: return@runCatching false
+            }
             true
         }.getOrDefault(false)
 
