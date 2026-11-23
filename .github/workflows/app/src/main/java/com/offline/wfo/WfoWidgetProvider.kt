@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.os.Build
+import android.view.View
 import android.widget.RemoteViews
 import androidx.core.content.ContextCompat
 import java.time.DayOfWeek
@@ -54,6 +55,14 @@ class WfoWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_month_title, "WFO • $shortMonthYear")
             views.setTextViewText(R.id.widget_updated_time, "Updated $nowTime")
 
+            // Dedicated Sub-Line for Long Office / Wi-Fi Name
+            if (isOnOffice && activeSrc.isNotEmpty()) {
+                views.setViewVisibility(R.id.widget_source_detail, View.VISIBLE)
+                views.setTextViewText(R.id.widget_source_detail, "📍 $activeSrc")
+            } else {
+                views.setViewVisibility(R.id.widget_source_detail, View.GONE)
+            }
+
             // Live Today Status Pill
             val disconnectedHint = when (mode) {
                 TrackingMode.LOCATION_ONLY -> "Not at office"
@@ -63,8 +72,7 @@ class WfoWidgetProvider : AppWidgetProvider() {
 
             when {
                 isOnOffice -> {
-                    val src = if (activeSrc.isNotEmpty()) " ($activeSrc)" else ""
-                    views.setTextViewText(R.id.widget_status_pill, "🟢 At Office$src")
+                    views.setTextViewText(R.id.widget_status_pill, "🟢 At Office")
                     views.setTextColor(R.id.widget_status_pill, Color.parseColor("#065F46"))
                     views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_green)
                 }
@@ -75,22 +83,22 @@ class WfoWidgetProvider : AppWidgetProvider() {
                 }
                 todayType == DayType.PLANNED -> {
                     views.setTextViewText(R.id.widget_status_pill, "📅 Planned Office")
-                    views.setTextColor(R.id.widget_status_pill, Color.parseColor("#3730A3"))
+                    views.setTextColor(R.parseColor("#3730A3"))
                     views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_indigo)
                 }
                 todayType == DayType.LEAVE -> {
                     views.setTextViewText(R.id.widget_status_pill, "🌴 On Leave")
-                    views.setTextColor(R.id.widget_status_pill, Color.parseColor("#92400E"))
+                    views.setTextColor(R.parseColor("#92400E"))
                     views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_amber)
                 }
                 todayType == DayType.HOLIDAY -> {
                     views.setTextViewText(R.id.widget_status_pill, "🎉 Holiday")
-                    views.setTextColor(R.id.widget_status_pill, Color.parseColor("#5B21B6"))
+                    views.setTextColor(R.parseColor("#5B21B6"))
                     views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_purple)
                 }
                 else -> {
                     views.setTextViewText(R.id.widget_status_pill, "🏠 $disconnectedHint")
-                    views.setTextColor(R.id.widget_status_pill, Color.parseColor("#475569"))
+                    views.setTextColor(R.parseColor("#475569"))
                     views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_neutral)
                 }
             }
