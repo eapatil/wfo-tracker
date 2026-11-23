@@ -2,12 +2,12 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root_container"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
+    android:layout_height="wrap_content"
     android:background="@drawable/widget_card_bg"
     android:orientation="vertical"
-    android:padding="14dp">
+    android:padding="12dp">
 
-    <!-- Row 1: Month Title + Live Status Pill + Manual Refresh Button -->
+    <!-- Row 1: Protected Title + Status Pill + Refresh Button -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -16,10 +16,8 @@
 
         <TextView
             android:id="@+id/widget_month_title"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:ellipsize="end"
             android:maxLines="1"
             android:text="WFO • Nov 2026"
             android:textColor="@color/widget_text_primary"
@@ -28,15 +26,17 @@
 
         <TextView
             android:id="@+id/widget_status_pill"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
             android:layout_marginEnd="6dp"
+            android:layout_weight="1"
             android:background="@drawable/widget_pill_neutral"
             android:ellipsize="end"
             android:maxLines="1"
-            android:paddingStart="9dp"
+            android:paddingStart="8dp"
             android:paddingTop="3dp"
-            android:paddingEnd="9dp"
+            android:paddingEnd="8dp"
             android:paddingBottom="3dp"
             android:text="🏠 WFH Today"
             android:textSize="11sp"
@@ -44,19 +44,31 @@
 
         <TextView
             android:id="@+id/widget_refresh_btn"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
             android:background="@drawable/widget_pill_neutral"
             android:gravity="center"
             android:text="🔄"
             android:textSize="12sp" />
     </LinearLayout>
 
-    <!-- Row 2: Hero Attendance Ratio + Pace Line -->
+    <!-- Row 2: Dedicated Sub-Line for Long Office / Wi-Fi Name (Hidden When Empty) -->
+    <TextView
+        android:id="@+id/widget_source_detail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="@color/widget_text_secondary"
+        android:textSize="11sp"
+        android:visibility="gone" />
+
+    <!-- Row 3: Hero Attendance Ratio + Pace Line -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="6dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
@@ -64,9 +76,10 @@
             android:id="@+id/widget_hero_ratio"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:maxLines="1"
             android:text="0 / 9 days (0%)"
             android:textColor="@color/widget_text_primary"
-            android:textSize="17sp"
+            android:textSize="16sp"
             android:textStyle="bold" />
 
         <TextView
@@ -84,22 +97,22 @@
             android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- Row 3: Progress Bar -->
+    <!-- Row 4: Progress Bar -->
     <ProgressBar
         android:id="@+id/widget_progress_bar"
         style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="match_parent"
-        android:layout_height="8dp"
+        android:layout_height="7dp"
         android:layout_marginTop="6dp"
         android:max="9"
         android:progress="0"
         android:progressDrawable="@drawable/widget_progress_drawable" />
 
-    <!-- Row 4: This Week (M T W T F) Bubbles + Last Updated Time -->
+    <!-- Row 5: This Week (M T W T F) Bubbles + Last Updated Time -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="8dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
@@ -161,8 +174,11 @@
             android:id="@+id/widget_updated_time"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
             android:layout_weight="1"
+            android:ellipsize="end"
             android:gravity="end"
+            android:maxLines="1"
             android:text="Updated 09:00"
             android:textColor="@color/widget_text_secondary"
             android:textSize="10sp" />
