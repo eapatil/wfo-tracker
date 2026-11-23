@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "WFOTracker"
+rootProject.name = "OfficePace"
 include(":app")
