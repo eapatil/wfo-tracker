@@ -17,7 +17,7 @@
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
-        android:label="WFO Tracker"
+        android:label="OfficePace"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
 
         <activity
@@ -52,7 +52,7 @@
         <receiver
             android:name=".WfoWidgetProvider"
             android:exported="true"
-            android:label="WFO Tracker Glance">
+            android:label="OfficePace Glance">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="com.offline.wfo.ACTION_WIDGET_REFRESH" />
