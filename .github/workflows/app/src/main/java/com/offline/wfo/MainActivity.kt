@@ -45,11 +45,15 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.StyleSpan
 import android.view.GestureDetector
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
@@ -377,7 +381,7 @@ class MainActivity : AppCompatActivity() {
                     showStatusPopup(false, "Profile photo selection cancelled")
                 }
             }
-                        REQ_PICK_BACKUP_FOLDER -> {
+            REQ_PICK_BACKUP_FOLDER -> {
                 if (resultCode == Activity.RESULT_OK && data?.data != null) {
                     val treeUri = data.data!!
                     val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
@@ -1862,9 +1866,16 @@ class MainActivity : AppCompatActivity() {
         modeRow.addView(modeHolidayBtn)
         calendarCardContainer.addView(modeRow)
 
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
+        var downX = 0f
+        var downY = 0f
+        var isHorizontalSwipe = false
+
         val swipeDetector = GestureDetector(
             this,
             object : GestureDetector.SimpleOnGestureListener() {
+                override fun onDown(e: MotionEvent): Boolean = true
+
                 override fun onFling(
                     e1: MotionEvent?,
                     e2: MotionEvent,
@@ -1874,7 +1885,7 @@ class MainActivity : AppCompatActivity() {
                     if (e1 == null) return false
                     val dx = e2.x - e1.x
                     val dy = e2.y - e1.y
-                    if (abs(dx) > abs(dy) && abs(dx) > 100 && abs(velocityX) > 100) {
+                    if (abs(dx) > abs(dy) * 1.2f && abs(dx) > 80 && abs(velocityX) > 100) {
                         val dir = if (dx < 0) 1 else -1
                         selectedMonth = if (dx < 0) selectedMonth.plusMonths(1) else selectedMonth.minusMonths(1)
                         refreshAllViews(animateCharts = true)
@@ -1888,11 +1899,38 @@ class MainActivity : AppCompatActivity() {
 
         calendarContainer = object : LinearLayout(this) {
             override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
-                return swipeDetector.onTouchEvent(ev) || super.onInterceptTouchEvent(ev)
+                when (ev.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        downX = ev.x
+                        downY = ev.y
+                        isHorizontalSwipe = false
+                        swipeDetector.onTouchEvent(ev)
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        swipeDetector.onTouchEvent(ev)
+                        val dx = abs(ev.x - downX)
+                        val dy = abs(ev.y - downY)
+                        if (!isHorizontalSwipe && dx > touchSlop && dx > dy * 1.3f) {
+                            isHorizontalSwipe = true
+                            parent?.requestDisallowInterceptTouchEvent(true)
+                            return true
+                        }
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        parent?.requestDisallowInterceptTouchEvent(false)
+                        isHorizontalSwipe = false
+                    }
+                }
+                return super.onInterceptTouchEvent(ev)
             }
 
             override fun onTouchEvent(event: MotionEvent): Boolean {
-                return swipeDetector.onTouchEvent(event) || super.onTouchEvent(event)
+                val handled = swipeDetector.onTouchEvent(event)
+                if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                    parent?.requestDisallowInterceptTouchEvent(false)
+                    isHorizontalSwipe = false
+                }
+                return handled || isHorizontalSwipe || super.onTouchEvent(event)
             }
         }.apply {
             orientation = LinearLayout.VERTICAL
@@ -2475,7 +2513,7 @@ class MainActivity : AppCompatActivity() {
         return scroll
     }
 
-        private fun showHelpGuideDialog() {
+    private fun showHelpGuideDialog() {
         var dialogRef: AlertDialog? = null
 
         val scrollView = ScrollView(this).apply {
@@ -2487,7 +2525,6 @@ class MainActivity : AppCompatActivity() {
         }
         scrollView.addView(rootContent)
 
-        // Top Live Readiness Pill
         val permsReady = hasLocationPermission() && hasBackgroundLocationPermission() && isSystemLocationEnabled()
         val backupHealthy = store.getBackupHealthInfo().healthy
         val readinessRow = LinearLayout(this).apply {
@@ -2643,14 +2680,14 @@ class MainActivity : AppCompatActivity() {
                     setTextColor(Color.parseColor(accentHex))
                 }
 
-                val spannable = android.text.SpannableString(line)
+                val spannable = SpannableString(line)
                 val colonIdx = line.indexOf(':')
                 if (colonIdx > 0) {
                     spannable.setSpan(
-                        android.text.style.StyleSpan(Typeface.BOLD),
+                        StyleSpan(Typeface.BOLD),
                         0,
                         colonIdx + 1,
-                        android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                     )
                 }
 
