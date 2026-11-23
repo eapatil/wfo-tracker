@@ -294,16 +294,16 @@ class AttendanceStore(private val context: Context) {
 
     fun getTargetSsids(): List<String> {
         val raw = prefs.getString(KEY_TARGET_SSIDS, "") ?: ""
-        return raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        return raw.split(",").map { sanitizeImportedText(it).trim() }.filter { it.isNotEmpty() }.distinct()
     }
 
     fun setTargetSsids(csvInput: String) {
-        val cleaned = csvInput.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        val cleaned = csvInput.split(",").map { sanitizeImportedText(it).trim() }.filter { it.isNotEmpty() }.distinct()
         prefs.edit().putString(KEY_TARGET_SSIDS, cleaned.joinToString(",")).apply()
     }
 
     fun addTargetSsid(ssid: String): Boolean {
-        val clean = ssid.trim()
+        val clean = sanitizeImportedText(ssid).trim()
         if (clean.isEmpty()) return false
         val current = getTargetSsids().toMutableList()
         if (current.any { it.equals(clean, ignoreCase = true) }) return false
@@ -330,7 +330,7 @@ class AttendanceStore(private val context: Context) {
 
     fun setOfficeLocation(name: String, lat: Double, lng: Double, radiusMeters: Int) {
         prefs.edit()
-            .putString(KEY_OFFICE_LOC_NAME, name.trim())
+            .putString(KEY_OFFICE_LOC_NAME, sanitizeImportedText(name).trim())
             .putLong(KEY_OFFICE_LAT, lat.toBits())
             .putLong(KEY_OFFICE_LNG, lng.toBits())
             .putInt(KEY_OFFICE_RADIUS, radiusMeters.coerceIn(50, 5000))
@@ -434,7 +434,7 @@ class AttendanceStore(private val context: Context) {
     fun getActiveOfficeSsid(): String = prefs.getString(KEY_ACTIVE_SSID, "") ?: ""
 
     fun setActiveOfficeSsid(ssid: String) {
-        prefs.edit().putString(KEY_ACTIVE_SSID, ssid).apply()
+        prefs.edit().putString(KEY_ACTIVE_SSID, sanitizeImportedText(ssid)).apply()
     }
 
     fun claimOnceFlag(flagKey: String): Boolean {
@@ -461,7 +461,7 @@ class AttendanceStore(private val context: Context) {
     ): Boolean {
         val dateStr = nowDate.toString()
         val timeStr = nowTime.format(DateTimeFormatter.ofPattern("HH:mm"))
-        val cleanSource = sourceLabel.trim().ifEmpty { "Office" }
+        val cleanSource = sanitizeImportedText(sourceLabel).trim().ifEmpty { "Office" }
 
         val firstSeen = getStringMap(KEY_FIRST_SEEN).toMutableMap()
         val lastSeen = getStringMap(KEY_LAST_SEEN).toMutableMap()
@@ -503,7 +503,8 @@ class AttendanceStore(private val context: Context) {
         val lastSeen = getStringMap(KEY_LAST_SEEN).toMutableMap()
         val sourceMap = getStringMap(KEY_SOURCE_MAP).toMutableMap()
         lastSeen[dateStr] = timeStr
-        if (sourceLabel.isNotBlank()) sourceMap[dateStr] = sourceLabel.trim()
+        val cleanSrc = sanitizeImportedText(sourceLabel).trim()
+        if (cleanSrc.isNotBlank()) sourceMap[dateStr] = cleanSrc
         saveStringMap(KEY_LAST_SEEN, lastSeen)
         saveStringMap(KEY_SOURCE_MAP, sourceMap)
         triggerSilentAutoBackup()
@@ -550,7 +551,7 @@ class AttendanceStore(private val context: Context) {
 
     fun setDayNote(date: LocalDate, note: String) {
         val map = getStringMap(KEY_DAY_NOTES).toMutableMap()
-        val clean = note.trim()
+        val clean = sanitizeImportedText(note).trim()
         if (clean.isEmpty()) map.remove(date.toString()) else map[date.toString()] = clean
         saveStringMap(KEY_DAY_NOTES, map)
         triggerSilentAutoBackup()
@@ -1147,7 +1148,7 @@ class AttendanceStore(private val context: Context) {
             s.recoverySuggestedDates.joinToString(", ") { it.format(DateTimeFormatter.ofPattern("dd MMM")) }
         }
         return buildString {
-            appendLine("WFO Attendance Report — ${s.monthLabel}")
+            appendLine("OfficePace Attendance Report — ${s.monthLabel}")
             appendLine("Name: $uName")
             appendLine("Attended: ${s.attendedDays} / ${s.requiredDays} required days (${s.actualPercent}% of ${s.effectiveWorkingDays} working days)")
             appendLine("Target Mandate: ${s.targetPercent}% (Monthly) | Remaining Needed: ${s.remainingDays} | WFH Buffer: ${maxOf(0, s.bufferDays)}")
@@ -1178,7 +1179,7 @@ class AttendanceStore(private val context: Context) {
 
         val overallPct = if (totalWorking == 0) 0 else ((totalAttended * 100.0) / totalWorking).roundToInt()
         return buildString {
-            appendLine("WFO Annual Year-in-Review — $year")
+            appendLine("OfficePace Annual Year-in-Review — $year")
             appendLine("Name: $uName")
             appendLine("Overall Attendance: $totalAttended / $totalRequired required days ($overallPct% of $totalWorking working days)")
             appendLine("Total Leaves: $totalLeaves | Total Holidays: $totalHolidays")
@@ -1200,7 +1201,7 @@ class AttendanceStore(private val context: Context) {
             appendLine("date,type,source,first_seen,last_seen,duration_hours,auto_logged,note")
             for (k in allKeys) {
                 val t = types[k] ?: DayType.NONE
-                val src = csvEscape(sources[k] ?: "")
+                val src = csvEscape(sanitizeImportedText(sources[k] ?: ""))
                 val fsRaw = firstSeen[k] ?: ""
                 val lsRaw = lastSeen[k] ?: ""
                 val hrs = computeSpanHours(fsRaw, lsRaw)
@@ -1208,7 +1209,7 @@ class AttendanceStore(private val context: Context) {
                 val fs = csvEscape(fsRaw)
                 val ls = csvEscape(lsRaw)
                 val auto = if (autoSet.contains(k)) "true" else "false"
-                val nt = csvEscape(notes[k] ?: "")
+                val nt = csvEscape(sanitizeImportedText(notes[k] ?: ""))
                 appendLine("$k,${t.name},$src,$fs,$ls,$hrsStr,$auto,$nt")
             }
         }
@@ -1276,7 +1277,7 @@ class AttendanceStore(private val context: Context) {
                 types[dateStr] = type
             }
             if (idxSource >= 0 && cols.size > idxSource && cols[idxSource].isNotBlank()) {
-                sources[dateStr] = cols[idxSource].trim()
+                sources[dateStr] = sanitizeImportedText(cols[idxSource]).trim()
             }
             if (idxFirst >= 0 && cols.size > idxFirst && cols[idxFirst].isNotBlank()) {
                 firstSeen[dateStr] = cols[idxFirst].trim()
@@ -1288,7 +1289,7 @@ class AttendanceStore(private val context: Context) {
                 autoSet.add(dateStr)
             }
             if (idxNote >= 0 && cols.size > idxNote && cols[idxNote].isNotBlank()) {
-                notes[dateStr] = cols[idxNote].trim()
+                notes[dateStr] = sanitizeImportedText(cols[idxNote]).trim()
             }
             importedCount++
         }
@@ -1305,6 +1306,16 @@ class AttendanceStore(private val context: Context) {
             }
         }
         return importedCount
+    }
+
+    private fun sanitizeImportedText(raw: String): String {
+        return raw
+            .replace("\u00E2\u2014\u201A", "-")
+            .replace("\u00E2\u2014\u20AC", "-")
+            .replace("â\u0094\u0080", "-")
+            .replace("\u2013", "-")
+            .replace("\u2014", "-")
+            .replace("\u2212", "-")
     }
 
     fun bulkImportHolidays(rawText: String): Map<LocalDate, DayType> {
