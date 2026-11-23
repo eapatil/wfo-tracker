@@ -16,6 +16,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -181,6 +183,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var monthTitleView: TextView
     private lateinit var paceBannerView: TextView
     private lateinit var weeklyPacePillView: TextView
+    private lateinit var morningBriefingCardView: LinearLayout
+    private lateinit var morningBriefingTitleView: TextView
+    private lateinit var morningBriefingDetailView: TextView
+    private lateinit var recoveryStripView: TextView
     private lateinit var circularRingView: CircularProgressRingView
     private lateinit var heroSubView: TextView
     private lateinit var heroProjectedView: TextView
@@ -201,6 +207,8 @@ class MainActivity : AppCompatActivity() {
 
     // Tab 2: Analytics Views
     private lateinit var trendChartView: TrendBarChartView
+    private lateinit var runRateFollowThroughView: TextView
+    private lateinit var bufferTrajectoryView: TextView
     private lateinit var qtdTitleView: TextView
     private lateinit var qtdDetailView: TextView
     private lateinit var qtdLeaveHolView: TextView
@@ -293,6 +301,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        store.performDailyRolloverIfNeeded()
         startMonitorServiceIfPermitted()
         refreshAllViews(animateCharts = false)
         if (appLockOverlay.visibility == View.VISIBLE) {
@@ -1683,6 +1692,24 @@ class MainActivity : AppCompatActivity() {
         navRow.addView(nextBtn)
         root.addView(navRow)
 
+        morningBriefingCardView = makeCardContainer().apply {
+            setPadding(20, 14, 20, 14)
+        }
+        morningBriefingTitleView = TextView(this).apply {
+            textSize = 13f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(cTextPrimary())
+        }
+        morningBriefingDetailView = TextView(this).apply {
+            textSize = 12f
+            setTextColor(cTextSecondary())
+            setPadding(0, 4, 0, 0)
+        }
+        morningBriefingCardView.addView(morningBriefingTitleView)
+        morningBriefingCardView.addView(morningBriefingDetailView)
+        root.addView(morningBriefingCardView)
+        addSpacer(root, 10)
+
         paceBannerView = TextView(this).apply {
             textSize = 13f
             setTypeface(null, Typeface.BOLD)
@@ -1699,7 +1726,15 @@ class MainActivity : AppCompatActivity() {
             setPadding(20, 14, 20, 14)
         }
         root.addView(weeklyPacePillView)
-        addSpacer(root, 16)
+        addSpacer(root, 10)
+
+        recoveryStripView = TextView(this).apply {
+            textSize = 12f
+            setPadding(18, 12, 18, 12)
+            visibility = View.GONE
+        }
+        root.addView(recoveryStripView)
+        addSpacer(root, 12)
 
         heroCardContainer = makeCardContainer()
         circularRingView = CircularProgressRingView(this).apply {
@@ -1916,6 +1951,20 @@ class MainActivity : AppCompatActivity() {
             )
         }
         trendCard.addView(trendChartView)
+        addSpacer(trendCard, 12)
+
+        runRateFollowThroughView = TextView(this).apply {
+            textSize = 13f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(cTextPrimary())
+            setPadding(0, 4, 0, 4)
+        }
+        bufferTrajectoryView = TextView(this).apply {
+            textSize = 12f
+            setTextColor(cTextSecondary())
+        }
+        trendCard.addView(runRateFollowThroughView)
+        trendCard.addView(bufferTrajectoryView)
         root.addView(trendCard)
         addSpacer(root, 16)
 
@@ -2011,6 +2060,15 @@ class MainActivity : AppCompatActivity() {
         simCard.addView(simResultView)
         root.addView(simCard)
         addSpacer(root, 18)
+
+        val copySnapshotBtn = makePillButton("📎 Copy Audit Snapshot", "#0284C7", "#FFFFFF") {
+            val snap = store.buildMonthlySummaryReport(selectedMonth)
+            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            cm.setPrimaryClip(ClipData.newPlainText("WFO Audit Snapshot", snap))
+            showStatusPopup(true, "Audit snapshot copied to clipboard")
+        }
+        root.addView(copySnapshotBtn)
+        addSpacer(root, 12)
 
         val shareMonthBtn = makePillButton("📋 Share Monthly Summary Report", "#4F46E5", "#FFFFFF") {
             val report = store.buildMonthlySummaryReport(selectedMonth)
@@ -3049,8 +3107,14 @@ class MainActivity : AppCompatActivity() {
 
         val s = store.getMonthStats(selectedMonth)
         val w = store.getWeeklyPaceStats()
+        val r = store.getRhythmStats()
 
         monthTitleView.text = s.monthLabel
+
+        if (::morningBriefingTitleView.isInitialized && ::morningBriefingDetailView.isInitialized) {
+            morningBriefingTitleView.text = "🧭 ${r.safeToWfhVerdict}"
+            morningBriefingDetailView.text = "${r.safeToWfhDetail} • Window ${r.learnedArrivalWindowLabel}"
+        }
 
         val progressColorHex: String
         when {
@@ -3077,6 +3141,26 @@ class MainActivity : AppCompatActivity() {
                 paceBannerView.setTextColor(Color.parseColor("#92400E"))
                 paceBannerView.background = roundedBox("#FEF3C7", "#FCD34D", 18f, 1)
                 progressColorHex = "#4F46E5"
+            }
+        }
+
+        if (::recoveryStripView.isInitialized) {
+            val daysLeftInMonth = selectedMonth.atEndOfMonth().dayOfMonth - today.dayOfMonth
+            if (selectedMonth == YearMonth.from(today) && s.remainingDays > 0 && daysLeftInMonth in 0..7 && s.recoverySuggestedDates.isNotEmpty()) {
+                val dateList = s.recoverySuggestedDates.joinToString(", ") {
+                    it.format(DateTimeFormatter.ofPattern("dd MMM (EEE)"))
+                }
+                recoveryStripView.visibility = View.VISIBLE
+                recoveryStripView.background = roundedBox(
+                    if (isDark) "#451A03" else "#FFFBEB",
+                    "#F59E0B",
+                    14f,
+                    1
+                )
+                recoveryStripView.setTextColor(if (isDark) Color.parseColor("#FDE68A") else Color.parseColor("#92400E"))
+                recoveryStripView.text = "📌 Month-End Recovery: Suggest $dateList (${String.format(Locale.US, "%.2f", s.requiredDailyRunRate)}/weekday needed)"
+            } else {
+                recoveryStripView.visibility = View.GONE
             }
         }
 
@@ -3152,9 +3236,16 @@ class MainActivity : AppCompatActivity() {
         }
 
         val q = store.getQuarterStats(selectedMonth)
-        val r = store.getRhythmStats()
         val trends = store.getMultiMonthTrend(selectedMonth, 6)
         trendChartView.setData(trends, isDark, animate = animateCharts)
+
+        if (::runRateFollowThroughView.isInitialized) {
+            runRateFollowThroughView.text =
+                "⚡ Run-Rate: ${String.format(Locale.US, "%.2f", s.requiredDailyRunRate)}/weekday   •   🎯 Plan Follow-Through: ${s.planFollowThroughPercent}%"
+        }
+        if (::bufferTrajectoryView.isInitialized) {
+            bufferTrajectoryView.text = "📈 ${s.bufferTrajectoryLabel}   •   ${q.driftSummary}"
+        }
 
         qtdTitleView.text = "${q.quarterLabel} Rollup"
         qtdDetailView.text =
