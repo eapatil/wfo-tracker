@@ -102,6 +102,7 @@ class MainActivity : AppCompatActivity() {
     private var activeTapMode: DayType = DayType.OFFICE
     private var activeTab: ActiveTab = ActiveTab.HOME
     private var activeLogFilter: LogFilter = LogFilter.ALL
+    private var isMonthlyLogExpanded: Boolean = false
     private var simLeaves: Int = 0
     private var simHolidays: Int = 0
     private var lastUndoBatch: Map<LocalDate, DayType> = emptyMap()
@@ -199,6 +200,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var modeLeaveBtn: TextView
     private lateinit var modeHolidayBtn: TextView
     private lateinit var calendarContainer: LinearLayout
+    private lateinit var logHeaderToggleView: TextView
+    private lateinit var logExpandBodyView: LinearLayout
     private lateinit var filterAllBtn: TextView
     private lateinit var filterOfficeBtn: TextView
     private lateinit var filterPlannedBtn: TextView
@@ -1892,8 +1895,30 @@ class MainActivity : AppCompatActivity() {
         addSpacer(root, 16)
 
         val logCard = makeCardContainer()
-        logCard.addView(makeSectionTitle("Monthly Log & Timestamps"))
-        addSpacer(logCard, 10)
+        logHeaderToggleView = TextView(this).apply {
+            text = "Monthly Log & Timestamps   ▼"
+            textSize = 16f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(cTextPrimary())
+            isClickable = true
+            isFocusable = true
+            setPadding(0, 2, 0, 2)
+            setOnClickListener {
+                isMonthlyLogExpanded = !isMonthlyLogExpanded
+                logExpandBodyView.visibility = if (isMonthlyLogExpanded) View.VISIBLE else View.GONE
+                if (isMonthlyLogExpanded) {
+                    animateTabReveal(logExpandBodyView)
+                }
+                refreshAllViews(animateCharts = false)
+            }
+        }
+        logCard.addView(logHeaderToggleView)
+
+        logExpandBodyView = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = if (isMonthlyLogExpanded) View.VISIBLE else View.GONE
+            setPadding(0, 12, 0, 0)
+        }
 
         val filterRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1911,14 +1936,15 @@ class MainActivity : AppCompatActivity() {
         filterRow.addView(filterPlannedBtn)
         addHorizontalGap(filterRow, 6)
         filterRow.addView(filterLeaveHolBtn)
-        logCard.addView(filterRow)
+        logExpandBodyView.addView(filterRow)
 
         auditLogView = TextView(this).apply {
             textSize = 13f
             setTextColor(cTextPrimary())
             setLineSpacing(8f, 1.0f)
         }
-        logCard.addView(auditLogView)
+        logExpandBodyView.addView(auditLogView)
+        logCard.addView(logExpandBodyView)
         root.addView(logCard)
 
         return scroll
@@ -3207,6 +3233,10 @@ class MainActivity : AppCompatActivity() {
 
         renderCalendarGrid(s)
 
+        val arrow = if (isMonthlyLogExpanded) "▲" else "▼"
+        logHeaderToggleView.text = "Monthly Log & Timestamps (${s.dayLogs.size} entries • ${s.attendedDays} Office)   $arrow"
+        logExpandBodyView.visibility = if (isMonthlyLogExpanded) View.VISIBLE else View.GONE
+
         styleModeChip(filterAllBtn, activeLogFilter == LogFilter.ALL, "#334155")
         styleModeChip(filterOfficeBtn, activeLogFilter == LogFilter.OFFICE, "#10B981")
         styleModeChip(filterPlannedBtn, activeLogFilter == LogFilter.PLANNED, "#4F46E5")
@@ -3241,7 +3271,7 @@ class MainActivity : AppCompatActivity() {
 
         if (::runRateFollowThroughView.isInitialized) {
             runRateFollowThroughView.text =
-                "⚡ Run-Rate: ${String.format(Locale.US, "%.2f", s.requiredDailyRunRate)}/weekday   •   🎯 Plan Follow-Through: ${s.planFollowThroughPercent}%"
+                "⚡ Run-Rate: ${String.format(Locale.US, "%.2f", s.requiredDailyRunRate)}/wkday • 🎯 Follow-Through: ${s.planFollowThroughPercent}% • ⏱️ Avg: ${String.format(Locale.US, "%.1f", s.avgOfficeHours)}h"
         }
         if (::bufferTrajectoryView.isInitialized) {
             bufferTrajectoryView.text = "📈 ${s.bufferTrajectoryLabel}   •   ${q.driftSummary}"
