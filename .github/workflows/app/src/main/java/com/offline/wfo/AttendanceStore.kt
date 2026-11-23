@@ -15,7 +15,6 @@ import java.time.LocalTime
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
-import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.roundToInt
@@ -842,10 +841,10 @@ class AttendanceStore(private val context: Context) {
         }
 
         val trajectoryLabel = when {
-            remainingDays == 0 -> "Target achieved — zero buffer burn risk"
-            bufferDays < 0 -> "Behind pace — shortfall of ${remainingDays - availableWeekdaysLeft} day(s)"
-            bufferDays <= 1 -> "Tight glide path — only $bufferDays buffer day left"
-            else -> "Healthy glide path — $bufferDays buffer days available"
+            remainingDays == 0 -> "Monthly target achieved — zero buffer burn risk"
+            bufferDays < 0 -> "Behind monthly pace — shortfall of ${remainingDays - availableWeekdaysLeft} day(s)"
+            bufferDays <= 1 -> "Tight monthly glide path — only $bufferDays buffer day left"
+            else -> "Healthy monthly glide path — $bufferDays buffer days available"
         }
 
         val recoveryDates = if (remainingDays > 0) {
@@ -954,19 +953,6 @@ class AttendanceStore(private val context: Context) {
         }
         val actualPct = if (totalWorking == 0) 0 else ((totalAttended * 100.0) / totalWorking).roundToInt()
 
-        val qStartDate = months.first().atDay(1)
-        val qEndDate = months.last().atEndOfMonth()
-        val totalQuarterDays = maxOf(1, ChronoUnit.DAYS.between(qStartDate, qEndDate) + 1)
-        val elapsedQuarterDays = ChronoUnit.DAYS.between(qStartDate, today).coerceIn(0, totalQuarterDays)
-        val expectedPctSoFar = (targetPct * (elapsedQuarterDays.toDouble() / totalQuarterDays.toDouble())).roundToInt()
-        val earlyDrift = elapsedQuarterDays >= 20 && actualPct + 6 < expectedPctSoFar
-
-        val driftSummary = if (earlyDrift) {
-            "⚠️ Early quarter drift: at $actualPct% vs ~$expectedPctSoFar% expected pace"
-        } else {
-            "✅ Quarter pace aligned with $targetPct% target"
-        }
-
         return QuarterStats(
             quarterLabel = "Q$qNum ${ym.year}",
             effectiveWorkingDays = totalWorking,
@@ -975,8 +961,8 @@ class AttendanceStore(private val context: Context) {
             leaveDays = totalLeaves,
             holidayDays = totalHolidays,
             actualPercent = actualPct,
-            isEarlyDriftWarning = earlyDrift,
-            driftSummary = driftSummary
+            isEarlyDriftWarning = false,
+            driftSummary = "ℹ️ Strictly monthly mandate ($targetPct%/month — no quarterly carryover)"
         )
     }
 
@@ -1053,17 +1039,35 @@ class AttendanceStore(private val context: Context) {
 
         val mStats = getMonthStats(YearMonth.from(today), today)
         val wStats = getWeeklyPaceStats(today)
+        val todayType = getDayType(today)
+        val isAtOfficeNow = wasConnectedToOfficeWifi()
+        val activeSrc = getActiveOfficeSsid()
+
         val (verdict, detail) = when {
+            isAtOfficeNow || todayType == DayType.OFFICE -> {
+                val title = if (isAtOfficeNow) "At Office Today — Presence Active" else "Office Day Logged Today"
+                val progressPart = if (mStats.remainingDays == 0) {
+                    "${mStats.targetPercent}% monthly target met (${mStats.attendedDays}/${mStats.requiredDays} days)."
+                } else {
+                    "${mStats.attendedDays}/${mStats.requiredDays} days done • ${mStats.remainingDays} more needed this month."
+                }
+                val srcSuffix = if (isAtOfficeNow && activeSrc.isNotEmpty()) " ($activeSrc)" else ""
+                "$title$srcSuffix" to progressPart
+            }
+            todayType == DayType.HOLIDAY ->
+                "Company Holiday Today" to "${mStats.attendedDays}/${mStats.requiredDays} days logged • ${maxOf(0, mStats.bufferDays)} monthly buffer day(s) left."
+            todayType == DayType.LEAVE ->
+                "On Leave Today" to "${mStats.attendedDays}/${mStats.requiredDays} days logged • ${maxOf(0, mStats.bufferDays)} monthly buffer day(s) left."
             mStats.remainingDays == 0 ->
                 "Safe to WFH Today" to "${mStats.targetPercent}% monthly mandate already met (${mStats.attendedDays}/${mStats.requiredDays} days)."
             mStats.bufferDays <= 0 ->
-                "Office Recommended Today" to "Zero buffer left — ${mStats.remainingDays} day(s) needed across ${mStats.availableWeekdaysLeft} weekday(s)."
+                "Office Recommended Today" to "Zero monthly buffer left — ${mStats.remainingDays} day(s) needed across ${mStats.availableWeekdaysLeft} weekday(s)."
             consecutiveWfh >= 3 ->
-                "Office Recommended Today" to "$consecutiveWfh consecutive WFH weekdays — logging office today protects your buffer."
+                "Office Recommended Today" to "$consecutiveWfh consecutive WFH weekdays — logging office today protects your monthly buffer."
             mStats.bufferDays == 1 || wStats.remainingThisWeek > wStats.weekdaysLeftThisWeek ->
-                "Watch Buffer Today" to "Only ${mStats.bufferDays} buffer day left; ${wStats.remainingThisWeek} needed for weekly pace."
+                "Watch Monthly Buffer Today" to "Only ${mStats.bufferDays} buffer day left; ${wStats.remainingThisWeek} needed for weekly pace."
             else ->
-                "Safe to WFH Today" to "${mStats.bufferDays} buffer day(s) left • ${wStats.remainingThisWeek} needed this week."
+                "Safe to WFH Today" to "${mStats.bufferDays} monthly buffer day(s) left • ${wStats.remainingThisWeek} needed this week."
         }
 
         return RhythmStats(
@@ -1090,7 +1094,7 @@ class AttendanceStore(private val context: Context) {
             appendLine("WFO Attendance Report — ${s.monthLabel}")
             appendLine("Name: $uName")
             appendLine("Attended: ${s.attendedDays} / ${s.requiredDays} required days (${s.actualPercent}% of ${s.effectiveWorkingDays} working days)")
-            appendLine("Target Mandate: ${s.targetPercent}% | Remaining Needed: ${s.remainingDays} | WFH Buffer: ${maxOf(0, s.bufferDays)}")
+            appendLine("Target Mandate: ${s.targetPercent}% (Monthly) | Remaining Needed: ${s.remainingDays} | WFH Buffer: ${maxOf(0, s.bufferDays)}")
             appendLine("Run-Rate Needed: ${String.format(Locale.US, "%.2f", s.requiredDailyRunRate)}/weekday | Plan Follow-Through: ${s.planFollowThroughPercent}%")
             appendLine("Leaves: ${s.leaveDays} | Holidays: ${s.holidayDays}")
             appendLine("Suggested Recovery Dates: $recoveryLine")
