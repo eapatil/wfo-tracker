@@ -3974,7 +3974,7 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.HORIZONTAL
                 setPadding(0, 0, 0, 14)
             }
-            val options = listOf(
+                        val options = listOf(
                 "🏢" to DayType.OFFICE,
                 "📅" to DayType.PLANNED,
                 "🌴" to DayType.LEAVE,
@@ -3982,12 +3982,13 @@ class MainActivity : AppCompatActivity() {
                 "Clear" to DayType.NONE
             )
             options.forEachIndexed { idx, (lbl, targetType) ->
-                val chip = makeModeChip(lbl) {
+                val chip = makeModeChip(lbl) {}
+                chip.setOnClickListener {
                     store.setExplicitDayType(date, targetType)
                     syncBackgroundAndWidget()
                     refreshAllViews(animateCharts = false)
                     dialogRef?.dismiss()
-                    showStatusPopup(true, "Updated ${date}")
+                    showStatusPopup(true, "Updated $date")
                 }
                 styleModeChip(chip, info.type == targetType, "#4F46E5")
                 quickStatusRow.addView(chip)
