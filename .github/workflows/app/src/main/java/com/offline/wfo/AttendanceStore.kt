@@ -153,7 +153,9 @@ class AttendanceStore(private val context: Context) {
         private const val KEY_LAST_ROLLOVER_DATE = "last_rollover_date"
         private const val KEY_ARRIVAL_MINUTES_SAMPLES = "arrival_minutes_samples"
 
-        private const val AUTO_BACKUP_FILENAME = "wfo_attendance_autobackup.csv"
+        private const val AUTO_BACKUP_FILENAME = "officepace_attendance_autobackup.csv"
+        private const val LEGACY_AUTO_BACKUP_FILENAME = "wfo_attendance_autobackup.csv"
+
     }
 
     init {
@@ -1387,8 +1389,10 @@ class AttendanceStore(private val context: Context) {
         }.getOrNull()
     }
 
-    fun restoreExistingBackupFromFolder(treeUri: Uri): Int {
-        val existingUri = findDocumentUriInTree(treeUri, AUTO_BACKUP_FILENAME) ?: return 0
+        fun restoreExistingBackupFromFolder(treeUri: Uri): Int {
+        val existingUri = findDocumentUriInTree(treeUri, AUTO_BACKUP_FILENAME)
+            ?: findDocumentUriInTree(treeUri, LEGACY_AUTO_BACKUP_FILENAME)
+            ?: return 0
         val text = context.contentResolver.openInputStream(existingUri)?.use { stream ->
             BufferedReader(InputStreamReader(stream)).readText()
         } ?: return 0
