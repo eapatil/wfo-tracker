@@ -377,31 +377,36 @@ class MainActivity : AppCompatActivity() {
                     showStatusPopup(false, "Profile photo selection cancelled")
                 }
             }
-            REQ_PICK_BACKUP_FOLDER -> {
+                        REQ_PICK_BACKUP_FOLDER -> {
                 if (resultCode == Activity.RESULT_OK && data?.data != null) {
                     val treeUri = data.data!!
                     val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
                         Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                    runCatching {
+                    val permGranted = runCatching {
                         contentResolver.takePersistableUriPermission(treeUri, flags)
-                    }
+                        true
+                    }.getOrDefault(false)
                     store.setAutoBackupTreeUri(treeUri.toString())
 
                     val hadLocalDataBefore = store.getAllMarkedDates().isNotEmpty()
                     val importedCount = store.restoreExistingBackupFromFolder(treeUri)
+                    val synced = store.triggerSilentAutoBackup()
+
                     if (importedCount > 0) {
                         activeLogFilter = LogFilter.ALL
                         syncBackgroundAndWidget()
                         refreshAllViews(animateCharts = true)
-                        showStatusPopup(true, "Found existing backup — restored $importedCount date(s)")
+                        val syncNote = if (synced) " & auto-backup synced" else ""
+                        showStatusPopup(true, "Restored $importedCount date(s)$syncNote")
                     } else {
-                        val synced = store.triggerSilentAutoBackup()
                         refreshAllViews(animateCharts = false)
                         if (synced) {
                             showStatusPopup(
                                 true,
                                 if (hadLocalDataBefore) "Auto-backup folder linked & synced" else "Auto-backup folder configured"
                             )
+                        } else if (!permGranted) {
+                            showStatusPopup(false, "Folder selected, but persistable write permission was not granted")
                         } else {
                             showStatusPopup(false, "Folder linked, but could not write backup file yet")
                         }
