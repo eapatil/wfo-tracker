@@ -1472,6 +1472,12 @@ class MainActivity : AppCompatActivity() {
             showStatusPopup(true, "Settings saved & dashboard locked")
         }
         root.addView(saveFinishBtn)
+        addSpacer(root, 12)
+
+        val setupHelpBtn = makePillButton("📖 How It Works & Configuration Guide", "#0284C7", "#FFFFFF") {
+            showHelpGuideDialog()
+        }
+        root.addView(setupHelpBtn)
         addSpacer(root, 16)
         root.addView(makePersonalFooterView())
 
@@ -2447,10 +2453,70 @@ class MainActivity : AppCompatActivity() {
             }
         }
         root.addView(setupWizardBtn)
+        addSpacer(root, 12)
+
+        val helpGuideBtn = makePillButton("📖 How It Works & Configuration Guide", "#0284C7", "#FFFFFF") {
+            showHelpGuideDialog()
+        }
+        root.addView(helpGuideBtn)
         addSpacer(root, 16)
         root.addView(makePersonalFooterView())
 
         return scroll
+    }
+
+    private fun showHelpGuideDialog() {
+        val scrollView = ScrollView(this)
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(44, 24, 44, 20)
+        }
+        scrollView.addView(content)
+
+        val guideSections = listOf(
+            "1. How Auto-Tracking Works" to
+                "• Runs in the background via WifiMonitorService when Location permission is granted.\n" +
+                "• Supports Wi-Fi SSID matching, GPS Geofence radius, or Both.\n" +
+                "• Automatically records first_seen on arrival, refreshes last_seen while connected, and logs your departure timestamp when you leave.\n" +
+                "• Learns your typical arrival window over time and tightens location checks during your commute window.",
+            "2. Monthly Mandate, Buffer & Recovery" to
+                "• Attendance is evaluated strictly on a monthly basis (no quarterly carryover).\n" +
+                "• Effective working days exclude weekends and (when enabled in Setup) marked Holidays and Leaves.\n" +
+                "• WFH Buffer shows how many non-office weekdays remain after subtracting the office days you still need.\n" +
+                "• Near month-end, recovery suggestions highlight remaining eligible weekdays ranked by your preferred weekday priority.",
+            "3. Required Android Permissions" to
+                "• Location (Fine/Coarse) & \"Allow all the time\": Required for background geofence checks and Wi-Fi SSID visibility on Android.\n" +
+                "• Phone Location (GPS) Switch ON: Android may hide connected Wi-Fi SSIDs if system location is off.\n" +
+                "• Notifications & Exact Alarms: Ensures check-in, disconnect, and reminder alerts arrive on time.\n" +
+                "• Unrestricted Battery: Prevents Android from sleeping the background monitor.",
+            "4. Backup, Restore & Safe Reinstalls" to
+                "• Link an Auto-Backup Folder in Settings so the app maintains wfo_attendance_autobackup.csv (including date, type, source, first_seen, last_seen, duration_hours, auto_logged, and note).\n" +
+                "• Before reinstalling or switching phones, verify your backup folder has the latest CSV, or use Save CSV / Restore CSV anytime."
+        )
+
+        guideSections.forEachIndexed { index, (heading, body) ->
+            val hTv = TextView(this).apply {
+                text = heading
+                textSize = 15f
+                setTypeface(null, Typeface.BOLD)
+                setTextColor(cTextPrimary())
+                setPadding(0, if (index == 0) 0 else 14, 0, 4)
+            }
+            val bTv = TextView(this).apply {
+                text = body
+                textSize = 13f
+                setTextColor(cTextSecondary())
+                setLineSpacing(6f, 1.0f)
+            }
+            content.addView(hTv)
+            content.addView(bTv)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("📖 WFO Tracker Guide")
+            .setView(scrollView)
+            .setPositiveButton("Got It", null)
+            .show()
     }
 
     private fun buildRadiusSelectorRow(): LinearLayout {
