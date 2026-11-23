@@ -294,7 +294,7 @@ class MainActivity : AppCompatActivity() {
             startMonitorServiceIfPermitted()
             if (store.isFullAppLockEnabled() && !isAppAuthenticated) {
                 showAppLockScreen()
-                promptDeviceCredential(REQ_UNLOCK_APP, "Unlock WFO Tracker")
+                promptDeviceCredential(REQ_UNLOCK_APP, "Unlock OfficePace")
             } else {
                 showDashboardMode(playEntrance = true)
             }
@@ -495,7 +495,7 @@ class MainActivity : AppCompatActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ALERTS_ID,
-                "WFO Live Status & Alerts",
+                "OfficePace Live Status & Alerts",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Animated heads-up alerts and live presence notifications"
@@ -1018,7 +1018,7 @@ class MainActivity : AppCompatActivity() {
         }
         val intent = km.createConfirmDeviceCredentialIntent(
             title,
-            "Verify your identity to modify WFO attendance records"
+            "Verify your identity to modify OfficePace records"
         )
         if (intent != null) {
             launchSystemIntentForResult(intent, requestCode)
@@ -1087,7 +1087,7 @@ class MainActivity : AppCompatActivity() {
             animStage.addView(lockIconView)
 
             val title = TextView(this@MainActivity).apply {
-                text = "WFO Tracker Locked"
+                text = "OfficePace Locked"
                 textSize = 22f
                 setTypeface(null, Typeface.BOLD)
                 setTextColor(cTextPrimary())
@@ -1136,7 +1136,7 @@ class MainActivity : AppCompatActivity() {
             lockStatusCardView.addView(lockStatusSummaryView)
 
             val unlockBtn = makePillButton("Unlock Now", "#4F46E5", "#FFFFFF") {
-                promptDeviceCredential(REQ_UNLOCK_APP, "Unlock WFO Tracker")
+                promptDeviceCredential(REQ_UNLOCK_APP, "Unlock OfficePace")
             }
 
             addView(animStage)
@@ -1147,7 +1147,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ==================== 2. FIRST-TIME SETUP WIZARD UI ====================
+    // ==================== 2. CARD-BASED SETUP WIZARD UI ====================
 
     private fun buildSetupWizardView(): ScrollView {
         val scroll = ScrollView(this)
@@ -1158,13 +1158,13 @@ class MainActivity : AppCompatActivity() {
         scroll.addView(root)
 
         val title = TextView(this).apply {
-            text = "WFO Tracker Setup"
+            text = "OfficePace Setup"
             textSize = 24f
             setTypeface(null, Typeface.BOLD)
             setTextColor(cTextPrimary())
         }
         val subtitle = TextView(this).apply {
-            text = "Personalize your profile, enable background permissions, and configure Wi-Fi or location tracking."
+            text = "Complete permissions first, add your profile and name, then configure Wi-Fi, monthly policy, and backup."
             textSize = 13f
             setTextColor(cTextSecondary())
             setPadding(0, 6, 0, 18)
@@ -1172,8 +1172,55 @@ class MainActivity : AppCompatActivity() {
         root.addView(title)
         root.addView(subtitle)
 
+        // Card 1: Permissions & Background Readiness First
+        val permCard = makeCardContainer()
+        permCard.addView(makeSectionTitle("1. Permissions & Background Readiness"))
+        addSpacer(permCard, 12)
+
+        setupPermStatusView = TextView(this).apply { textSize = 13f; setPadding(0, 0, 0, 6) }
+        val btnGrantPerm = makePillButton("Allow Location & Notifications", "#4F46E5", "#FFFFFF") {
+            requestForegroundAndNotifPermissions()
+        }
+        permCard.addView(setupPermStatusView)
+        permCard.addView(btnGrantPerm)
+        addSpacer(permCard, 14)
+
+        setupBgLocStatusView = TextView(this).apply { textSize = 13f; setPadding(0, 0, 0, 6) }
+        val btnBgLoc = makePillButton("Set Location: \"Allow all the time\"", "#4F46E5", "#FFFFFF") {
+            requestBackgroundLocation()
+        }
+        permCard.addView(setupBgLocStatusView)
+        permCard.addView(btnBgLoc)
+        addSpacer(permCard, 14)
+
+        setupGpsStatusView = TextView(this).apply { textSize = 13f; setPadding(0, 0, 0, 6) }
+        val btnGps = makePillButton("Turn ON Phone Location (GPS)", "#0284C7", "#FFFFFF") {
+            startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+        }
+        permCard.addView(setupGpsStatusView)
+        permCard.addView(btnGps)
+        addSpacer(permCard, 14)
+
+        setupExactAlarmStatusView = TextView(this).apply { textSize = 13f; setPadding(0, 0, 0, 6) }
+        val btnExactAlarm = makePillButton("Check / Enable Exact Alarms", "#0284C7", "#FFFFFF") {
+            openExactAlarmSettings()
+        }
+        permCard.addView(setupExactAlarmStatusView)
+        permCard.addView(btnExactAlarm)
+        addSpacer(permCard, 14)
+
+        setupBatteryStatusView = TextView(this).apply { textSize = 13f; setPadding(0, 0, 0, 6) }
+        val btnBattery = makePillButton("Allow Unrestricted Battery", "#0284C7", "#FFFFFF") {
+            requestUnrestrictedBattery()
+        }
+        permCard.addView(setupBatteryStatusView)
+        permCard.addView(btnBattery)
+        root.addView(permCard)
+        addSpacer(root, 16)
+
+        // Card 2: Profile Photo, Name & Privacy
         val profileCard = makeCardContainer()
-        profileCard.addView(makeSectionTitle("1. Personal Profile & Privacy"))
+        profileCard.addView(makeSectionTitle("2. Profile Photo, Name & Privacy"))
         addSpacer(profileCard, 14)
 
         val avatarRow = LinearLayout(this).apply {
@@ -1236,51 +1283,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(profileCard)
         addSpacer(root, 16)
 
-        val permCard = makeCardContainer()
-        permCard.addView(makeSectionTitle("2. Required System Permissions & Alarms"))
-        addSpacer(permCard, 12)
-
-        setupPermStatusView = TextView(this).apply { textSize = 13f; setPadding(0, 0, 0, 6) }
-        val btnGrantPerm = makePillButton("Allow Location & Notifications", "#4F46E5", "#FFFFFF") {
-            requestForegroundAndNotifPermissions()
-        }
-        permCard.addView(setupPermStatusView)
-        permCard.addView(btnGrantPerm)
-        addSpacer(permCard, 14)
-
-        setupBgLocStatusView = TextView(this).apply { textSize = 13f; setPadding(0, 0, 0, 6) }
-        val btnBgLoc = makePillButton("Set Location: \"Allow all the time\"", "#4F46E5", "#FFFFFF") {
-            requestBackgroundLocation()
-        }
-        permCard.addView(setupBgLocStatusView)
-        permCard.addView(btnBgLoc)
-        addSpacer(permCard, 14)
-
-        setupGpsStatusView = TextView(this).apply { textSize = 13f; setPadding(0, 0, 0, 6) }
-        val btnGps = makePillButton("Turn ON Phone Location (GPS)", "#0284C7", "#FFFFFF") {
-            startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
-        }
-        permCard.addView(setupGpsStatusView)
-        permCard.addView(btnGps)
-        addSpacer(permCard, 14)
-
-        setupExactAlarmStatusView = TextView(this).apply { textSize = 13f; setPadding(0, 0, 0, 6) }
-        val btnExactAlarm = makePillButton("Check / Enable Exact Alarms", "#0284C7", "#FFFFFF") {
-            openExactAlarmSettings()
-        }
-        permCard.addView(setupExactAlarmStatusView)
-        permCard.addView(btnExactAlarm)
-        addSpacer(permCard, 14)
-
-        setupBatteryStatusView = TextView(this).apply { textSize = 13f; setPadding(0, 0, 0, 6) }
-        val btnBattery = makePillButton("Allow Unrestricted Battery", "#0284C7", "#FFFFFF") {
-            requestUnrestrictedBattery()
-        }
-        permCard.addView(setupBatteryStatusView)
-        permCard.addView(btnBattery)
-        root.addView(permCard)
-        addSpacer(root, 16)
-
+        // Card 3: Office Wi-Fi & Geofence Location
         val trackingCard = makeCardContainer()
         trackingCard.addView(makeSectionTitle("3. Office Wi-Fi & Geofence Location"))
         setupLiveWifiView = TextView(this).apply {
@@ -1329,8 +1332,9 @@ class MainActivity : AppCompatActivity() {
         root.addView(trackingCard)
         addSpacer(root, 16)
 
+        // Card 4: Monthly Policy & Alert Settings
         val policyCard = makeCardContainer()
-        policyCard.addView(makeSectionTitle("4. Policy Rules & Notification Options"))
+        policyCard.addView(makeSectionTitle("4. Monthly Policy & Alert Settings"))
 
         val pctRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1435,6 +1439,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(policyCard)
         addSpacer(root, 16)
 
+        // Card 5: Auto-Backup Folder & Finish
         val backupSetupCard = makeCardContainer()
         backupSetupCard.addView(makeSectionTitle("5. Auto-Backup Folder (Local or Drive)"))
         setupBackupFolderStatusView = TextView(this).apply {
@@ -2096,7 +2101,7 @@ class MainActivity : AppCompatActivity() {
         val copySnapshotBtn = makePillButton("📎 Copy Audit Snapshot", "#0284C7", "#FFFFFF") {
             val snap = store.buildMonthlySummaryReport(selectedMonth)
             val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            cm.setPrimaryClip(ClipData.newPlainText("WFO Audit Snapshot", snap))
+            cm.setPrimaryClip(ClipData.newPlainText("OfficePace Audit Snapshot", snap))
             showStatusPopup(true, "Audit snapshot copied to clipboard")
         }
         root.addView(copySnapshotBtn)
@@ -2106,7 +2111,7 @@ class MainActivity : AppCompatActivity() {
             val report = store.buildMonthlySummaryReport(selectedMonth)
             val intent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
-                putExtra(Intent.EXTRA_SUBJECT, "WFO Attendance Summary - $selectedMonth")
+                putExtra(Intent.EXTRA_SUBJECT, "OfficePace Attendance Summary - $selectedMonth")
                 putExtra(Intent.EXTRA_TEXT, report)
             }
             startActivity(Intent.createChooser(intent, "Share Monthly Summary"))
@@ -2118,7 +2123,7 @@ class MainActivity : AppCompatActivity() {
             val report = store.buildAnnualSummaryReport(selectedMonth.year)
             val intent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
-                putExtra(Intent.EXTRA_SUBJECT, "WFO Annual Summary - ${selectedMonth.year}")
+                putExtra(Intent.EXTRA_SUBJECT, "OfficePace Annual Summary - ${selectedMonth.year}")
                 putExtra(Intent.EXTRA_TEXT, report)
             }
             startActivity(Intent.createChooser(intent, "Share Annual Summary"))
@@ -2490,7 +2495,7 @@ class MainActivity : AppCompatActivity() {
                 "• Notifications & Exact Alarms: Ensures check-in, disconnect, and reminder alerts arrive on time.\n" +
                 "• Unrestricted Battery: Prevents Android from sleeping the background monitor.",
             "4. Backup, Restore & Safe Reinstalls" to
-                "• Link an Auto-Backup Folder in Settings so the app maintains wfo_attendance_autobackup.csv (including date, type, source, first_seen, last_seen, duration_hours, auto_logged, and note).\n" +
+                "• Link an Auto-Backup Folder in Settings so OfficePace maintains wfo_attendance_autobackup.csv (including date, type, source, first_seen, last_seen, duration_hours, auto_logged, and note).\n" +
                 "• Before reinstalling or switching phones, verify your backup folder has the latest CSV, or use Save CSV / Restore CSV anytime."
         )
 
@@ -2513,7 +2518,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         AlertDialog.Builder(this)
-            .setTitle("📖 WFO Tracker Guide")
+            .setTitle("📖 OfficePace Guide")
             .setView(scrollView)
             .setPositiveButton("Got It", null)
             .show()
@@ -3779,7 +3784,7 @@ class MainActivity : AppCompatActivity() {
         canvas.drawOval(rectF, paint)
 
         val name = store.getUserName()
-        val initial = if (name.isNotEmpty()) name.first().uppercaseChar().toString() else "W"
+        val initial = if (name.isNotEmpty()) name.first().uppercaseChar().toString() else "O"
         val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             textSize = 68f
@@ -3867,7 +3872,7 @@ class MainActivity : AppCompatActivity() {
         val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "text/csv"
-            putExtra(Intent.EXTRA_TITLE, "wfo_attendance_backup.csv")
+            putExtra(Intent.EXTRA_TITLE, "officepace_attendance_backup.csv")
         }
         launchSystemIntentForResult(intent, REQ_EXPORT_CSV)
     }
@@ -3980,7 +3985,7 @@ class MainActivity : AppCompatActivity() {
         val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         val raw = wifiManager.connectionInfo?.ssid ?: ""
         if (raw.isEmpty() || raw == "<unknown ssid>") return ""
-        return raw.removePrefix("\"").removeSuffix("\"")
+        return sanitizeImportedText(raw.removePrefix("\"").removeSuffix("\""))
     }
 
     // ==================== 7. THEME & COMPONENT STYLING ====================
@@ -3992,7 +3997,7 @@ class MainActivity : AppCompatActivity() {
     private fun cTextPrimary(): Int = Color.parseColor(if (isDark) "#F8FAFC" else "#0F172A")
     private fun cTextSecondary(): Int = Color.parseColor(if (isDark) "#94A3B8" else "#64748B")
 
-        private fun makePersonalFooterView(): TextView {
+    private fun makePersonalFooterView(): TextView {
         return TextView(this).apply {
             text = "Developed by Eleazer Patil • Local-First, Privacy-Focused"
             textSize = 11f
