@@ -33,7 +33,6 @@ import java.time.LocalTime
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
 
 class WifiMonitorService : Service() {
 
@@ -563,6 +562,7 @@ class ReminderReceiver : BroadcastReceiver() {
             if (store.isMorningNudgeEnabled() &&
                 isWeekday &&
                 todayType == DayType.NONE &&
+                !store.wasConnectedToOfficeWifi() &&
                 !now.isBefore(LocalTime.of(8, 30)) &&
                 now.isBefore(LocalTime.of(10, 30))
             ) {
@@ -619,7 +619,7 @@ class ReminderReceiver : BroadcastReceiver() {
                 )
             }
 
-            // 4. Night-Before Prep, Month-End Recovery & Quarter-End Pace Alert (20:00 - 22:00)
+            // 4. Night-Before Prep & Monthly End-of-Month Recovery Alert (20:00 - 22:00)
             val tomorrow = today.plusDays(1)
             if (store.isPlannedRemindersEnabled() &&
                 store.getDayType(tomorrow) == DayType.PLANNED &&
@@ -651,28 +651,8 @@ class ReminderReceiver : BroadcastReceiver() {
                     sendAlertNotification(
                         context,
                         "📌 ${mStats.monthLabel} Recovery Needed",
-                        "Need ${mStats.remainingDays} more office day(s). Suggested dates: $datesText."
+                        "Need ${mStats.remainingDays} more office day(s) before month-end. Suggested dates: $datesText."
                     )
-                }
-            }
-
-            if (store.isQuarterPaceAlertEnabled() && !now.isBefore(LocalTime.of(20, 0)) && now.isBefore(LocalTime.of(22, 0))) {
-                val qIndex = (today.monthValue - 1) / 3
-                val qEndMonth = YearMonth.of(today.year, qIndex * 3 + 3)
-                val qEndDate = qEndMonth.atEndOfMonth()
-                val daysToQEnd = ChronoUnit.DAYS.between(today, qEndDate)
-                if (daysToQEnd in 1..21) {
-                    val qStats = store.getQuarterStats(YearMonth.from(today), today)
-                    val qRemaining = maxOf(0, qStats.requiredDays - qStats.attendedDays)
-                    if (qRemaining > 0 &&
-                        store.claimOnceFlag("notif_qend_${today.year}_Q${qIndex + 1}_$today")
-                    ) {
-                        sendAlertNotification(
-                            context,
-                            "📊 ${qStats.quarterLabel} Pace Alert",
-                            "Only $daysToQEnd day(s) left in the quarter — you need $qRemaining more office day(s) (${qStats.attendedDays}/${qStats.requiredDays})."
-                        )
-                    }
                 }
             }
 
