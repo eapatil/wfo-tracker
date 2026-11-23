@@ -2490,7 +2490,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 10, 0, 0)
         }
 
-        val clearUpcomingBtn = makeSmallChipButton("Clear Upcoming").apply {
+        val clearUpcomingBtn = makeSmallChipButton("Clear Upcoming") {}.apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
