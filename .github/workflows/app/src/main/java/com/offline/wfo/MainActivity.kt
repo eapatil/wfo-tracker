@@ -98,10 +98,21 @@ class MainActivity : AppCompatActivity() {
 
         private const val CHANNEL_ALERTS_ID = "wfo_live_alerts_channel"
         private const val NOTIF_STATUS_PING_ID = 9042
+
+        private const val THEME_PREFS_NAME = "officepace_ui_prefs"
+        private const val KEY_THEME_MODE = "app_theme_mode"
+        private const val STATE_SELECTED_MONTH = "state_selected_month"
+        private const val STATE_ACTIVE_TAB = "state_active_tab"
+        private const val STATE_EDIT_UNLOCKED = "state_edit_unlocked"
+        private const val STATE_APP_AUTH = "state_app_auth"
+        private const val STATE_LOG_EXPANDED = "state_log_expanded"
+        private const val STATE_NOTIF_EXPANDED = "state_notif_expanded"
+        private const val STATE_HOL_EXPANDED = "state_hol_expanded"
     }
 
     private enum class ActiveTab { HOME, ANALYTICS, SETTINGS }
     private enum class LogFilter { ALL, OFFICE, PLANNED, LEAVE_HOLIDAY }
+    private enum class ThemeChoice { SYSTEM, LIGHT, DARK }
 
     private lateinit var store: AttendanceStore
     private var selectedMonth: YearMonth = YearMonth.now()
@@ -198,9 +209,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var circularRingView: CircularProgressRingView
     private lateinit var heroSubView: TextView
     private lateinit var heroProjectedView: TextView
-    private lateinit var kpiWorkingView: TextView
-    private lateinit var kpiRemainingView: TextView
-    private lateinit var kpiBufferView: TextView
+    private lateinit var kpiWorkingNumView: TextView
+    private lateinit var kpiRemainingNumView: TextView
+    private lateinit var kpiBufferNumView: TextView
     private lateinit var autoPlanBtn: TextView
     private lateinit var modeOfficeBtn: TextView
     private lateinit var modePlannedBtn: TextView
@@ -228,6 +239,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var simResultView: TextView
 
     // Tab 3: Settings & Data Views
+    private lateinit var themeSystemBtn: TextView
+    private lateinit var themeLightBtn: TextView
+    private lateinit var themeDarkBtn: TextView
     private lateinit var modeWifiOnlyBtn: TextView
     private lateinit var modeLocOnlyBtn: TextView
     private lateinit var modeBothBtn: TextView
@@ -267,16 +281,66 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun getThemeChoice(): ThemeChoice {
+        val raw = getSharedPreferences(THEME_PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_THEME_MODE, ThemeChoice.SYSTEM.name) ?: ThemeChoice.SYSTEM.name
+        return runCatching { ThemeChoice.valueOf(raw) }.getOrDefault(ThemeChoice.SYSTEM)
+    }
+
+    private fun setThemeChoiceAndApply(choice: ThemeChoice) {
+        if (getThemeChoice() == choice) return
+        getSharedPreferences(THEME_PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_THEME_MODE, choice.name)
+            .apply()
+        recreate()
+    }
+
+    private fun resolveIsDarkMode(): Boolean {
+        return when (getThemeChoice()) {
+            ThemeChoice.LIGHT -> false
+            ThemeChoice.DARK -> true
+            ThemeChoice.SYSTEM ->
+                (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                    Configuration.UI_MODE_NIGHT_YES
+        }
+    }
+
     private fun showStatusPopup(success: Boolean, message: String) {
         val prefix = if (success) "✅ Success: " else "❌ Failed: "
         Toast.makeText(this, "$prefix$message", Toast.LENGTH_LONG).show()
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(STATE_SELECTED_MONTH, selectedMonth.toString())
+        outState.putString(STATE_ACTIVE_TAB, activeTab.name)
+        outState.putBoolean(STATE_EDIT_UNLOCKED, isEditUnlocked)
+        outState.putBoolean(STATE_APP_AUTH, isAppAuthenticated)
+        outState.putBoolean(STATE_LOG_EXPANDED, isMonthlyLogExpanded)
+        outState.putBoolean(STATE_NOTIF_EXPANDED, isNotificationsSectionExpanded)
+        outState.putBoolean(STATE_HOL_EXPANDED, isUpcomingHolidaysSectionExpanded)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = AttendanceStore(this)
-        isDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
-            Configuration.UI_MODE_NIGHT_YES
+
+        if (savedInstanceState != null) {
+            savedInstanceState.getString(STATE_SELECTED_MONTH)?.let { ymStr ->
+                runCatching { YearMonth.parse(ymStr) }.getOrNull()?.let { selectedMonth = it }
+            }
+            savedInstanceState.getString(STATE_ACTIVE_TAB)?.let { tabStr ->
+                runCatching { ActiveTab.valueOf(tabStr) }.getOrNull()?.let { activeTab = it }
+            }
+            isEditUnlocked = savedInstanceState.getBoolean(STATE_EDIT_UNLOCKED, false)
+            isAppAuthenticated = savedInstanceState.getBoolean(STATE_APP_AUTH, false)
+            isMonthlyLogExpanded = savedInstanceState.getBoolean(STATE_LOG_EXPANDED, false)
+            isNotificationsSectionExpanded = savedInstanceState.getBoolean(STATE_NOTIF_EXPANDED, false)
+            isUpcomingHolidaysSectionExpanded = savedInstanceState.getBoolean(STATE_HOL_EXPANDED, false)
+        }
+
+        isDark = resolveIsDarkMode()
         ensureAlertNotificationChannel()
 
         val frameRoot = FrameLayout(this).apply {
@@ -309,10 +373,10 @@ class MainActivity : AppCompatActivity() {
                 showAppLockScreen()
                 promptDeviceCredential(REQ_UNLOCK_APP, "Unlock OfficePace")
             } else {
-                showDashboardMode(playEntrance = true)
+                showDashboardMode(playEntrance = savedInstanceState == null)
             }
         }
-        refreshAllViews(animateCharts = true)
+        refreshAllViews(animateCharts = savedInstanceState == null)
     }
 
     override fun onResume() {
@@ -340,7 +404,7 @@ class MainActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         stopAllLoopingAnimations()
-        if (store.isSetupComplete() && !isAwaitingSystemIntent) {
+        if (store.isSetupComplete() && !isAwaitingSystemIntent && !isChangingConfigurations) {
             isEditUnlocked = false
             if (store.isFullAppLockEnabled()) {
                 isAppAuthenticated = false
@@ -626,8 +690,8 @@ class MainActivity : AppCompatActivity() {
         }
         liveStripPulseAnimator = ObjectAnimator.ofPropertyValuesHolder(
             todayLiveStripView,
-            PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.02f, 1f),
-            PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.04f, 1f)
+            PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 1.015f, 1f),
+            PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 1.03f, 1f)
         ).apply {
             duration = 1800L
             repeatCount = ValueAnimator.INFINITE
@@ -642,6 +706,19 @@ class MainActivity : AppCompatActivity() {
         if (::todayLiveStripView.isInitialized) {
             todayLiveStripView.scaleX = 1f
             todayLiveStripView.scaleY = 1f
+        }
+    }
+
+    private fun shakeLockHint() {
+        if (!::lockToggleBtn.isInitialized) return
+        lockToggleBtn.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        ObjectAnimator.ofFloat(
+            lockToggleBtn,
+            View.TRANSLATION_X,
+            0f, -12f, 12f, -8f, 8f, -4f, 4f, 0f
+        ).apply {
+            duration = 360L
+            start()
         }
     }
 
@@ -863,22 +940,6 @@ class MainActivity : AppCompatActivity() {
                 .setInterpolator(OvershootInterpolator(0.85f))
                 .start()
         }
-
-        listOfNotNull(
-            if (::kpiWorkingView.isInitialized) kpiWorkingView else null,
-            if (::kpiRemainingView.isInitialized) kpiRemainingView else null,
-            if (::kpiBufferView.isInitialized) kpiBufferView else null
-        ).forEachIndexed { idx, kpi ->
-            kpi.scaleX = 0.85f
-            kpi.scaleY = 0.85f
-            kpi.animate()
-                .scaleX(1f)
-                .scaleY(1f)
-                .setStartDelay((180 + idx * 55).toLong())
-                .setDuration(280L)
-                .setInterpolator(OvershootInterpolator(1.1f))
-                .start()
-        }
     }
 
     private fun animateTabReveal(target: View) {
@@ -1010,6 +1071,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun ensureEditUnlocked(): Boolean {
         if (isEditUnlocked) return true
+        shakeLockHint()
         showStatusPopup(false, "Locked — Tap 🔒 at top to unlock edits")
         return false
     }
@@ -1147,7 +1209,7 @@ class MainActivity : AppCompatActivity() {
             topStatusLine.addView(lockStatusTitleView)
 
             lockStatusSummaryView = TextView(this@MainActivity).apply {
-                textSize = 12f
+                textSize = 12.5f
                 setTextColor(cTextSecondary())
                 setPadding(0, 8, 0, 0)
             }
@@ -1527,16 +1589,16 @@ class MainActivity : AppCompatActivity() {
 
         topHeaderBar = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(28, 18, 28, 10)
+            setPadding(28, 16, 28, 8)
         }
 
         val profileHeader = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 0, 0, 10)
+            setPadding(0, 0, 0, 8)
         }
         dashAvatarView = ImageView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(92, 92)
+            layoutParams = LinearLayout.LayoutParams(88, 88)
             scaleType = ImageView.ScaleType.CENTER_CROP
         }
         val greetingCol = LinearLayout(this).apply {
@@ -1593,10 +1655,10 @@ class MainActivity : AppCompatActivity() {
         topHeaderBar.addView(profileHeader)
 
         todayLiveStripView = TextView(this).apply {
-            textSize = 12.5f
+            textSize = 12f
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
-            setPadding(16, 12, 16, 12)
+            setPadding(16, 10, 16, 10)
         }
         topHeaderBar.addView(todayLiveStripView)
 
@@ -1669,8 +1731,9 @@ class MainActivity : AppCompatActivity() {
 
         val bottomNav = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
+            elevation = 8f
             background = roundedBox(cCardHex(), cBorder(), 0f, 1)
-            setPadding(16, 12, 16, 12)
+            setPadding(16, 10, 16, 10)
         }
         navHomeBtn = makeNavTabButton("📅 Home") { switchTab(ActiveTab.HOME) }
         navAnalyticsBtn = makeNavTabButton("📊 Analytics") { switchTab(ActiveTab.ANALYTICS) }
@@ -1700,7 +1763,7 @@ class MainActivity : AppCompatActivity() {
         val navRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 0, 0, 12)
+            setPadding(0, 0, 0, 10)
         }
         val prevBtn = makeSmallChipButton("◀") {
             selectedMonth = selectedMonth.minusMonths(1)
@@ -1731,10 +1794,10 @@ class MainActivity : AppCompatActivity() {
         navRow.addView(nextBtn)
         root.addView(navRow)
 
-        // Single Unified Briefing Card (combines Today Verdict, Monthly Pace, Weekly Quota & Recovery)
+        // Single Unified Briefing Card
         briefingCardView = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(22, 16, 22, 16)
+            setPadding(22, 14, 22, 14)
         }
         briefingHeadlineView = TextView(this).apply {
             textSize = 14f
@@ -1746,7 +1809,7 @@ class MainActivity : AppCompatActivity() {
             setLineSpacing(3f, 1.0f)
         }
         briefingWeeklyView = TextView(this).apply {
-            textSize = 12f
+            textSize = 12.5f
             setTypeface(null, Typeface.BOLD)
             setPadding(0, 6, 0, 0)
         }
@@ -1759,7 +1822,7 @@ class MainActivity : AppCompatActivity() {
         val divider = View(this).apply {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1)
             setBackgroundColor(Color.parseColor(cBorder()))
-            alpha = 0.45f
+            alpha = 0.55f
         }
         briefingCardView.addView(briefingHeadlineView)
         briefingCardView.addView(briefingSubView)
@@ -1767,14 +1830,14 @@ class MainActivity : AppCompatActivity() {
         briefingCardView.addView(briefingWeeklyView)
         briefingCardView.addView(briefingRecoveryView)
         root.addView(briefingCardView)
-        addSpacer(root, 14)
+        addSpacer(root, 12)
 
-        // Progress Ring & Key Monthly Numbers Card
+        // Progress Ring & Color-Coded KPI Summary Card
         heroCardContainer = makeCardContainer().apply {
-            setPadding(24, 18, 24, 18)
+            setPadding(24, 16, 24, 16)
         }
         circularRingView = CircularProgressRingView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(290, 290).apply {
+            layoutParams = LinearLayout.LayoutParams(280, 280).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
             }
         }
@@ -1785,9 +1848,9 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 6, 0, 4)
         }
         heroProjectedView = TextView(this).apply {
-            textSize = 12f
+            textSize = 12.5f
             setTypeface(null, Typeface.BOLD)
-            setTextColor(Color.parseColor("#4F46E5"))
+            setTextColor(Color.parseColor(if (isDark) "#A5B4FC" else "#4F46E5"))
             gravity = Gravity.CENTER
             setPadding(0, 0, 0, 10)
         }
@@ -1800,19 +1863,22 @@ class MainActivity : AppCompatActivity() {
             background = roundedBox(cInputBg(), cBorder(), 16f, 1)
             setPadding(12, 12, 12, 12)
         }
-        kpiWorkingView = makeKpiColumnView()
-        kpiRemainingView = makeKpiColumnView()
-        kpiBufferView = makeKpiColumnView()
-        kpiRow.addView(kpiWorkingView)
-        kpiRow.addView(kpiRemainingView)
-        kpiRow.addView(kpiBufferView)
+        val (colWorking, numWorking) = makeColorCodedKpiColumn("Working Days")
+        val (colRemaining, numRemaining) = makeColorCodedKpiColumn("Still Needed")
+        val (colBuffer, numBuffer) = makeColorCodedKpiColumn("WFH Buffer")
+        kpiWorkingNumView = numWorking
+        kpiRemainingNumView = numRemaining
+        kpiBufferNumView = numBuffer
+        kpiRow.addView(colWorking)
+        kpiRow.addView(colRemaining)
+        kpiRow.addView(colBuffer)
         heroCardContainer.addView(kpiRow)
         root.addView(heroCardContainer)
-        addSpacer(root, 14)
+        addSpacer(root, 12)
 
         // Calendar Card with Swipe Navigation & Mode Selector
         calendarCardContainer = makeCardContainer().apply {
-            setPadding(22, 18, 22, 18)
+            setPadding(22, 16, 22, 16)
         }
         val calHeaderRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1843,30 +1909,34 @@ class MainActivity : AppCompatActivity() {
             text = "Swipe left/right for months • Tap day to inspect or mark"
             textSize = 12f
             setTextColor(cTextSecondary())
-            setPadding(0, 4, 0, 12)
+            setPadding(0, 4, 0, 10)
         }
         calendarCardContainer.addView(calHint)
 
         val modeRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(0, 0, 0, 12)
+            setPadding(0, 0, 0, 10)
         }
         modeOfficeBtn = makeModeChip("🏢 Office") {
+            if (!ensureEditUnlocked()) return@makeModeChip
             activeTapMode = DayType.OFFICE
             animateCellPop(modeOfficeBtn)
             refreshAllViews(animateCharts = false)
         }
         modePlannedBtn = makeModeChip("📅 Plan") {
+            if (!ensureEditUnlocked()) return@makeModeChip
             activeTapMode = DayType.PLANNED
             animateCellPop(modePlannedBtn)
             refreshAllViews(animateCharts = false)
         }
         modeLeaveBtn = makeModeChip("🌴 Leave") {
+            if (!ensureEditUnlocked()) return@makeModeChip
             activeTapMode = DayType.LEAVE
             animateCellPop(modeLeaveBtn)
             refreshAllViews(animateCharts = false)
         }
         modeHolidayBtn = makeModeChip("🎉 Holiday") {
+            if (!ensureEditUnlocked()) return@makeModeChip
             activeTapMode = DayType.HOLIDAY
             animateCellPop(modeHolidayBtn)
             refreshAllViews(animateCharts = false)
@@ -1953,7 +2023,7 @@ class MainActivity : AppCompatActivity() {
         calendarCardContainer.addView(calendarContainer)
 
         val legendView = TextView(this).apply {
-            text = "🟢 Office   •   🔵 Dashed Planned   •   🟠 Leave   •   🟣 Holiday"
+            text = "🟢 Office  •  🔵 Planned  •  🟠 Leave  •  🟣 Holiday  •  Corner dot = Note"
             textSize = 11f
             setTextColor(cTextSecondary())
             gravity = Gravity.CENTER
@@ -1961,7 +2031,7 @@ class MainActivity : AppCompatActivity() {
         }
         calendarCardContainer.addView(legendView)
         root.addView(calendarCardContainer)
-        addSpacer(root, 14)
+        addSpacer(root, 12)
 
         // Collapsible Monthly Log Drawer
         val logCard = makeCardContainer().apply {
@@ -2058,7 +2128,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 4, 0, 4)
         }
         bufferTrajectoryView = TextView(this).apply {
-            textSize = 12f
+            textSize = 12.5f
             setTextColor(cTextSecondary())
         }
         trendCard.addView(runRateFollowThroughView)
@@ -2081,7 +2151,7 @@ class MainActivity : AppCompatActivity() {
         rhythmView = TextView(this).apply {
             textSize = 13f
             setTypeface(null, Typeface.BOLD)
-            setTextColor(Color.parseColor("#4F46E5"))
+            setTextColor(Color.parseColor(if (isDark) "#A5B4FC" else "#4F46E5"))
         }
         qtdCard.addView(qtdTitleView)
         qtdCard.addView(qtdDetailView)
@@ -2203,6 +2273,32 @@ class MainActivity : AppCompatActivity() {
             setPadding(28, 8, 28, 48)
         }
         scroll.addView(root)
+
+        // Appearance / Theme Card
+        val themeCard = makeCardContainer()
+        themeCard.addView(makeSectionTitle("Appearance & Theme"))
+        val themeSub = TextView(this).apply {
+            text = "Choose high-contrast Light, Dark, or match your phone system theme:"
+            textSize = 12f
+            setTextColor(cTextSecondary())
+            setPadding(0, 4, 0, 10)
+        }
+        themeCard.addView(themeSub)
+
+        val themeRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        themeSystemBtn = makeModeChip("🌗 System") { setThemeChoiceAndApply(ThemeChoice.SYSTEM) }
+        themeLightBtn = makeModeChip("☀️ Light") { setThemeChoiceAndApply(ThemeChoice.LIGHT) }
+        themeDarkBtn = makeModeChip("🌙 Dark") { setThemeChoiceAndApply(ThemeChoice.DARK) }
+        themeRow.addView(themeSystemBtn)
+        addHorizontalGap(themeRow, 6)
+        themeRow.addView(themeLightBtn)
+        addHorizontalGap(themeRow, 6)
+        themeRow.addView(themeDarkBtn)
+        themeCard.addView(themeRow)
+        root.addView(themeCard)
+        addSpacer(root, 16)
 
         val modeCard = makeCardContainer()
         modeCard.addView(makeSectionTitle("Tracking Mode"))
@@ -2914,15 +3010,8 @@ class MainActivity : AppCompatActivity() {
         val leaveCount = items.count { it.type == DayType.LEAVE }
 
         upcomingHolLeaveSummaryView.text = "🎉 $holCount Upcoming Holiday(s)   •   🌴 $leaveCount Upcoming Leave(s)"
-        upcomingHolLeaveSummaryView.setTextColor(
-            if (isDark) Color.parseColor("#E2E8F0") else Color.parseColor("#1E293B")
-        )
-        upcomingHolLeaveSummaryView.background = roundedBox(
-            if (isDark) "#0F172A" else "#F8FAFC",
-            cBorder(),
-            12f,
-            1
-        )
+        upcomingHolLeaveSummaryView.setTextColor(cTextPrimary())
+        upcomingHolLeaveSummaryView.background = roundedBox(cInputBg(), cBorder(), 12f, 1)
 
         upcomingHolLeaveListView.removeAllViews()
         if (items.isEmpty()) {
@@ -2998,6 +3087,7 @@ class MainActivity : AppCompatActivity() {
                 if (!view.isPressed) return@setOnCheckedChangeListener
                 if (!isEditUnlocked) {
                     isChecked = !checked
+                    shakeLockHint()
                     showStatusPopup(false, "Locked — Tap 🔒 at top to unlock edits")
                     return@setOnCheckedChangeListener
                 }
@@ -3357,6 +3447,11 @@ class MainActivity : AppCompatActivity() {
         val liveSsid = getConnectedWifiSsid()
         val targetPct = store.getTargetPercent()
         val mode = store.getTrackingMode()
+        val themeChoice = getThemeChoice()
+
+        if (::themeSystemBtn.isInitialized) styleModeChip(themeSystemBtn, themeChoice == ThemeChoice.SYSTEM, "#4F46E5")
+        if (::themeLightBtn.isInitialized) styleModeChip(themeLightBtn, themeChoice == ThemeChoice.LIGHT, "#0284C7")
+        if (::themeDarkBtn.isInitialized) styleModeChip(themeDarkBtn, themeChoice == ThemeChoice.DARK, "#334155")
 
         val avatarBmp = loadCircularAvatarBitmap()
         setupAvatarView.setImageBitmap(avatarBmp)
@@ -3455,13 +3550,13 @@ class MainActivity : AppCompatActivity() {
 
         lockToggleBtn.text = if (isEditUnlocked) "🔓 Unlocked" else "🔒 Locked"
         lockToggleBtn.background = roundedBox(
-            if (isEditUnlocked) "#D1FAE5" else cInputBg(),
+            if (isEditUnlocked) (if (isDark) "#064E3B" else "#D1FAE5") else cInputBg(),
             if (isEditUnlocked) "#10B981" else cBorder(),
             16f,
             2
         )
         lockToggleBtn.setTextColor(
-            if (isEditUnlocked) Color.parseColor("#065F46") else cTextPrimary()
+            if (isEditUnlocked) (if (isDark) Color.parseColor("#A7F3D0") else Color.parseColor("#065F46")) else cTextPrimary()
         )
 
         val today = LocalDate.now()
@@ -3481,8 +3576,13 @@ class MainActivity : AppCompatActivity() {
             isOnOfficePresence -> {
                 val srcTag = if (activeSource.isNotEmpty()) " ($activeSource)" else ""
                 todayLiveStripView.text = "🟢 Connected / At Office$srcTag"
-                todayLiveStripView.setTextColor(Color.parseColor("#065F46"))
-                todayLiveStripView.background = roundedBox("#D1FAE5", "#10B981", 16f, 2)
+                todayLiveStripView.setTextColor(if (isDark) Color.parseColor("#A7F3D0") else Color.parseColor("#065F46"))
+                todayLiveStripView.background = roundedBox(
+                    if (isDark) "#064E3B" else "#D1FAE5",
+                    "#10B981",
+                    16f,
+                    2
+                )
             }
             todayType == DayType.OFFICE -> {
                 todayLiveStripView.text = "✅ Office Day Logged Today"
@@ -3506,8 +3606,13 @@ class MainActivity : AppCompatActivity() {
             }
             todayType == DayType.LEAVE -> {
                 todayLiveStripView.text = "🌴 On Leave Today"
-                todayLiveStripView.setTextColor(Color.parseColor("#92400E"))
-                todayLiveStripView.background = roundedBox("#FEF3C7", "#F59E0B", 16f, 1)
+                todayLiveStripView.setTextColor(if (isDark) Color.parseColor("#FDE68A") else Color.parseColor("#92400E"))
+                todayLiveStripView.background = roundedBox(
+                    if (isDark) "#451A03" else "#FEF3C7",
+                    "#F59E0B",
+                    16f,
+                    1
+                )
             }
             todayType == DayType.HOLIDAY -> {
                 todayLiveStripView.text = "🎉 Company Holiday Today"
@@ -3560,7 +3665,7 @@ class MainActivity : AppCompatActivity() {
                 cardFillHex = if (isDark) "#1E293B" else "#FFFBEB"
                 cardStrokeHex = if (isDark) "#475569" else "#FCD34D"
                 headlineColor = if (isDark) Color.parseColor("#FDE68A") else Color.parseColor("#92400E")
-                subColor = if (isDark) Color.parseColor("#CBD5E1") else Color.parseColor("#78350F")
+                subColor = if (isDark) Color.parseColor("#E2E8F0") else Color.parseColor("#78350F")
             }
         }
 
@@ -3617,9 +3722,24 @@ class MainActivity : AppCompatActivity() {
             heroProjectedView.visibility = View.GONE
         }
 
-        kpiWorkingView.text = "${s.effectiveWorkingDays}\nWorking Days"
-        kpiRemainingView.text = "${s.remainingDays}\nStill Needed"
-        kpiBufferView.text = "${maxOf(0, s.bufferDays)}\nWFH Buffer"
+        kpiWorkingNumView.text = "${s.effectiveWorkingDays}"
+        kpiWorkingNumView.setTextColor(cTextPrimary())
+
+        kpiRemainingNumView.text = "${s.remainingDays}"
+        kpiRemainingNumView.setTextColor(
+            if (s.remainingDays == 0) Color.parseColor("#10B981")
+            else Color.parseColor(if (isDark) "#A5B4FC" else "#4F46E5")
+        )
+
+        val safeBuffer = maxOf(0, s.bufferDays)
+        kpiBufferNumView.text = "$safeBuffer"
+        kpiBufferNumView.setTextColor(
+            when {
+                s.remainingDays == 0 || safeBuffer >= 2 -> Color.parseColor("#10B981")
+                safeBuffer == 1 -> Color.parseColor("#F59E0B")
+                else -> Color.parseColor("#EF4444")
+            }
+        )
 
         styleModeChip(modeOfficeBtn, activeTapMode == DayType.OFFICE, "#10B981")
         styleModeChip(modePlannedBtn, activeTapMode == DayType.PLANNED, "#4F46E5")
@@ -3645,10 +3765,14 @@ class MainActivity : AppCompatActivity() {
                 LogFilter.LEAVE_HOLIDAY -> log.type == DayType.LEAVE || log.type == DayType.HOLIDAY
             }
         }
-        auditLogView.text = if (filteredLogs.isEmpty()) {
-            "No matching entries in ${s.monthLabel}."
+        if (filteredLogs.isEmpty()) {
+            auditLogView.gravity = Gravity.CENTER
+            auditLogView.setTextColor(cTextSecondary())
+            auditLogView.text = "📭 No matching entries in ${s.monthLabel}.\nTap ✨ Auto-Plan above or unlock 🔒 to log days."
         } else {
-            filteredLogs.joinToString("\n") { log ->
+            auditLogView.gravity = Gravity.START
+            auditLogView.setTextColor(cTextPrimary())
+            auditLogView.text = filteredLogs.joinToString("\n") { log ->
                 val icon = when (log.type) {
                     DayType.OFFICE -> "🏢"
                     DayType.PLANNED -> "📅"
@@ -3852,15 +3976,13 @@ class MainActivity : AppCompatActivity() {
                 setPadding(0, 3, 0, 3)
             }
             for (col in 0..6) {
-                val cell = TextView(this).apply {
-                    gravity = Gravity.CENTER
-                    textSize = 13f
+                val cellWrapper = FrameLayout(this).apply {
                     layoutParams = LinearLayout.LayoutParams(0, 88, 1f).apply {
                         setMargins(4, 0, 4, 0)
                     }
                 }
                 if ((currentDay == 1 && col < firstDayOffset) || currentDay > daysInMonth) {
-                    cell.text = ""
+                    // Empty placeholder cell
                 } else {
                     val date = ym.atDay(currentDay)
                     val dateStr = date.toString()
@@ -3869,17 +3991,26 @@ class MainActivity : AppCompatActivity() {
                     val isToday = date == today
                     val hasNote = store.getDayNote(dateStr).isNotEmpty()
 
-                    cell.text = if (hasNote) "$currentDay•" else currentDay.toString()
+                    val dayNumTv = TextView(this).apply {
+                        text = currentDay.toString()
+                        gravity = Gravity.CENTER
+                        textSize = 13f
+                        layoutParams = FrameLayout.LayoutParams(
+                            FrameLayout.LayoutParams.MATCH_PARENT,
+                            FrameLayout.LayoutParams.MATCH_PARENT
+                        )
+                    }
+
                     when (dtype) {
                         DayType.OFFICE -> {
-                            cell.setTextColor(Color.WHITE)
-                            cell.setTypeface(null, Typeface.BOLD)
-                            cell.background = roundedBox("#10B981", if (isToday) "#2563EB" else "#059669", 16f, if (isToday) 6 else 2)
+                            dayNumTv.setTextColor(Color.WHITE)
+                            dayNumTv.setTypeface(null, Typeface.BOLD)
+                            cellWrapper.background = roundedBox("#10B981", if (isToday) "#2563EB" else "#059669", 16f, if (isToday) 6 else 2)
                         }
                         DayType.PLANNED -> {
-                            cell.setTextColor(if (isDark) Color.parseColor("#C7D2FE") else Color.parseColor("#3730A3"))
-                            cell.setTypeface(null, Typeface.BOLD)
-                            cell.background = dashedBox(
+                            dayNumTv.setTextColor(if (isDark) Color.parseColor("#C7D2FE") else Color.parseColor("#3730A3"))
+                            dayNumTv.setTypeface(null, Typeface.BOLD)
+                            cellWrapper.background = dashedBox(
                                 if (isDark) "#1E1B4B" else "#EEF2FF",
                                 if (isToday) "#2563EB" else "#6366F1",
                                 16f,
@@ -3887,23 +4018,24 @@ class MainActivity : AppCompatActivity() {
                             )
                         }
                         DayType.LEAVE -> {
-                            cell.setTextColor(Color.WHITE)
-                            cell.setTypeface(null, Typeface.BOLD)
-                            cell.background = roundedBox("#F59E0B", if (isToday) "#2563EB" else "#D97706", 16f, if (isToday) 6 else 2)
+                            dayNumTv.setTextColor(Color.WHITE)
+                            dayNumTv.setTypeface(null, Typeface.BOLD)
+                            cellWrapper.background = roundedBox("#F59E0B", if (isToday) "#2563EB" else "#D97706", 16f, if (isToday) 6 else 2)
                         }
                         DayType.HOLIDAY -> {
-                            cell.setTextColor(Color.WHITE)
-                            cell.setTypeface(null, Typeface.BOLD)
-                            cell.background = roundedBox("#8B5CF6", if (isToday) "#2563EB" else "#7C3AED", 16f, if (isToday) 6 else 2)
+                            dayNumTv.setTextColor(Color.WHITE)
+                            dayNumTv.setTypeface(null, Typeface.BOLD)
+                            cellWrapper.background = roundedBox("#8B5CF6", if (isToday) "#2563EB" else "#7C3AED", 16f, if (isToday) 6 else 2)
                         }
                         DayType.NONE -> {
                             if (isWeekend) {
-                                cell.setTextColor(cTextSecondary())
-                                cell.background = roundedBox(cInputBg(), if (isToday) "#2563EB" else cBorder(), 16f, if (isToday) 5 else 1)
+                                dayNumTv.setTextColor(cTextSecondary())
+                                cellWrapper.alpha = 0.72f
+                                cellWrapper.background = roundedBox(cInputBg(), if (isToday) "#2563EB" else cBorder(), 16f, if (isToday) 5 else 1)
                             } else {
-                                cell.setTextColor(cTextPrimary())
-                                cell.background = roundedBox(
-                                    if (isDark) "#334155" else "#E2E8F0",
+                                dayNumTv.setTextColor(cTextPrimary())
+                                cellWrapper.background = roundedBox(
+                                    if (isDark) "#2A3649" else "#E2E8F0",
                                     if (isToday) "#2563EB" else cBorder(),
                                     16f,
                                     if (isToday) 6 else 1
@@ -3912,7 +4044,33 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
 
-                    cell.setOnClickListener { view ->
+                    cellWrapper.addView(dayNumTv)
+
+                    if (hasNote) {
+                        val noteDot = View(this).apply {
+                            layoutParams = FrameLayout.LayoutParams(10, 10).apply {
+                                gravity = Gravity.TOP or Gravity.END
+                                setMargins(0, 10, 10, 0)
+                            }
+                            val dotHex = if (dtype == DayType.NONE || dtype == DayType.PLANNED) "#4F46E5" else "#FFFFFF"
+                            background = roundedBox(dotHex, dotHex, 999f, 0)
+                        }
+                        cellWrapper.addView(noteDot)
+                    }
+
+                    if (isToday) {
+                        val todayBar = View(this).apply {
+                            layoutParams = FrameLayout.LayoutParams(24, 5).apply {
+                                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                                setMargins(0, 0, 0, 9)
+                            }
+                            val barHex = if (dtype == DayType.NONE || dtype == DayType.PLANNED) "#2563EB" else "#FFFFFF"
+                            background = roundedBox(barHex, barHex, 999f, 0)
+                        }
+                        cellWrapper.addView(todayBar)
+                    }
+
+                    cellWrapper.setOnClickListener { view ->
                         if (!isEditUnlocked) {
                             showDayInspectorDialog(date)
                             return@setOnClickListener
@@ -3930,14 +4088,14 @@ class MainActivity : AppCompatActivity() {
                         showStatusPopup(true, msg)
                     }
 
-                    cell.setOnLongClickListener { view ->
+                    cellWrapper.setOnLongClickListener { view ->
                         view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                         showDayInspectorDialog(date)
                         true
                     }
                     currentDay++
                 }
-                weekRow.addView(cell)
+                weekRow.addView(cellWrapper)
             }
             calendarContainer.addView(weekRow)
         }
@@ -4339,12 +4497,12 @@ class MainActivity : AppCompatActivity() {
 
     // ==================== 7. THEME & COMPONENT STYLING ====================
 
-    private fun cBg(): Int = Color.parseColor(if (isDark) "#0F172A" else "#F1F5F9")
-    private fun cCardHex(): String = if (isDark) "#1E293B" else "#FFFFFF"
+    private fun cBg(): Int = Color.parseColor(if (isDark) "#0B1120" else "#F1F5F9")
+    private fun cCardHex(): String = if (isDark) "#162032" else "#FFFFFF"
     private fun cInputBg(): String = if (isDark) "#0F172A" else "#F8FAFC"
-    private fun cBorder(): String = if (isDark) "#2E3D52" else "#CBD5E1"
+    private fun cBorder(): String = if (isDark) "#2A3950" else "#CBD5E1"
     private fun cTextPrimary(): Int = Color.parseColor(if (isDark) "#F8FAFC" else "#0F172A")
-    private fun cTextSecondary(): Int = Color.parseColor(if (isDark) "#94A3B8" else "#64748B")
+    private fun cTextSecondary(): Int = Color.parseColor(if (isDark) "#CBD5E1" else "#475569")
 
     private fun makePersonalFooterView(): TextView {
         return TextView(this).apply {
@@ -4420,7 +4578,7 @@ class MainActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             isClickable = true
             isFocusable = true
-            setPadding(12, 18, 12, 18)
+            setPadding(12, 16, 12, 16)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             setOnClickListener { onClick() }
         }
@@ -4428,8 +4586,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun styleNavTab(btn: TextView, selected: Boolean) {
         if (selected) {
-            btn.setTextColor(Color.WHITE)
-            btn.background = roundedBox("#4F46E5", "#4F46E5", 16f, 0)
+            btn.setTextColor(if (isDark) Color.parseColor("#E0E7FF") else Color.parseColor("#3730A3"))
+            btn.background = roundedBox(
+                if (isDark) "#312E81" else "#EEF2FF",
+                if (isDark) "#6366F1" else "#818CF8",
+                16f,
+                2
+            )
         } else {
             btn.setTextColor(cTextSecondary())
             btn.background = roundedBox(cInputBg(), cBorder(), 16f, 1)
@@ -4460,15 +4623,29 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun makeKpiColumnView(): TextView {
-        return TextView(this).apply {
-            textSize = 13f
+    private fun makeColorCodedKpiColumn(caption: String): Pair<LinearLayout, TextView> {
+        val col = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val numTv = TextView(this).apply {
+            textSize = 18f
             setTypeface(null, Typeface.BOLD)
             setTextColor(cTextPrimary())
             gravity = Gravity.CENTER
-            setLineSpacing(5f, 1.0f)
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
+        val labelTv = TextView(this).apply {
+            text = caption
+            textSize = 11.5f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(cTextSecondary())
+            gravity = Gravity.CENTER
+            setPadding(0, 2, 0, 0)
+        }
+        col.addView(numTv)
+        col.addView(labelTv)
+        return col to numTv
     }
 
     private fun roundedBox(
@@ -4534,14 +4711,17 @@ class MainActivity : AppCompatActivity() {
             strokeWidth = 26f
             strokeCap = Paint.Cap.ROUND
         }
+        private val goalMarkerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+        }
         private val mainTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             textAlign = Paint.Align.CENTER
             typeface = Typeface.DEFAULT_BOLD
-            textSize = 54f
+            textSize = 52f
         }
         private val subTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             textAlign = Paint.Align.CENTER
-            textSize = 28f
+            textSize = 27f
         }
 
         fun setData(
@@ -4582,11 +4762,11 @@ class MainActivity : AppCompatActivity() {
             val pad = 28f
             val rect = RectF(pad, pad, width - pad, height - pad)
 
-            trackPaint.color = Color.parseColor(if (dark) "#334155" else "#E2E8F0")
+            trackPaint.color = Color.parseColor(if (dark) "#2A3950" else "#E2E8F0")
             projectedPaint.color = Color.parseColor(if (dark) "#3730A3" else "#C7D2FE")
             progressPaint.color = accentColor
             mainTextPaint.color = Color.parseColor(if (dark) "#F8FAFC" else "#0F172A")
-            subTextPaint.color = Color.parseColor(if (dark) "#94A3B8" else "#64748B")
+            subTextPaint.color = Color.parseColor(if (dark) "#CBD5E1" else "#475569")
 
             canvas.drawArc(rect, 0f, 360f, false, trackPaint)
 
@@ -4601,11 +4781,15 @@ class MainActivity : AppCompatActivity() {
                 canvas.drawArc(rect, -90f, actualSweep, false, progressPaint)
             }
 
+            // 100% Goal marker dot at 12 o'clock
             val cx = width / 2f
             val cy = height / 2f
+            goalMarkerPaint.color = Color.parseColor(if (targetAttended >= required) "#10B981" else (if (dark) "#94A3B8" else "#64748B"))
+            canvas.drawCircle(cx, pad, 7f, goalMarkerPaint)
+
             val displayPct = (targetPct * animFraction).roundToInt()
             canvas.drawText("$targetAttended / $required", cx, cy + 8f, mainTextPaint)
-            canvas.drawText("days ($displayPct%)", cx, cy + 48f, subTextPaint)
+            canvas.drawText("days ($displayPct%)", cx, cy + 46f, subTextPaint)
         }
     }
 
@@ -4681,7 +4865,7 @@ class MainActivity : AppCompatActivity() {
             targetLinePaint.color = Color.parseColor("#F59E0B")
             canvas.drawLine(16f, targetY, width - 16f, targetY, targetLinePaint)
 
-            labelPaint.color = Color.parseColor(if (dark) "#94A3B8" else "#64748B")
+            labelPaint.color = Color.parseColor(if (dark) "#CBD5E1" else "#475569")
             valuePaint.color = Color.parseColor(if (dark) "#F8FAFC" else "#0F172A")
 
             items.forEachIndexed { idx, pt ->
