@@ -475,6 +475,10 @@ class MainActivity : AppCompatActivity() {
                     val importedCount = store.restoreExistingBackupFromFolder(treeUri)
                     val synced = store.triggerSilentAutoBackup()
 
+                    if (::setupNameInput.isInitialized && store.getUserName().isNotEmpty()) {
+                        setupNameInput.setText(store.getUserName())
+                    }
+
                     if (importedCount > 0) {
                         activeLogFilter = LogFilter.ALL
                         syncBackgroundAndWidget()
@@ -538,6 +542,9 @@ class MainActivity : AppCompatActivity() {
                 if (resultCode == Activity.RESULT_OK && data?.data != null) {
                     runCatching {
                         val count = store.importFromUri(data.data!!, autoBackupAfter = true)
+                        if (::setupNameInput.isInitialized && store.getUserName().isNotEmpty()) {
+                            setupNameInput.setText(store.getUserName())
+                        }
                         activeLogFilter = LogFilter.ALL
                         syncBackgroundAndWidget()
                         refreshAllViews(animateCharts = true)
@@ -1234,7 +1241,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ==================== 2. CARD-BASED SETUP WIZARD UI ====================
+    // ==================== 2. CARD-BASED SETUP WIZARD UI (REORDERED FOR RESTORE) ====================
 
     private fun buildSetupWizardView(): ScrollView {
         val scroll = ScrollView(this)
@@ -1251,7 +1258,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(cTextPrimary())
         }
         val subtitle = TextView(this).apply {
-            text = "Complete permissions first, add your profile and name, then configure Wi-Fi, monthly policy, and backup."
+            text = "1. Grant permissions → 2. Link backup folder (auto-restores name & logs) → 3. Confirm profile → 4. Office & policy."
             textSize = 13f
             setTextColor(cTextSecondary())
             setPadding(0, 6, 0, 18)
@@ -1259,7 +1266,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(title)
         root.addView(subtitle)
 
-        // Card 1: Permissions & Background Readiness First
+        // Step 1: Permissions & Background Readiness First
         val permCard = makeCardContainer()
         permCard.addView(makeSectionTitle("1. Permissions & Background Readiness"))
         addSpacer(permCard, 12)
@@ -1305,9 +1312,25 @@ class MainActivity : AppCompatActivity() {
         root.addView(permCard)
         addSpacer(root, 16)
 
-        // Card 2: Profile Photo, Name & Privacy
+        // Step 2: Auto-Backup Folder Before Profile (Auto-Imports Saved Name & Records)
+        val backupSetupCard = makeCardContainer()
+        backupSetupCard.addView(makeSectionTitle("2. Auto-Backup Folder (Auto-Restore Name & History)"))
+        setupBackupFolderStatusView = TextView(this).apply {
+            textSize = 13f
+            setTextColor(cTextSecondary())
+            setPadding(0, 6, 0, 12)
+        }
+        val pickFolderBtn = makePillButton("📁 Choose Backup Folder (Auto-Imports CSV)", "#E0E7FF", "#3730A3") {
+            launchBackupFolderPicker()
+        }
+        backupSetupCard.addView(setupBackupFolderStatusView)
+        backupSetupCard.addView(pickFolderBtn)
+        root.addView(backupSetupCard)
+        addSpacer(root, 16)
+
+        // Step 3: Profile Photo, Name & Privacy
         val profileCard = makeCardContainer()
-        profileCard.addView(makeSectionTitle("2. Profile Photo, Name & Privacy"))
+        profileCard.addView(makeSectionTitle("3. Profile Photo, Name & Privacy"))
         addSpacer(profileCard, 14)
 
         val avatarRow = LinearLayout(this).apply {
@@ -1370,9 +1393,9 @@ class MainActivity : AppCompatActivity() {
         root.addView(profileCard)
         addSpacer(root, 16)
 
-        // Card 3: Office Wi-Fi & Geofence Location
+        // Step 4: Office Wi-Fi & Geofence Location
         val trackingCard = makeCardContainer()
-        trackingCard.addView(makeSectionTitle("3. Office Wi-Fi & Geofence Location"))
+        trackingCard.addView(makeSectionTitle("4. Office Wi-Fi & Geofence Location"))
         setupLiveWifiView = TextView(this).apply {
             textSize = 13f
             setTextColor(cTextSecondary())
@@ -1419,9 +1442,9 @@ class MainActivity : AppCompatActivity() {
         root.addView(trackingCard)
         addSpacer(root, 16)
 
-        // Card 4: Monthly Policy & Alert Settings
+        // Step 5: Monthly Policy & Alert Settings
         val policyCard = makeCardContainer()
-        policyCard.addView(makeSectionTitle("4. Monthly Policy & Alert Settings"))
+        policyCard.addView(makeSectionTitle("5. Monthly Policy & Alert Settings"))
 
         val pctRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1524,22 +1547,6 @@ class MainActivity : AppCompatActivity() {
         policyCard.addView(setupTargetBufferAlertSwitch)
         policyCard.addView(setupQuarterAlertSwitch)
         root.addView(policyCard)
-        addSpacer(root, 16)
-
-        // Card 5: Auto-Backup Folder & Finish
-        val backupSetupCard = makeCardContainer()
-        backupSetupCard.addView(makeSectionTitle("5. Auto-Backup Folder (Local or Drive)"))
-        setupBackupFolderStatusView = TextView(this).apply {
-            textSize = 13f
-            setTextColor(cTextSecondary())
-            setPadding(0, 6, 0, 12)
-        }
-        val pickFolderBtn = makePillButton("📁 Choose Folder (Auto-Imports Existing Backup)", "#E0E7FF", "#3730A3") {
-            launchBackupFolderPicker()
-        }
-        backupSetupCard.addView(setupBackupFolderStatusView)
-        backupSetupCard.addView(pickFolderBtn)
-        root.addView(backupSetupCard)
         addSpacer(root, 20)
 
         val saveFinishBtn = makePillButton("✅ Save Settings & Start Auto-Tracker", "#10B981", "#FFFFFF") {
@@ -1800,7 +1807,6 @@ class MainActivity : AppCompatActivity() {
         navRow.addView(nextBtn)
         root.addView(navRow)
 
-        // Single Unified Briefing Card
         briefingCardView = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(22, 14, 22, 14)
@@ -1838,7 +1844,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(briefingCardView)
         addSpacer(root, 12)
 
-        // Progress Ring & Color-Coded KPI Summary Card
         heroCardContainer = makeCardContainer().apply {
             setPadding(24, 16, 24, 16)
         }
@@ -1882,7 +1887,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(heroCardContainer)
         addSpacer(root, 12)
 
-        // Calendar Card with Swipe Navigation, Auto-Plan, Clear Plan & Mode Selector
         calendarCardContainer = makeCardContainer().apply {
             setPadding(22, 16, 22, 16)
         }
@@ -1900,7 +1904,7 @@ class MainActivity : AppCompatActivity() {
             refreshAllViews(animateCharts = true)
             if (removed.isNotEmpty()) {
                 showUndoBanner("Cleared ${removed.size} planned day(s)", removed)
-                showStatusPopup(true, "Cleared ${removed.size} planned day(s)")
+                showStatusPopup(true, "Cleared ${removed.size} planned day(s) & synced CSV")
             } else {
                 showStatusPopup(false, "No planned days to clear in ${selectedMonth.month.getDisplayName(TextStyle.SHORT, Locale.getDefault())}")
             }
@@ -2053,7 +2057,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(calendarCardContainer)
         addSpacer(root, 12)
 
-        // Collapsible Monthly Log Drawer
         val logCard = makeCardContainer().apply {
             setPadding(22, 16, 22, 16)
         }
@@ -2323,7 +2326,6 @@ class MainActivity : AppCompatActivity() {
         }
         scroll.addView(root)
 
-        // Appearance / Theme Card
         val themeCard = makeCardContainer()
         themeCard.addView(makeSectionTitle("Appearance & Theme"))
         activeThemeStatusView = TextView(this).apply {
@@ -2516,7 +2518,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(wifiSectionCard)
         addSpacer(root, 16)
 
-        // Collapsible Notifications & Exact Alarm Status Card
         val notifCard = makeCardContainer()
         val notifHeaderRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -2617,7 +2618,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(notifCard)
         addSpacer(root, 16)
 
-        // Collapsible Upcoming Holidays & Leaves Card
         val holidayCard = makeCardContainer()
         val holHeaderRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -2896,32 +2896,31 @@ class MainActivity : AppCompatActivity() {
                 )
             ),
             Triple(
-                "2. Monthly Mandate & Buffer",
+                "2. Monthly Mandate & Smart Planning",
                 "#10B981",
                 listOf(
                     "Strictly Monthly: Calculated per calendar month with zero quarterly carryover.",
-                    "Working Days: Excludes weekends and (when enabled) marked Holidays and Leaves.",
-                    "WFH Buffer: Shows remaining non-office weekdays after subtracting days still needed.",
-                    "Recovery Suggestions: Near month-end, ranks remaining weekdays using your preferred weekday priority."
+                    "Working Days & Buffer: Excludes weekends and (when enabled) marked Holidays and Leaves to show remaining WFH buffer.",
+                    "Smart Auto-Plan & Clear Plan: Schedules only the remaining needed days using your weekday priority order, cleans stale planned notes on clear, auto-trims when holidays/leaves reduce your target, and supports UNDO."
                 )
             ),
             Triple(
-                "3. Required Android Permissions",
+                "3. Setup Order & Required Permissions",
                 "#F59E0B",
                 listOf(
-                    "Location (Allow all the time): Needed for background geofence checks and Wi-Fi SSID visibility.",
-                    "Phone Location (GPS) ON: Android hides connected Wi-Fi SSIDs if system GPS is turned off.",
+                    "Recommended Setup Order: Grant permissions first, link your backup folder to auto-restore saved name and logs, then confirm your profile, Wi-Fi/geofence, and monthly policy.",
+                    "Location (Allow all the time) & GPS ON: Required for background geofence checks and Wi-Fi SSID detection.",
                     "Notifications & Exact Alarms: Delivers check-in, departure, and planned-day reminders on time.",
                     "Unrestricted Battery: Prevents Android from sleeping the background monitor."
                 )
             ),
             Triple(
-                "4. Backup & Safe Reinstalls",
+                "4. Appearance, Widget & Reinstall Backup",
                 "#0284C7",
                 listOf(
-                    "Auto-Backup CSV: Link a folder in Settings to keep officepace_attendance_autobackup.csv synced automatically.",
-                    "Exported Columns: Includes date, type, source, first_seen, last_seen, duration_hours, auto_logged, and note.",
-                    "Before Reinstalling: Confirm your linked folder has the latest CSV, or use Save CSV / Restore CSV anytime."
+                    "System / Light / Dark Theme: Switch anytime in Settings with high-contrast palettes across all charts and cards.",
+                    "Home Screen Widget: Pin OfficePace Glance from Settings (or your launcher's Widgets picker) for live monthly status.",
+                    "CSV Name & Live Backup: Saves officepace_attendance_autobackup.csv with your name metadata (# meta_user_name=), timestamps, and notes—link the folder or restore CSV after reinstall to recover both."
                 )
             )
         )
@@ -4884,7 +4883,6 @@ class MainActivity : AppCompatActivity() {
                 canvas.drawArc(rect, -90f, actualSweep, false, progressPaint)
             }
 
-            // 100% Goal marker dot at 12 o'clock
             val cx = width / 2f
             val cy = height / 2f
             goalMarkerPaint.color = Color.parseColor(
