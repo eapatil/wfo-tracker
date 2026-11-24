@@ -55,21 +55,22 @@ class WfoWidgetProvider : AppWidgetProvider() {
 
             val views = RemoteViews(context.packageName, R.layout.wfo_widget)
 
+            // Header: Current Day & Date + Sync Timestamp
             val todayStamp = today.format(DateTimeFormatter.ofPattern("EEE, dd MMM", Locale.getDefault()))
             val shortMonthYear = ym.format(DateTimeFormatter.ofPattern("MMM yyyy", Locale.getDefault()))
             val nowTime = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
             views.setTextViewText(R.id.widget_month_title, "OfficePace • $todayStamp")
             views.setTextViewText(R.id.widget_updated_time, "Updated $nowTime")
 
+            // Dedicated Sub-Line: Shown only when actively connected to an office Wi-Fi / zone
             if (isOnOffice && activeSrc.isNotEmpty()) {
                 views.setViewVisibility(R.id.widget_source_detail, View.VISIBLE)
-                views.setTextViewText(R.id.widget_source_detail, "📍 $activeSrc • $todayStamp ($shortMonthYear)")
+                views.setTextViewText(R.id.widget_source_detail, "📍 $activeSrc ($shortMonthYear)")
             } else {
-                val fullDateLabel = today.format(DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy", Locale.getDefault()))
-                views.setViewVisibility(R.id.widget_source_detail, View.VISIBLE)
-                views.setTextViewText(R.id.widget_source_detail, "🗓️ $fullDateLabel")
+                views.setViewVisibility(R.id.widget_source_detail, View.GONE)
             }
 
+            // Live Today Status Pill
             val disconnectedHint = when (mode) {
                 TrackingMode.LOCATION_ONLY -> "Not at office"
                 TrackingMode.WIFI_ONLY -> "Not on Wi-Fi"
@@ -109,6 +110,7 @@ class WfoWidgetProvider : AppWidgetProvider() {
                 }
             }
 
+            // Hero Progress Ratio & Bar
             views.setTextViewText(
                 R.id.widget_hero_ratio,
                 "${stats.attendedDays} / ${stats.requiredDays} days (${stats.actualPercent}%)"
@@ -117,6 +119,7 @@ class WfoWidgetProvider : AppWidgetProvider() {
             val progressVal = stats.attendedDays.coerceIn(0, progressMax)
             views.setProgressBar(R.id.widget_progress_bar, progressMax, progressVal, false)
 
+            // Pace & Buffer Line
             val paceText = when {
                 stats.remainingDays == 0 ->
                     "🎉 ${stats.targetPercent}% target met — safe to WFH"
@@ -129,6 +132,7 @@ class WfoWidgetProvider : AppWidgetProvider() {
             }
             views.setTextViewText(R.id.widget_pace_text, paceText)
 
+            // This Week 5-Day Mon–Fri Strip (with Today underlined)
             val monday = today.with(DayOfWeek.MONDAY)
             val dayIds = listOf(
                 R.id.widget_day_mon to "M",
@@ -176,6 +180,7 @@ class WfoWidgetProvider : AppWidgetProvider() {
                 }
             }
 
+            // Tap Card Body -> Open MainActivity
             val openAppIntent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
@@ -187,6 +192,7 @@ class WfoWidgetProvider : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.widget_root_container, openPending)
 
+            // Tap Refresh Icon -> Trigger Immediate Background Wi-Fi / Geofence Check
             val refreshIntent = Intent(context, WfoWidgetProvider::class.java).apply {
                 action = ACTION_WIDGET_REFRESH
             }
