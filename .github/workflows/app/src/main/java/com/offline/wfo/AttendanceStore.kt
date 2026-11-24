@@ -602,7 +602,7 @@ class AttendanceStore(private val context: Context) {
 
     fun autoPlanRemainingDaysForMonth(ym: YearMonth): Map<LocalDate, DayType> {
         val stats = getMonthStats(ym)
-        val needed = stats.remainingDays
+        val needed = maxOf(0, stats.remainingDays - stats.futurePlannedDays)
         if (needed <= 0) return emptyMap()
 
         val today = LocalDate.now()
@@ -637,6 +637,24 @@ class AttendanceStore(private val context: Context) {
             triggerSilentAutoBackup()
         }
         return modified
+    }
+
+    fun clearPlannedDaysForMonth(ym: YearMonth): Map<LocalDate, DayType> {
+        val map = getDayTypesMap().toMutableMap()
+        val removed = mutableMapOf<LocalDate, DayType>()
+        for (day in 1..ym.lengthOfMonth()) {
+            val d = ym.atDay(day)
+            val key = d.toString()
+            if (map[key] == DayType.PLANNED) {
+                removed[d] = DayType.PLANNED
+                map.remove(key)
+            }
+        }
+        if (removed.isNotEmpty()) {
+            saveDayTypesMap(map)
+            triggerSilentAutoBackup()
+        }
+        return removed
     }
 
     fun getSuggestedRecoveryDates(ym: YearMonth, today: LocalDate = LocalDate.now()): List<LocalDate> {
