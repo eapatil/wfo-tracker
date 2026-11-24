@@ -221,6 +221,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var calendarContainer: LinearLayout
     private lateinit var logHeaderToggleView: TextView
     private lateinit var logExpandBodyView: LinearLayout
+    private lateinit var logSummaryBarView: TextView
     private lateinit var filterAllBtn: TextView
     private lateinit var filterOfficeBtn: TextView
     private lateinit var filterPlannedBtn: TextView
@@ -261,6 +262,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var radius1000Btn: TextView
     private lateinit var radius1500Btn: TextView
     private lateinit var priorityWeekdaysContainer: LinearLayout
+    private lateinit var priorityOrderPreviewView: TextView
     private lateinit var notifSummaryTv: TextView
     private lateinit var notifArrowTv: TextView
     private lateinit var notifBodyView: LinearLayout
@@ -2080,6 +2082,20 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 12, 0, 0)
         }
 
+        logSummaryBarView = TextView(this).apply {
+            textSize = 12f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(cTextPrimary())
+            gravity = Gravity.CENTER
+            background = roundedBox(cInputBg(), cBorder(), 12f, 1)
+            setPadding(14, 8, 14, 8)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 0, 0, 10) }
+        }
+        logExpandBodyView.addView(logSummaryBarView)
+
         val filterRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, 0, 0, 10)
@@ -2423,6 +2439,13 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
         }
         priorityCard.addView(priorityWeekdaysContainer)
+        priorityOrderPreviewView = TextView(this).apply {
+            textSize = 12f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(Color.parseColor(if (isDark) "#A5B4FC" else "#4F46E5"))
+            setPadding(0, 10, 0, 0)
+        }
+        priorityCard.addView(priorityOrderPreviewView)
         root.addView(priorityCard)
         addSpacer(root, 16)
 
@@ -3039,6 +3062,13 @@ class MainActivity : AppCompatActivity() {
             styleModeChip(chip, rankIndex >= 0, "#4F46E5")
             priorityWeekdaysContainer.addView(chip)
             if (idx < weekdays.lastIndex) addHorizontalGap(priorityWeekdaysContainer, 5)
+        }
+
+        if (::priorityOrderPreviewView.isInitialized) {
+            val sequenceLabel = ordered.joinToString(" → ") {
+                it.getDisplayName(TextStyle.SHORT, Locale.getDefault())
+            }
+            priorityOrderPreviewView.text = "Auto-Plan order: $sequenceLabel"
         }
     }
 
@@ -3815,6 +3845,11 @@ class MainActivity : AppCompatActivity() {
         val arrow = if (isMonthlyLogExpanded) "▲" else "▼"
         logHeaderToggleView.text = "Monthly Log & Timestamps (${s.dayLogs.size} entries • ${s.attendedDays} Office)   $arrow"
         logExpandBodyView.visibility = if (isMonthlyLogExpanded) View.VISIBLE else View.GONE
+
+        if (::logSummaryBarView.isInitialized) {
+            logSummaryBarView.text =
+                "🏢 ${s.attendedDays} Office  •  📅 ${s.plannedTotalCount} Planned  •  🌴 ${s.leaveDays} Leave  •  🎉 ${s.holidayDays} Holiday"
+        }
 
         styleModeChip(filterAllBtn, activeLogFilter == LogFilter.ALL, "#334155")
         styleModeChip(filterOfficeBtn, activeLogFilter == LogFilter.OFFICE, "#10B981")
@@ -4770,8 +4805,9 @@ class MainActivity : AppCompatActivity() {
         }
         private val projectedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
-            strokeWidth = 26f
-            strokeCap = Paint.Cap.ROUND
+            strokeWidth = 22f
+            strokeCap = Paint.Cap.BUTT
+            pathEffect = DashPathEffect(floatArrayOf(18f, 12f), 0f)
         }
         private val progressPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
@@ -4830,7 +4866,7 @@ class MainActivity : AppCompatActivity() {
             val rect = RectF(pad, pad, width - pad, height - pad)
 
             trackPaint.color = Color.parseColor(if (dark) "#2A3950" else "#E2E8F0")
-            projectedPaint.color = Color.parseColor(if (dark) "#3730A3" else "#C7D2FE")
+            projectedPaint.color = Color.parseColor(if (dark) "#818CF8" else "#6366F1")
             progressPaint.color = accentColor
             mainTextPaint.color = Color.parseColor(if (dark) "#F8FAFC" else "#0F172A")
             subTextPaint.color = Color.parseColor(if (dark) "#CBD5E1" else "#475569")
@@ -4842,12 +4878,13 @@ class MainActivity : AppCompatActivity() {
             val actualSweep = (((targetAttended / denom) * 360f) * animFraction).coerceIn(0f, 360f)
 
             if (projSweep > actualSweep) {
-                canvas.drawArc(rect, -90f, projSweep, false, projectedPaint)
+                canvas.drawArc(rect, -90f + actualSweep, projSweep - actualSweep, false, projectedPaint)
             }
             if (actualSweep > 0f) {
                 canvas.drawArc(rect, -90f, actualSweep, false, progressPaint)
             }
 
+            // 100% Goal marker dot at 12 o'clock
             val cx = width / 2f
             val cy = height / 2f
             goalMarkerPaint.color = Color.parseColor(
