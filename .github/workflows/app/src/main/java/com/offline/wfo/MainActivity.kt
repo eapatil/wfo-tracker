@@ -585,8 +585,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ==================== NOTIFICATIONS WITH LIVE MOTION & ACTIONS ====================
-
     private fun ensureAlertNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -647,8 +645,6 @@ class MainActivity : AppCompatActivity() {
             NotificationManagerCompat.from(this).notify(NOTIF_STATUS_PING_ID, builder.build())
         }
     }
-
-    // ==================== ANIMATIONS (HEARTBEAT, LOCK STATUS CARD & UNLOCK) ====================
 
     private fun stopAllLoopingAnimations() {
         stopLockScreenRunningAnimation()
@@ -1002,8 +998,6 @@ class MainActivity : AppCompatActivity() {
             .start()
     }
 
-    // ==================== VIEW SWITCHERS, TABS & UNDO ====================
-
     private fun showAppLockScreen() {
         stopHeartbeatAnimation()
         stopLiveStripPulse()
@@ -1123,8 +1117,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ==================== 1. FULL-APP LOCK OVERLAY WITH STATUS CARD ====================
-
     private fun buildAppLockOverlay(): LinearLayout {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1241,8 +1233,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ==================== 2. CARD-BASED SETUP WIZARD UI (REORDERED FOR RESTORE) ====================
-
     private fun buildSetupWizardView(): ScrollView {
         val scroll = ScrollView(this)
         val root = LinearLayout(this).apply {
@@ -1266,7 +1256,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(title)
         root.addView(subtitle)
 
-        // Step 1: Permissions & Background Readiness First
         val permCard = makeCardContainer()
         permCard.addView(makeSectionTitle("1. Permissions & Background Readiness"))
         addSpacer(permCard, 12)
@@ -1312,7 +1301,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(permCard)
         addSpacer(root, 16)
 
-        // Step 2: Auto-Backup Folder Before Profile (Auto-Imports Saved Name & Records)
         val backupSetupCard = makeCardContainer()
         backupSetupCard.addView(makeSectionTitle("2. Auto-Backup Folder (Auto-Restore Name & History)"))
         setupBackupFolderStatusView = TextView(this).apply {
@@ -1328,7 +1316,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(backupSetupCard)
         addSpacer(root, 16)
 
-        // Step 3: Profile Photo, Name & Privacy
         val profileCard = makeCardContainer()
         profileCard.addView(makeSectionTitle("3. Profile Photo, Name & Privacy"))
         addSpacer(profileCard, 14)
@@ -1393,7 +1380,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(profileCard)
         addSpacer(root, 16)
 
-        // Step 4: Office Wi-Fi & Geofence Location
         val trackingCard = makeCardContainer()
         trackingCard.addView(makeSectionTitle("4. Office Wi-Fi & Geofence Location"))
         setupLiveWifiView = TextView(this).apply {
@@ -1442,7 +1428,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(trackingCard)
         addSpacer(root, 16)
 
-        // Step 5: Monthly Policy & Alert Settings
         val policyCard = makeCardContainer()
         policyCard.addView(makeSectionTitle("5. Monthly Policy & Alert Settings"))
 
@@ -1588,8 +1573,6 @@ class MainActivity : AppCompatActivity() {
 
         return scroll
     }
-
-    // ==================== 3. MAIN 3-TAB SCAFFOLD ====================
 
     private fun buildMainScaffold(): LinearLayout {
         val scaffold = LinearLayout(this).apply {
@@ -1761,8 +1744,6 @@ class MainActivity : AppCompatActivity() {
 
         return scaffold
     }
-
-    // ==================== TAB 1: HOME (CLEAN UNIFIED BRIEFING & CALENDAR) ====================
 
     @SuppressLint("ClickableViewAccessibility")
     private fun buildHomeTab(): ScrollView {
@@ -2129,8 +2110,6 @@ class MainActivity : AppCompatActivity() {
         return scroll
     }
 
-    // ==================== TAB 2: ANALYTICS & SIMULATOR ====================
-
     private fun buildAnalyticsTab(): ScrollView {
         val scroll = ScrollView(this)
         val root = LinearLayout(this).apply {
@@ -2315,8 +2294,6 @@ class MainActivity : AppCompatActivity() {
 
         return scroll
     }
-
-    // ==================== TAB 3: SETTINGS & DATA ====================
 
     private fun buildSettingsTab(): ScrollView {
         val scroll = ScrollView(this)
@@ -3173,8 +3150,6 @@ class MainActivity : AppCompatActivity() {
         showStatusPopup(true, "Geofence radius updated to ${meters}m")
     }
 
-    // ==================== SELECT LOCATION (SEARCH / GPS / MAPS / RADIUS) ====================
-
     @Suppress("DEPRECATION")
     private fun showSelectLocationDialog() {
         var dialogRef: AlertDialog? = null
@@ -3501,8 +3476,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ==================== 4. REFRESH LOGIC ====================
-
     private fun refreshAllViews(animateCharts: Boolean = false) {
         updateLockScreenStatusCard()
 
@@ -3648,15 +3621,17 @@ class MainActivity : AppCompatActivity() {
             if (isEditUnlocked) (if (isDark) Color.parseColor("#A7F3D0") else Color.parseColor("#065F46")) else cTextPrimary()
         )
 
+        // Top Live Banner with Current Day & Date (EEE, dd MMM)
         val today = LocalDate.now()
         val todayType = store.getDayType(today)
         val isOnOfficePresence = store.wasConnectedToOfficeWifi()
         val activeSource = store.getActiveOfficeSsid()
+        val todayStamp = today.format(DateTimeFormatter.ofPattern("EEE, dd MMM", Locale.getDefault()))
 
         val disconnectedLabel = when (mode) {
             TrackingMode.LOCATION_ONLY -> "Not at office location"
             TrackingMode.WIFI_ONLY -> "Not connected to office Wi-Fi"
-            TrackingMode.BOTH -> "Not connected to office Wi-Fi or at office location"
+            TrackingMode.BOTH -> "Not at office"
         }
 
         startLiveStripPulse(isOnOfficePresence)
@@ -3664,7 +3639,7 @@ class MainActivity : AppCompatActivity() {
         when {
             isOnOfficePresence -> {
                 val srcTag = if (activeSource.isNotEmpty()) " ($activeSource)" else ""
-                todayLiveStripView.text = "🟢 Connected / At Office$srcTag"
+                todayLiveStripView.text = "🟢 $todayStamp • At Office$srcTag"
                 todayLiveStripView.setTextColor(if (isDark) Color.parseColor("#A7F3D0") else Color.parseColor("#065F46"))
                 todayLiveStripView.background = roundedBox(
                     if (isDark) "#064E3B" else "#D1FAE5",
@@ -3674,7 +3649,7 @@ class MainActivity : AppCompatActivity() {
                 )
             }
             todayType == DayType.OFFICE -> {
-                todayLiveStripView.text = "✅ Office Day Logged Today"
+                todayLiveStripView.text = "✅ $todayStamp • Office Day Logged"
                 todayLiveStripView.setTextColor(if (isDark) Color.parseColor("#A7F3D0") else Color.parseColor("#065F46"))
                 todayLiveStripView.background = roundedBox(
                     if (isDark) "#064E3B" else "#ECFDF5",
@@ -3684,7 +3659,7 @@ class MainActivity : AppCompatActivity() {
                 )
             }
             todayType == DayType.PLANNED -> {
-                todayLiveStripView.text = "📅 Planned Office Day Today"
+                todayLiveStripView.text = "📅 $todayStamp • Planned Office Day"
                 todayLiveStripView.setTextColor(if (isDark) Color.parseColor("#C7D2FE") else Color.parseColor("#3730A3"))
                 todayLiveStripView.background = roundedBox(
                     if (isDark) "#1E1B4B" else "#EEF2FF",
@@ -3694,7 +3669,7 @@ class MainActivity : AppCompatActivity() {
                 )
             }
             todayType == DayType.LEAVE -> {
-                todayLiveStripView.text = "🌴 On Leave Today"
+                todayLiveStripView.text = "🌴 $todayStamp • On Leave"
                 todayLiveStripView.setTextColor(if (isDark) Color.parseColor("#FDE68A") else Color.parseColor("#92400E"))
                 todayLiveStripView.background = roundedBox(
                     if (isDark) "#451A03" else "#FEF3C7",
@@ -3704,7 +3679,7 @@ class MainActivity : AppCompatActivity() {
                 )
             }
             todayType == DayType.HOLIDAY -> {
-                todayLiveStripView.text = "🎉 Company Holiday Today"
+                todayLiveStripView.text = "🎉 $todayStamp • Holiday"
                 todayLiveStripView.setTextColor(if (isDark) Color.parseColor("#DDD6FE") else Color.parseColor("#5B21B6"))
                 todayLiveStripView.background = roundedBox(
                     if (isDark) "#2E1065" else "#F5F3FF",
@@ -3714,7 +3689,7 @@ class MainActivity : AppCompatActivity() {
                 )
             }
             else -> {
-                todayLiveStripView.text = "🏠 WFH Today • $disconnectedLabel"
+                todayLiveStripView.text = "🏠 $todayStamp • WFH ($disconnectedLabel)"
                 todayLiveStripView.setTextColor(cTextSecondary())
                 todayLiveStripView.background = roundedBox(cCardHex(), cBorder(), 16f, 1)
             }
@@ -4322,8 +4297,6 @@ class MainActivity : AppCompatActivity() {
         dialogRef = builder.show()
     }
 
-    // ==================== 5. AVATAR IMAGE PROCESSING ====================
-
     private fun saveCompressedAvatar(uri: Uri) {
         runCatching {
             val rawBmp = contentResolver.openInputStream(uri)?.use { stream ->
@@ -4379,8 +4352,6 @@ class MainActivity : AppCompatActivity() {
         canvas.drawText(initial, canvas.width / 2f, yPos, textPaint)
         return output
     }
-
-    // ==================== 6. SYSTEM, WIDGET & SERVICE HELPERS ====================
 
     private fun requestPinOfficePaceWidget() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
@@ -4596,8 +4567,6 @@ class MainActivity : AppCompatActivity() {
             .replace("\u2212", "-")
     }
 
-    // ==================== 7. THEME & COMPONENT STYLING ====================
-
     private fun cBg(): Int = Color.parseColor(if (isDark) "#0B1120" else "#F1F5F9")
     private fun cCardHex(): String = if (isDark) "#162032" else "#FFFFFF"
     private fun cInputBg(): String = if (isDark) "#0F172A" else "#F8FAFC"
@@ -4784,8 +4753,6 @@ class MainActivity : AppCompatActivity() {
         val gap = TextView(this).apply { width = widthPx }
         parent.addView(gap)
     }
-
-    // ==================== 8. CUSTOM ANIMATED CANVAS VISUALIZATIONS ====================
 
     private class CircularProgressRingView(context: Context) : View(context) {
         private var targetAttended = 0
