@@ -249,8 +249,15 @@ class AttendanceStore(private val context: Context) {
 
         val desiredCount = stats.remainingDays
         if (existingPlanned.size > desiredCount) {
-            val sortedPlanned = existingPlanned.sortedByDescending { it }
-            sortedPlanned.take(existingPlanned.size - desiredCount).forEach { map.remove(it) }
+            val priorities = getPreferredWeekdaysPriority()
+            val sortedLowestPriorityFirst = existingPlanned.sortedWith(
+                compareByDescending<String> { k ->
+                    val dow = runCatching { LocalDate.parse(k).dayOfWeek }.getOrNull()
+                    val idx = if (dow != null) priorities.indexOf(dow) else -1
+                    if (idx >= 0) idx else 99
+                }.thenByDescending { it }
+            )
+            sortedLowestPriorityFirst.take(existingPlanned.size - desiredCount).forEach { map.remove(it) }
             saveDayTypesMap(map)
         }
     }
@@ -537,11 +544,14 @@ class AttendanceStore(private val context: Context) {
 
     fun restoreBatchDates(previousStates: Map<LocalDate, DayType>) {
         val map = getDayTypesMap().toMutableMap()
+        val affectedMonths = mutableSetOf<YearMonth>()
         previousStates.forEach { (date, prevType) ->
             val key = date.toString()
             if (prevType == DayType.NONE) map.remove(key) else map[key] = prevType
+            affectedMonths.add(YearMonth.from(date))
         }
         saveDayTypesMap(map)
+        affectedMonths.forEach { rebalanceAdaptivePlannedDays(it) }
         triggerSilentAutoBackup()
     }
 
@@ -1355,15 +1365,18 @@ class AttendanceStore(private val context: Context) {
         if (foundDates.isEmpty()) return emptyMap()
         val map = getDayTypesMap().toMutableMap()
         val modified = mutableMapOf<LocalDate, DayType>()
+        val affectedMonths = mutableSetOf<YearMonth>()
         foundDates.sorted().forEach { d ->
             val prev = map[d.toString()] ?: DayType.NONE
             if (prev != DayType.HOLIDAY) {
                 modified[d] = prev
                 map[d.toString()] = DayType.HOLIDAY
+                affectedMonths.add(YearMonth.from(d))
             }
         }
         if (modified.isNotEmpty()) {
             saveDayTypesMap(map)
+            affectedMonths.forEach { rebalanceAdaptivePlannedDays(it) }
             triggerSilentAutoBackup()
         }
         return modified
