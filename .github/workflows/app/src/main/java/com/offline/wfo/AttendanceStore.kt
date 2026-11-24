@@ -273,7 +273,7 @@ class AttendanceStore(private val context: Context) {
     fun getUserName(): String = prefs.getString(KEY_USER_NAME, "")?.trim() ?: ""
 
     fun setUserName(name: String) {
-        prefs.edit().putString(KEY_USER_NAME, name.trim()).apply()
+        prefs.edit().putString(KEY_USER_NAME, sanitizeImportedText(name).trim()).apply()
     }
 
     fun isFullAppLockEnabled(): Boolean = prefs.getBoolean(KEY_FULL_APP_LOCK, false)
@@ -474,6 +474,7 @@ class AttendanceStore(private val context: Context) {
         val firstSeen = getStringMap(KEY_FIRST_SEEN).toMutableMap()
         val lastSeen = getStringMap(KEY_LAST_SEEN).toMutableMap()
         val sourceMap = getStringMap(KEY_SOURCE_MAP).toMutableMap()
+        val notes = getStringMap(KEY_DAY_NOTES).toMutableMap()
         val autoSet = getAutoLoggedSet().toMutableSet()
         val dayMap = getDayTypesMap().toMutableMap()
 
@@ -489,6 +490,10 @@ class AttendanceStore(private val context: Context) {
         if (isNewOfficeDay) {
             dayMap[dateStr] = DayType.OFFICE
             autoSet.add(dateStr)
+            if (notes[dateStr].equals("Planned Office", ignoreCase = true)) {
+                notes.remove(dateStr)
+                saveStringMap(KEY_DAY_NOTES, notes)
+            }
         }
 
         saveStringMap(KEY_FIRST_SEEN, firstSeen)
@@ -521,9 +526,22 @@ class AttendanceStore(private val context: Context) {
     fun applyManualDayType(date: LocalDate, mode: DayType): DayType {
         val dateStr = date.toString()
         val map = getDayTypesMap().toMutableMap()
+        val notes = getStringMap(KEY_DAY_NOTES).toMutableMap()
         val current = map[dateStr] ?: DayType.NONE
         val next = if (current == mode) DayType.NONE else mode
-        if (next == DayType.NONE) map.remove(dateStr) else map[dateStr] = next
+        if (next == DayType.NONE) {
+            map.remove(dateStr)
+            if (notes[dateStr].equals("Planned Office", ignoreCase = true)) {
+                notes.remove(dateStr)
+                saveStringMap(KEY_DAY_NOTES, notes)
+            }
+        } else {
+            map[dateStr] = next
+            if (next != DayType.PLANNED && notes[dateStr].equals("Planned Office", ignoreCase = true)) {
+                notes.remove(dateStr)
+                saveStringMap(KEY_DAY_NOTES, notes)
+            }
+        }
         saveDayTypesMap(map)
         rebalanceAdaptivePlannedDays(YearMonth.from(date))
         triggerSilentAutoBackup()
@@ -531,7 +549,15 @@ class AttendanceStore(private val context: Context) {
     }
 
     fun setExplicitDayType(date: LocalDate, type: DayType) {
-        setDayTypeInternal(date.toString(), type)
+        val dateStr = date.toString()
+        setDayTypeInternal(dateStr, type)
+        val notes = getStringMap(KEY_DAY_NOTES).toMutableMap()
+        if ((type == DayType.NONE || type != DayType.PLANNED) &&
+            notes[dateStr].equals("Planned Office", ignoreCase = true)
+        ) {
+            notes.remove(dateStr)
+            saveStringMap(KEY_DAY_NOTES, notes)
+        }
         rebalanceAdaptivePlannedDays(YearMonth.from(date))
         triggerSilentAutoBackup()
     }
@@ -544,13 +570,25 @@ class AttendanceStore(private val context: Context) {
 
     fun restoreBatchDates(previousStates: Map<LocalDate, DayType>) {
         val map = getDayTypesMap().toMutableMap()
+        val notes = getStringMap(KEY_DAY_NOTES).toMutableMap()
         val affectedMonths = mutableSetOf<YearMonth>()
+        var notesChanged = false
+
         previousStates.forEach { (date, prevType) ->
             val key = date.toString()
-            if (prevType == DayType.NONE) map.remove(key) else map[key] = prevType
+            if (prevType == DayType.NONE) {
+                map.remove(key)
+                if (notes[key].equals("Planned Office", ignoreCase = true)) {
+                    notes.remove(key)
+                    notesChanged = true
+                }
+            } else {
+                map[key] = prevType
+            }
             affectedMonths.add(YearMonth.from(date))
         }
         saveDayTypesMap(map)
+        if (notesChanged) saveStringMap(KEY_DAY_NOTES, notes)
         affectedMonths.forEach { rebalanceAdaptivePlannedDays(it) }
         triggerSilentAutoBackup()
     }
@@ -651,17 +689,25 @@ class AttendanceStore(private val context: Context) {
 
     fun clearPlannedDaysForMonth(ym: YearMonth): Map<LocalDate, DayType> {
         val map = getDayTypesMap().toMutableMap()
+        val notes = getStringMap(KEY_DAY_NOTES).toMutableMap()
         val removed = mutableMapOf<LocalDate, DayType>()
+        var notesChanged = false
+
         for (day in 1..ym.lengthOfMonth()) {
             val d = ym.atDay(day)
             val key = d.toString()
             if (map[key] == DayType.PLANNED) {
                 removed[d] = DayType.PLANNED
                 map.remove(key)
+                if (notes[key].equals("Planned Office", ignoreCase = true)) {
+                    notes.remove(key)
+                    notesChanged = true
+                }
             }
         }
-        if (removed.isNotEmpty()) {
-            saveDayTypesMap(map)
+        if (removed.isNotEmpty() || notesChanged) {
+            if (removed.isNotEmpty()) saveDayTypesMap(map)
+            if (notesChanged) saveStringMap(KEY_DAY_NOTES, notes)
             triggerSilentAutoBackup()
         }
         return removed
@@ -1224,9 +1270,13 @@ class AttendanceStore(private val context: Context) {
         val lastSeen = getStringMap(KEY_LAST_SEEN)
         val sources = getStringMap(KEY_SOURCE_MAP)
         val autoSet = getAutoLoggedSet()
+        val uName = sanitizeImportedText(getUserName()).trim()
 
         val allKeys = (types.keys + notes.keys + firstSeen.keys + lastSeen.keys).toSortedSet()
         return buildString {
+            if (uName.isNotEmpty()) {
+                appendLine("# meta_user_name=${csvEscape(uName)}")
+            }
             appendLine("date,type,source,first_seen,last_seen,duration_hours,auto_logged,note")
             for (k in allKeys) {
                 val t = types[k] ?: DayType.NONE
@@ -1252,7 +1302,17 @@ class AttendanceStore(private val context: Context) {
     }
 
     fun importCsvText(csvText: String, autoBackupAfter: Boolean = false): Int {
-        val lines = csvText.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+        val rawLines = csvText.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+        if (rawLines.isEmpty()) return 0
+
+        rawLines.firstOrNull { it.startsWith("# meta_user_name=", ignoreCase = true) }?.let { metaLine ->
+            val extractedName = parseCsvLine(metaLine.substringAfter("=")).firstOrNull()?.trim().orEmpty()
+            if (extractedName.isNotEmpty() && getUserName().isEmpty()) {
+                setUserName(extractedName)
+            }
+        }
+
+        val lines = rawLines.filterNot { it.startsWith("#") }
         if (lines.isEmpty()) return 0
 
         val types = getDayTypesMap().toMutableMap()
