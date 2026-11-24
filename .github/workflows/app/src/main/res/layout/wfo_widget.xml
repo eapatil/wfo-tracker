@@ -7,7 +7,7 @@
     android:orientation="vertical"
     android:padding="12dp">
 
-    <!-- Row 1: Title + Status Pill + Refresh Button -->
+    <!-- Row 1: Day/Date Title + Status Pill + Refresh Button -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -18,17 +18,18 @@
             android:id="@+id/widget_month_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginEnd="4dp"
             android:maxLines="1"
             android:text="OfficePace"
             android:textColor="@color/widget_text_primary"
-            android:textSize="13sp"
+            android:textSize="14sp"
             android:textStyle="bold" />
 
         <TextView
             android:id="@+id/widget_status_pill"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="6dp"
             android:layout_marginEnd="6dp"
             android:layout_weight="1"
             android:background="@drawable/widget_pill_neutral"
@@ -52,7 +53,7 @@
             android:textSize="12sp" />
     </LinearLayout>
 
-    <!-- Row 2: Dedicated Sub-Line for Long Office / Wi-Fi Name (Hidden When Empty) -->
+    <!-- Row 2: Dedicated Sub-Line for Active Office / Wi-Fi Name (Hidden When Empty) -->
     <TextView
         android:id="@+id/widget_source_detail"
         android:layout_width="match_parent"
