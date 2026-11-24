@@ -213,6 +213,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var kpiRemainingNumView: TextView
     private lateinit var kpiBufferNumView: TextView
     private lateinit var autoPlanBtn: TextView
+    private lateinit var clearPlanBtn: TextView
     private lateinit var modeOfficeBtn: TextView
     private lateinit var modePlannedBtn: TextView
     private lateinit var modeLeaveBtn: TextView
@@ -227,6 +228,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var auditLogView: TextView
 
     // Tab 2: Analytics Views
+    private lateinit var trendLegendView: TextView
     private lateinit var trendChartView: TrendBarChartView
     private lateinit var runRateFollowThroughView: TextView
     private lateinit var bufferTrajectoryView: TextView
@@ -242,6 +244,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var themeSystemBtn: TextView
     private lateinit var themeLightBtn: TextView
     private lateinit var themeDarkBtn: TextView
+    private lateinit var activeThemeStatusView: TextView
     private lateinit var modeWifiOnlyBtn: TextView
     private lateinit var modeLocOnlyBtn: TextView
     private lateinit var modeBothBtn: TextView
@@ -261,6 +264,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var notifSummaryTv: TextView
     private lateinit var notifArrowTv: TextView
     private lateinit var notifBodyView: LinearLayout
+    private lateinit var settingsNotifPermStatusView: TextView
     private lateinit var settingsExactAlarmStatusView: TextView
     private lateinit var notifConnectSwitch: Switch
     private lateinit var notifDisconnectSwitch: Switch
@@ -1876,7 +1880,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(heroCardContainer)
         addSpacer(root, 12)
 
-        // Calendar Card with Swipe Navigation & Mode Selector
+        // Calendar Card with Swipe Navigation, Auto-Plan, Clear Plan & Mode Selector
         calendarCardContainer = makeCardContainer().apply {
             setPadding(22, 16, 22, 16)
         }
@@ -1886,6 +1890,18 @@ class MainActivity : AppCompatActivity() {
         }
         val calTitle = makeSectionTitle("Attendance & Leave Calendar").apply {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        clearPlanBtn = makeSmallChipButton("Clear Plan") {
+            if (!ensureEditUnlocked()) return@makeSmallChipButton
+            val removed = store.clearPlannedDaysForMonth(selectedMonth)
+            syncBackgroundAndWidget()
+            refreshAllViews(animateCharts = true)
+            if (removed.isNotEmpty()) {
+                showUndoBanner("Cleared ${removed.size} planned day(s)", removed)
+                showStatusPopup(true, "Cleared ${removed.size} planned day(s)")
+            } else {
+                showStatusPopup(false, "No planned days to clear in ${selectedMonth.month.getDisplayName(TextStyle.SHORT, Locale.getDefault())}")
+            }
         }
         autoPlanBtn = makeSmallChipButton("✨ Auto-Plan") {
             if (!ensureEditUnlocked()) return@makeSmallChipButton
@@ -1898,10 +1914,12 @@ class MainActivity : AppCompatActivity() {
                 showUndoBanner("Auto-planned ${modified.size} office day(s)", modified)
                 showStatusPopup(true, "Auto-planned ${modified.size} office day(s)")
             } else {
-                showStatusPopup(false, "No additional days needed to plan for this month")
+                showStatusPopup(false, "Monthly target days are already planned or met")
             }
         }
         calHeaderRow.addView(calTitle)
+        calHeaderRow.addView(clearPlanBtn)
+        addHorizontalGap(calHeaderRow, 6)
         calHeaderRow.addView(autoPlanBtn)
         calendarCardContainer.addView(calHeaderRow)
 
@@ -2104,13 +2122,12 @@ class MainActivity : AppCompatActivity() {
 
         val trendCard = makeCardContainer()
         trendCard.addView(makeSectionTitle("6-Month Attendance Trend"))
-        val trendSub = TextView(this).apply {
-            text = "Monthly attendance % vs. dashed mandate target line"
+        trendLegendView = TextView(this).apply {
             textSize = 12f
             setTextColor(cTextSecondary())
-            setPadding(0, 4, 0, 12)
+            setPadding(0, 4, 0, 10)
         }
-        trendCard.addView(trendSub)
+        trendCard.addView(trendLegendView)
 
         trendChartView = TrendBarChartView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
@@ -2161,12 +2178,28 @@ class MainActivity : AppCompatActivity() {
         addSpacer(root, 16)
 
         val simCard = makeCardContainer()
-        simCard.addView(makeSectionTitle("What-If Leave & Holiday Simulator"))
+        val simHeaderRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val simTitle = makeSectionTitle("What-If Leave & Holiday Simulator").apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val simResetBtn = makeSmallChipButton("Reset") {
+            simLeaves = 0
+            simHolidays = 0
+            refreshAllViews(animateCharts = false)
+            showStatusPopup(true, "Simulator reset")
+        }
+        simHeaderRow.addView(simTitle)
+        simHeaderRow.addView(simResetBtn)
+        simCard.addView(simHeaderRow)
+
         val simSub = TextView(this).apply {
             text = "Preview how upcoming leaves or holidays shift your required days:"
             textSize = 12f
             setTextColor(cTextSecondary())
-            setPadding(0, 4, 0, 12)
+            setPadding(0, 6, 0, 12)
         }
         simCard.addView(simSub)
 
@@ -2277,13 +2310,12 @@ class MainActivity : AppCompatActivity() {
         // Appearance / Theme Card
         val themeCard = makeCardContainer()
         themeCard.addView(makeSectionTitle("Appearance & Theme"))
-        val themeSub = TextView(this).apply {
-            text = "Choose high-contrast Light, Dark, or match your phone system theme:"
+        activeThemeStatusView = TextView(this).apply {
             textSize = 12f
             setTextColor(cTextSecondary())
             setPadding(0, 4, 0, 10)
         }
-        themeCard.addView(themeSub)
+        themeCard.addView(activeThemeStatusView)
 
         val themeRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -2499,6 +2531,13 @@ class MainActivity : AppCompatActivity() {
             visibility = View.GONE
             setPadding(0, 10, 0, 0)
         }
+
+        settingsNotifPermStatusView = TextView(this).apply {
+            textSize = 12f
+            setTypeface(null, Typeface.BOLD)
+            setPadding(4, 0, 4, 8)
+        }
+        notifBodyView.addView(settingsNotifPermStatusView)
 
         settingsExactAlarmStatusView = TextView(this).apply {
             textSize = 12f
@@ -3453,6 +3492,16 @@ class MainActivity : AppCompatActivity() {
         if (::themeLightBtn.isInitialized) styleModeChip(themeLightBtn, themeChoice == ThemeChoice.LIGHT, "#0284C7")
         if (::themeDarkBtn.isInitialized) styleModeChip(themeDarkBtn, themeChoice == ThemeChoice.DARK, "#334155")
 
+        if (::activeThemeStatusView.isInitialized) {
+            val modeName = when (themeChoice) {
+                ThemeChoice.SYSTEM -> "System"
+                ThemeChoice.LIGHT -> "Light"
+                ThemeChoice.DARK -> "Dark"
+            }
+            val activeSurface = if (isDark) "Dark" else "Light"
+            activeThemeStatusView.text = "Selected: $modeName • Active: $activeSurface (high-contrast palette)"
+        }
+
         val avatarBmp = loadCircularAvatarBitmap()
         setupAvatarView.setImageBitmap(avatarBmp)
         dashAvatarView.setImageBitmap(avatarBmp)
@@ -3486,6 +3535,17 @@ class MainActivity : AppCompatActivity() {
         val alarmColor = Color.parseColor(if (alarmOk) "#10B981" else "#F59E0B")
         setupExactAlarmStatusView.text = alarmLabel
         setupExactAlarmStatusView.setTextColor(alarmColor)
+
+        if (::settingsNotifPermStatusView.isInitialized) {
+            settingsNotifPermStatusView.text = if (notifOk) {
+                "🔔 System Notification Permission: Allowed"
+            } else {
+                "🔕 System Notification Permission: Not Allowed (Tap Setup to grant)"
+            }
+            settingsNotifPermStatusView.setTextColor(
+                Color.parseColor(if (notifOk) "#10B981" else "#F59E0B")
+            )
+        }
 
         if (::settingsExactAlarmStatusView.isInitialized) {
             settingsExactAlarmStatusView.text = alarmLabel
@@ -3639,6 +3699,10 @@ class MainActivity : AppCompatActivity() {
 
         monthTitleView.text = s.monthLabel
 
+        if (::clearPlanBtn.isInitialized) {
+            clearPlanBtn.visibility = if (s.plannedTotalCount > 0) View.VISIBLE else View.GONE
+        }
+
         val progressColorHex: String
         val cardFillHex: String
         val cardStrokeHex: String
@@ -3786,6 +3850,9 @@ class MainActivity : AppCompatActivity() {
 
         val q = store.getQuarterStats(selectedMonth)
         val trends = store.getMultiMonthTrend(selectedMonth, 6)
+        if (::trendLegendView.isInitialized) {
+            trendLegendView.text = "🟢 Met ≥$targetPct%   •   🟣 Below $targetPct%   •   🟠 Target Line ($targetPct%)"
+        }
         trendChartView.setData(trends, isDark, animate = animateCharts)
 
         if (::runRateFollowThroughView.isInitialized) {
@@ -4781,10 +4848,11 @@ class MainActivity : AppCompatActivity() {
                 canvas.drawArc(rect, -90f, actualSweep, false, progressPaint)
             }
 
-            // 100% Goal marker dot at 12 o'clock
             val cx = width / 2f
             val cy = height / 2f
-            goalMarkerPaint.color = Color.parseColor(if (targetAttended >= required) "#10B981" else (if (dark) "#94A3B8" else "#64748B"))
+            goalMarkerPaint.color = Color.parseColor(
+                if (targetAttended >= required) "#10B981" else (if (dark) "#94A3B8" else "#64748B")
+            )
             canvas.drawCircle(cx, pad, 7f, goalMarkerPaint)
 
             val displayPct = (targetPct * animFraction).roundToInt()
