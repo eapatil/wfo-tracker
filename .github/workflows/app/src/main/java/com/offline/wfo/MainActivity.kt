@@ -2625,12 +2625,24 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 10, 0, 0)
         }
 
-        val clearUpcomingBtn = makeSmallChipButton("Clear Upcoming") {}.apply {
+        val clearUpcomingBtn = makeSmallChipButton("Clear Upcoming") {
+            if (!ensureEditUnlocked()) return@makeSmallChipButton
+            val removedBatch = store.clearUpcomingHolidaysAndLeaves()
+            if (removedBatch.isNotEmpty()) {
+                syncBackgroundAndWidget()
+                refreshAllViews(animateCharts = true)
+                showUndoBanner("Cleared ${removedBatch.size} upcoming entry(s)", removedBatch)
+                showStatusPopup(true, "Cleared ${removedBatch.size} upcoming holiday/leave entry(s)")
+            } else {
+                showStatusPopup(false, "No upcoming holidays or leaves to clear")
+            }
+        }.apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { gravity = Gravity.END }
         }
+
         clearUpcomingBtn.setOnClickListener {
             if (!ensureEditUnlocked()) return@setOnClickListener
             val removedBatch = store.clearUpcomingHolidaysAndLeaves()
