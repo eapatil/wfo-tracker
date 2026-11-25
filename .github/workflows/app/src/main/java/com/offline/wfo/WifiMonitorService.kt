@@ -15,6 +15,7 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.media.AudioAttributes
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -24,6 +25,7 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import java.time.DayOfWeek
@@ -37,8 +39,11 @@ import java.time.format.DateTimeFormatter
 class WifiMonitorService : Service() {
 
     companion object {
-        const val CHANNEL_MONITOR = "wfo_monitor_channel"
-        const val CHANNEL_ALERTS = "wfo_alerts_channel"
+        // Silent channel for background status & passive nudges
+        const val CHANNEL_MONITOR = "officepace_silent_status_v1"
+        // Audible channel for check-in captured, check-out/departure & action/missed-plan alerts
+        const val CHANNEL_ALERTS = "officepace_action_sound_v1"
+
         const val ACTION_DATA_UPDATED = "com.offline.wfo.DATA_UPDATED"
         const val ACTION_QUICK_LOG_TODAY = "com.offline.wfo.QUICK_LOG_TODAY"
         const val ACTION_REFRESH_STATUS = "com.offline.wfo.REFRESH_STATUS"
@@ -92,7 +97,7 @@ class WifiMonitorService : Service() {
         store = AttendanceStore(this)
         connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        createNotificationChannels()
+        ensureServiceNotificationChannels(this)
 
         try {
             startForeground(101, buildPersistentNotification())
@@ -307,11 +312,11 @@ class WifiMonitorService : Service() {
             sendBroadcast(Intent(ACTION_DATA_UPDATED).setPackage(packageName))
             if (store.isDisconnectAlertEnabled()) {
                 val leaveMsg = when (mode) {
-                    TrackingMode.LOCATION_ONLY -> "Left ${store.getOfficeLocationName()} (${radiusMeters}m zone). Departure time recorded."
-                    TrackingMode.WIFI_ONLY -> "Disconnected from office Wi-Fi. Disconnect time recorded."
-                    TrackingMode.BOTH -> "Left office Wi-Fi / ${radiusMeters}m zone. Disconnect time recorded."
+                    TrackingMode.LOCATION_ONLY -> "Left ${store.getOfficeLocationName()} (${radiusMeters}m zone). Check-out time recorded."
+                    TrackingMode.WIFI_ONLY -> "Disconnected from office Wi-Fi. Check-out time recorded."
+                    TrackingMode.BOTH -> "Left office Wi-Fi / ${radiusMeters}m zone. Check-out time recorded."
                 }
-                sendAlertNotification(this, "🔌 Office Disconnected", leaveMsg)
+                sendAlertNotification(this, "🔌 Checked Out / Office Disconnected", leaveMsg)
             }
         } else {
             updatePersistentNotification()
@@ -324,13 +329,13 @@ class WifiMonitorService : Service() {
         val stats = store.getMonthStats(ym, today)
 
         val checkInBody = if (stats.remainingDays == 0) {
-            "Today is confirmed as an Office day (${stats.attendedDays}/${stats.requiredDays} days). ${stats.targetPercent}% monthly target met!"
+            "Attendance captured for today (${stats.attendedDays}/${stats.requiredDays} days). ${stats.targetPercent}% monthly target met!"
         } else {
-            "Today is confirmed as an Office day (${stats.attendedDays}/${stats.requiredDays} days). Need ${stats.remainingDays} more day(s) • ${maxOf(0, stats.bufferDays)} WFH buffer left."
+            "Attendance captured for today (${stats.attendedDays}/${stats.requiredDays} days). Need ${stats.remainingDays} more day(s) • ${maxOf(0, stats.bufferDays)} WFH buffer left."
         }
 
         if (store.isConnectAlertEnabled() && store.claimOnceFlag("notif_checkin_$today")) {
-            sendAlertNotification(this, "✅ Office Day Logged ($sourceLabel)", checkInBody)
+            sendAlertNotification(this, "✅ Attendance Captured ($sourceLabel)", checkInBody)
         }
 
         if (store.isTargetBufferAlertEnabled()) {
@@ -418,14 +423,71 @@ class WifiMonitorService : Service() {
     }
 
     private fun createNotificationChannels() {
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_MONITOR, "Background WFO Monitor", NotificationManager.IMPORTANCE_LOW)
-        )
-        nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_ALERTS, "Attendance & Plan Alerts", NotificationManager.IMPORTANCE_HIGH)
-        )
+        ensureServiceNotificationChannels(this)
     }
+}
+
+fun ensureServiceNotificationChannels(context: Context) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+    val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+    // 1. Silent channel for ongoing background status & passive updates
+    val silentChannel = NotificationChannel(
+        WifiMonitorService.CHANNEL_MONITOR,
+        "Background WFO Monitor (Silent)",
+        NotificationManager.IMPORTANCE_LOW
+    ).apply {
+        description = "Silent foreground service and passive daily status updates"
+        setSound(null, null)
+        enableVibration(false)
+        setShowBadge(false)
+    }
+
+    // 2. Audible channel for check-in captured, check-out/departure & action/missed-plan alerts
+    val audioAttrs = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+        .build()
+
+    val alertChannel = NotificationChannel(
+        WifiMonitorService.CHANNEL_ALERTS,
+        "Check-In, Check-Out & Action Alerts",
+        NotificationManager.IMPORTANCE_HIGH
+    ).apply {
+        description = "Audible alerts when attendance is captured, on check-out, or when a planned day is missed"
+        setSound(Settings.System.DEFAULT_NOTIFICATION_URI, audioAttrs)
+        enableVibration(true)
+    }
+
+    nm.createNotificationChannel(silentChannel)
+    nm.createNotificationChannel(alertChannel)
+}
+
+fun sendSilentStatusNotification(
+    context: Context,
+    title: String,
+    body: String,
+    notifId: Int = System.currentTimeMillis().toInt()
+) {
+    ensureServiceNotificationChannels(context)
+    val openIntent = PendingIntent.getActivity(
+        context,
+        notifId,
+        Intent(context, MainActivity::class.java),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+    val builder = NotificationCompat.Builder(context, WifiMonitorService.CHANNEL_MONITOR)
+        .setSmallIcon(android.R.drawable.ic_menu_my_calendar)
+        .setContentTitle(title)
+        .setContentText(body)
+        .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+        .setContentIntent(openIntent)
+        .setAutoCancel(true)
+        .setSilent(true)
+        .setPriority(NotificationCompat.PRIORITY_LOW)
+
+    val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    nm.notify(notifId, builder.build())
 }
 
 fun sendAlertNotification(
@@ -435,14 +497,7 @@ fun sendAlertNotification(
     notifId: Int = System.currentTimeMillis().toInt(),
     actions: List<NotificationCompat.Action> = emptyList()
 ) {
-    val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    nm.createNotificationChannel(
-        NotificationChannel(
-            WifiMonitorService.CHANNEL_ALERTS,
-            "Attendance & Plan Alerts",
-            NotificationManager.IMPORTANCE_HIGH
-        )
-    )
+    ensureServiceNotificationChannels(context)
     val openIntent = PendingIntent.getActivity(
         context,
         1,
@@ -456,9 +511,11 @@ fun sendAlertNotification(
         .setStyle(NotificationCompat.BigTextStyle().bigText(body))
         .setContentIntent(openIntent)
         .setAutoCancel(true)
+        .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
         .setPriority(NotificationCompat.PRIORITY_HIGH)
 
     actions.forEach { builder.addAction(it) }
+    val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     nm.notify(notifId, builder.build())
 }
 
@@ -544,21 +601,22 @@ class ReminderReceiver : BroadcastReceiver() {
             val todayType = store.getDayType(today)
             val isWeekday = today.dayOfWeek != DayOfWeek.SATURDAY && today.dayOfWeek != DayOfWeek.SUNDAY
 
-            // 1. Morning-Of Planned Office Reminder (07:30 - 09:30)
+            // 1. Morning-Of Planned Office Reminder (07:30 - 09:30) — Silent status reminder
             if (store.isPlannedRemindersEnabled() &&
                 todayType == DayType.PLANNED &&
                 !now.isBefore(LocalTime.of(7, 30)) &&
                 now.isBefore(LocalTime.of(9, 30)) &&
                 store.claimOnceFlag("notif_plan_morning_$today")
             ) {
-                sendAlertNotification(
+                sendSilentStatusNotification(
                     context,
                     "📅 Planned Office Day Today",
-                    "Today is marked as a Planned Office day. Auto-tracking will confirm when you arrive."
+                    "Today is marked as a Planned Office day. Auto-tracking will confirm when you arrive.",
+                    notifId = 4402
                 )
             }
 
-            // 2. Morning Pace & WFH Briefing on Unscheduled Weekdays (08:30 - 10:30)
+            // 2. Morning Pace & WFH Briefing on Unscheduled Weekdays (08:30 - 10:30) — Silent unless zero buffer
             if (store.isMorningNudgeEnabled() &&
                 isWeekday &&
                 todayType == DayType.NONE &&
@@ -570,20 +628,37 @@ class ReminderReceiver : BroadcastReceiver() {
                 val rhythm = store.getRhythmStats(today)
                 if ((stats.remainingDays > 0 && stats.bufferDays <= 2) || rhythm.consecutiveWfhWeekdays >= 3) {
                     if (store.claimOnceFlag("notif_pace_nudge_$today")) {
-                        sendAlertNotification(
-                            context,
-                            "🧭 ${rhythm.safeToWfhVerdict}",
-                            rhythm.safeToWfhDetail
-                        )
+                        if (stats.remainingDays > 0 && stats.bufferDays <= 0) {
+                            sendAlertNotification(
+                                context,
+                                "🚨 ${rhythm.safeToWfhVerdict}",
+                                rhythm.safeToWfhDetail,
+                                notifId = 4403
+                            )
+                        } else {
+                            sendSilentStatusNotification(
+                                context,
+                                "🧭 ${rhythm.safeToWfhVerdict}",
+                                rhythm.safeToWfhDetail,
+                                notifId = 4403
+                            )
+                        }
                     }
                 }
             }
 
-            // 3. Actionable Missed-Plan Rollover Alert (11:30 - 14:30)
+            // 3. Planned Day + 1-Hour Buffer After Learned Arrival Window (Audible Action Alert)
+            // Triggers ONLY when today is PLANNED, NOT yet OFFICE, and at/after (learnedArrivalEnd + 60m)
+            val lateCheckTime = store.getPlannedNotArrivedCheckTime()
+            val lateCheckEnd = lateCheckTime.plusHours(3).let { end ->
+                if (end.isBefore(lateCheckTime)) LocalTime.of(23, 59) else end
+            }
             if (store.isPlannedRemindersEnabled() &&
+                isWeekday &&
                 todayType == DayType.PLANNED &&
-                !now.isBefore(LocalTime.of(11, 30)) &&
-                now.isBefore(LocalTime.of(14, 30)) &&
+                !store.wasConnectedToOfficeWifi() &&
+                !now.isBefore(lateCheckTime) &&
+                !now.isAfter(lateCheckEnd) &&
                 store.claimOnceFlag("notif_plan_missed_$today")
             ) {
                 val notifId = 4401
@@ -610,10 +685,11 @@ class ReminderReceiver : BroadcastReceiver() {
                     NotificationCompat.Action(android.R.drawable.ic_menu_my_calendar, "Move to Tomorrow", movePi)
                 )
 
+                val checkTimeFormatted = lateCheckTime.format(DateTimeFormatter.ofPattern("HH:mm"))
                 sendAlertNotification(
                     context,
-                    "⚠️ Planned Office Visit Not Detected",
-                    "Office presence not detected yet for today's planned visit. Update directly below:",
+                    "⚠️ Planned Office Not Logged (Past $checkTimeFormatted)",
+                    "Still not logged at office after your learned arrival window + 1h buffer. Mark as Leave or Move to Tomorrow:",
                     notifId = notifId,
                     actions = actions
                 )
@@ -627,10 +703,11 @@ class ReminderReceiver : BroadcastReceiver() {
                 now.isBefore(LocalTime.of(22, 0)) &&
                 store.claimOnceFlag("notif_plan_eve_$today")
             ) {
-                sendAlertNotification(
+                sendSilentStatusNotification(
                     context,
                     "🎒 Office Day Tomorrow",
-                    "Reminder: Tomorrow ($tomorrow) is scheduled as a Planned Office day."
+                    "Reminder: Tomorrow ($tomorrow) is scheduled as a Planned Office day.",
+                    notifId = 4404
                 )
             }
 
@@ -651,32 +728,45 @@ class ReminderReceiver : BroadcastReceiver() {
                     sendAlertNotification(
                         context,
                         "📌 ${mStats.monthLabel} Recovery Needed",
-                        "Need ${mStats.remainingDays} more office day(s) before month-end. Suggested dates: $datesText."
+                        "Need ${mStats.remainingDays} more office day(s) before month-end. Suggested dates: $datesText.",
+                        notifId = 4405
                     )
                 }
             }
 
             // 5. Auto-End-of-Day Disconnect Safety Net (23:50 - 23:59)
             if (!now.isBefore(LocalTime.of(23, 50)) && store.wasConnectedToOfficeWifi()) {
-                store.updateLastSeenTimestamp(store.getActiveOfficeSsid(), today, now)
+                val prevSrc = store.getActiveOfficeSsid()
+                store.updateLastSeenTimestamp(prevSrc, today, now)
                 store.setWasConnectedToOfficeWifi(false)
                 store.setActiveOfficeSsid("")
+                if (store.isDisconnectAlertEnabled() && store.claimOnceFlag("notif_eod_checkout_$today")) {
+                    sendAlertNotification(
+                        context,
+                        "🔌 End-of-Day Check-Out Recorded",
+                        "Logged departure at ${now.format(DateTimeFormatter.ofPattern("HH:mm"))} for today's office session.",
+                        notifId = 4406
+                    )
+                }
                 context.sendBroadcast(Intent(WifiMonitorService.ACTION_DATA_UPDATED).setPackage(context.packageName))
             }
         }
 
         fun scheduleNextCheckpoint(context: Context) {
             val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val store = AttendanceStore(context)
+            val lateCheckTime = store.getPlannedNotArrivedCheckTime()
+
             val now = LocalDateTime.now()
             val checkpoints = listOf(
                 LocalTime.of(7, 35),
                 LocalTime.of(8, 35),
                 LocalTime.of(10, 0),
                 LocalTime.of(11, 0),
-                LocalTime.of(11, 35),
+                lateCheckTime,
                 LocalTime.of(20, 5),
                 LocalTime.of(23, 55)
-            )
+            ).distinct().sorted()
 
             var nextTrigger: LocalDateTime? = null
             for (cp in checkpoints) {
