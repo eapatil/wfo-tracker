@@ -2625,26 +2625,25 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 10, 0, 0)
         }
 
-        val clearUpcomingBtn = makeSmallChipButton("Clear Upcoming") {
-    if (ensureEditUnlocked()) {
-        val removedBatch = store.clearUpcomingHolidaysAndLeaves()
-        if (removedBatch.isNotEmpty()) {
-            syncBackgroundAndWidget()
-            refreshAllViews(animateCharts = true)
-            showUndoBanner("Cleared ${removedBatch.size} upcoming entry(s)", removedBatch)
-            showStatusPopup(true, "Cleared ${removedBatch.size} upcoming holiday/leave entry(s)")
-        } else {
-            showStatusPopup(false, "No upcoming holidays or leaves to clear")
+                val clearUpcomingBtn = makeSmallChipButton("Clear Upcoming") {
+            if (ensureEditUnlocked()) {
+                val removedBatch = store.clearUpcomingHolidaysAndLeaves()
+                if (removedBatch.isNotEmpty()) {
+                    syncBackgroundAndWidget()
+                    refreshAllViews(animateCharts = true)
+                    showUndoBanner("Cleared ${removedBatch.size} upcoming entry(s)", removedBatch)
+                    showStatusPopup(true, "Cleared ${removedBatch.size} upcoming holiday/leave entry(s)")
+                } else {
+                    showStatusPopup(false, "No upcoming holidays or leaves to clear")
+                }
+            }
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { gravity = Gravity.END }
         }
-    }
-}.apply {
-    layoutParams = LinearLayout.LayoutParams(
-        LinearLayout.LayoutParams.WRAP_CONTENT,
-        LinearLayout.LayoutParams.WRAP_CONTENT
-    ).apply { gravity = Gravity.END }
-}
-holidayBodyView.addView(clearUpcomingBtn)
-
+        holidayBodyView.addView(clearUpcomingBtn)
 
         upcomingHolLeaveSummaryView = TextView(this).apply {
             textSize = 12f
