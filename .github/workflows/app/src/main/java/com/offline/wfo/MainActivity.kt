@@ -3742,37 +3742,68 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        val currentYm = YearMonth.from(today)
+        val isCurrentMonth = selectedMonth == currentYm
+        val isPastMonth = selectedMonth.isBefore(currentYm)
+
         if (::briefingCardView.isInitialized) {
             briefingCardView.background = roundedBox(cardFillHex, cardStrokeHex, 18f, 1)
-            briefingHeadlineView.text = r.safeToWfhVerdict
-            briefingHeadlineView.setTextColor(headlineColor)
 
-            val monthlySummary = when {
-                s.remainingDays == 0 -> "${s.targetPercent}% monthly mandate met (${s.attendedDays}/${s.requiredDays} days)"
-                s.bufferDays < 0 -> "Shortfall: ${s.remainingDays} day(s) needed across ${s.availableWeekdaysLeft} left"
-                s.bufferDays == 0 -> "Zero buffer: all ${s.availableWeekdaysLeft} working day(s) needed"
-                else -> "On track • ${s.bufferDays} WFH buffer day(s) left"
-            }
-            briefingSubView.text = "$monthlySummary • Window ${r.learnedArrivalWindowLabel}"
-            briefingSubView.setTextColor(subColor)
+            if (isCurrentMonth) {
+                briefingHeadlineView.text = r.safeToWfhVerdict
+                briefingHeadlineView.setTextColor(headlineColor)
 
-            briefingWeeklyView.text = if (w.remainingThisWeek == 0) {
-                "📆 This Week: ${w.attendedThisWeek}/${w.weeklyQuota} days done (pace met)"
-            } else {
-                "📆 This Week: ${w.attendedThisWeek}/${w.weeklyQuota} days done • Need ${w.remainingThisWeek} more (${w.weekdaysLeftThisWeek} left)"
-            }
-            briefingWeeklyView.setTextColor(cTextPrimary())
-
-            val daysLeftInMonth = selectedMonth.atEndOfMonth().dayOfMonth - today.dayOfMonth
-            if (selectedMonth == YearMonth.from(today) && s.remainingDays > 0 && daysLeftInMonth in 0..7 && s.recoverySuggestedDates.isNotEmpty()) {
-                val dateList = s.recoverySuggestedDates.joinToString(", ") {
-                    it.format(DateTimeFormatter.ofPattern("dd MMM (EEE)"))
+                val monthlySummary = when {
+                    s.remainingDays == 0 -> "${s.targetPercent}% monthly mandate met (${s.attendedDays}/${s.requiredDays} days)"
+                    s.bufferDays < 0 -> "Shortfall: ${s.remainingDays} day(s) needed across ${s.availableWeekdaysLeft} left"
+                    s.bufferDays == 0 -> "Zero buffer: all ${s.availableWeekdaysLeft} working day(s) needed"
+                    else -> "On track • ${s.bufferDays} WFH buffer day(s) left"
                 }
-                briefingRecoveryView.visibility = View.VISIBLE
-                briefingRecoveryView.setTextColor(subColor)
-                briefingRecoveryView.text = "📌 Suggested dates: $dateList (${String.format(Locale.US, "%.2f", s.requiredDailyRunRate)}/wkday)"
+                briefingSubView.visibility = View.VISIBLE
+                briefingSubView.text = "$monthlySummary • Window ${r.learnedArrivalWindowLabel}"
+                briefingSubView.setTextColor(subColor)
+
+                briefingWeeklyView.visibility = View.VISIBLE
+                briefingWeeklyView.text = if (w.remainingThisWeek == 0) {
+                    "📆 This Week: ${w.attendedThisWeek}/${w.weeklyQuota} days done (pace met)"
+                } else {
+                    "📆 This Week: ${w.attendedThisWeek}/${w.weeklyQuota} days done • Need ${w.remainingThisWeek} more (${w.weekdaysLeftThisWeek} left)"
+                }
+                briefingWeeklyView.setTextColor(cTextPrimary())
+
+                val daysLeftInMonth = selectedMonth.atEndOfMonth().dayOfMonth - today.dayOfMonth
+                if (s.remainingDays > 0 && daysLeftInMonth in 0..7 && s.recoverySuggestedDates.isNotEmpty()) {
+                    val dateList = s.recoverySuggestedDates.joinToString(", ") {
+                        it.format(DateTimeFormatter.ofPattern("dd MMM (EEE)"))
+                    }
+                    briefingRecoveryView.visibility = View.VISIBLE
+                    briefingRecoveryView.setTextColor(subColor)
+                    briefingRecoveryView.text = "📌 Suggested dates: $dateList (${String.format(Locale.US, "%.2f", s.requiredDailyRunRate)}/wkday)"
+                } else {
+                    briefingRecoveryView.visibility = View.GONE
+                }
             } else {
+                briefingSubView.visibility = View.GONE
+                briefingWeeklyView.visibility = View.GONE
                 briefingRecoveryView.visibility = View.GONE
+
+                if (isPastMonth) {
+                    if (s.remainingDays == 0) {
+                        briefingHeadlineView.text = "✅ ${s.monthLabel} — Target Met (${s.attendedDays}/${s.requiredDays} days • ${s.actualPercent}%)"
+                    } else {
+                        briefingHeadlineView.text = "⚠️ ${s.monthLabel} — Shortfall of ${s.remainingDays} day(s) (${s.attendedDays}/${s.requiredDays} days)"
+                    }
+                } else {
+                    val plannedSuffix = if (s.futurePlannedDays > 0) " • ${s.futurePlannedDays} planned" else ""
+                    if (s.remainingDays == 0) {
+                        briefingHeadlineView.text = "✅ ${s.monthLabel} — Target Met$plannedSuffix"
+                    } else if (s.bufferDays < 0) {
+                        briefingHeadlineView.text = "⚠️ ${s.monthLabel} — Shortfall risk: ${s.remainingDays} day(s) needed across ${s.availableWeekdaysLeft} left$plannedSuffix"
+                    } else {
+                        briefingHeadlineView.text = "📅 ${s.monthLabel} — On track • ${s.remainingDays} needed • ${s.bufferDays} WFH buffer$plannedSuffix"
+                    }
+                }
+                briefingHeadlineView.setTextColor(headlineColor)
             }
         }
 
