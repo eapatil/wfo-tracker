@@ -11,6 +11,7 @@ import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
@@ -58,6 +59,15 @@ class WifiMonitorService : Service() {
     private lateinit var store: AttendanceStore
     private var callbackRegistered = false
     private var locationListenerRegistered = false
+    private var screenOffReceiverRegistered = false
+
+    private val screenOffReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == Intent.ACTION_SCREEN_OFF) {
+                store.backupNowAsync()
+            }
+        }
+    }
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) FLAG_INCLUDE_LOCATION_INFO else 0
@@ -112,6 +122,11 @@ class WifiMonitorService : Service() {
         connectivityManager.registerNetworkCallback(request, networkCallback)
         callbackRegistered = true
 
+        runCatching {
+            registerReceiver(screenOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
+            screenOffReceiverRegistered = true
+        }
+
         registerLocationUpdatesIfNeeded()
         ReminderReceiver.scheduleNextCheckpoint(this)
     }
@@ -162,6 +177,9 @@ class WifiMonitorService : Service() {
         }
         if (locationListenerRegistered) {
             runCatching { locationManager.removeUpdates(locationListener) }
+        }
+        if (screenOffReceiverRegistered) {
+            runCatching { unregisterReceiver(screenOffReceiver) }
         }
         super.onDestroy()
     }
@@ -431,7 +449,6 @@ fun ensureServiceNotificationChannels(context: Context) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
     val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-    // 1. Silent channel for ongoing background status & passive updates
     val silentChannel = NotificationChannel(
         WifiMonitorService.CHANNEL_MONITOR,
         "Background WFO Monitor (Silent)",
@@ -443,7 +460,6 @@ fun ensureServiceNotificationChannels(context: Context) {
         setShowBadge(false)
     }
 
-    // 2. Audible channel for check-in captured, check-out/departure & action/missed-plan alerts
     val audioAttrs = AudioAttributes.Builder()
         .setUsage(AudioAttributes.USAGE_NOTIFICATION)
         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -601,7 +617,6 @@ class ReminderReceiver : BroadcastReceiver() {
             val todayType = store.getDayType(today)
             val isWeekday = today.dayOfWeek != DayOfWeek.SATURDAY && today.dayOfWeek != DayOfWeek.SUNDAY
 
-            // 1. Morning-Of Planned Office Reminder (07:30 - 09:30) — Silent status reminder
             if (store.isPlannedRemindersEnabled() &&
                 todayType == DayType.PLANNED &&
                 !now.isBefore(LocalTime.of(7, 30)) &&
@@ -616,7 +631,6 @@ class ReminderReceiver : BroadcastReceiver() {
                 )
             }
 
-            // 2. Morning Pace & WFH Briefing on Unscheduled Weekdays (08:30 - 10:30) — Silent unless zero buffer
             if (store.isMorningNudgeEnabled() &&
                 isWeekday &&
                 todayType == DayType.NONE &&
@@ -647,8 +661,6 @@ class ReminderReceiver : BroadcastReceiver() {
                 }
             }
 
-            // 3. Planned Day + 1-Hour Buffer After Learned Arrival Window (Audible Action Alert)
-            // Triggers ONLY when today is PLANNED, NOT yet OFFICE, and at/after (learnedArrivalEnd + 60m)
             val lateCheckTime = store.getPlannedNotArrivedCheckTime()
             val lateCheckEnd = lateCheckTime.plusHours(3).let { end ->
                 if (end.isBefore(lateCheckTime)) LocalTime.of(23, 59) else end
@@ -695,7 +707,6 @@ class ReminderReceiver : BroadcastReceiver() {
                 )
             }
 
-            // 4. Night-Before Prep & Monthly End-of-Month Recovery Alert (20:00 - 22:00)
             val tomorrow = today.plusDays(1)
             if (store.isPlannedRemindersEnabled() &&
                 store.getDayType(tomorrow) == DayType.PLANNED &&
@@ -734,7 +745,6 @@ class ReminderReceiver : BroadcastReceiver() {
                 }
             }
 
-            // 5. Auto-End-of-Day Disconnect Safety Net (23:50 - 23:59)
             if (!now.isBefore(LocalTime.of(23, 50)) && store.wasConnectedToOfficeWifi()) {
                 val prevSrc = store.getActiveOfficeSsid()
                 store.updateLastSeenTimestamp(prevSrc, today, now)
