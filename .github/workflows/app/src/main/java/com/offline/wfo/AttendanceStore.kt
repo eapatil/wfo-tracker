@@ -1301,6 +1301,13 @@ class AttendanceStore(private val context: Context) {
             monthLines.forEach { appendLine(it) }
         }.trim()
     }
+    
+    fun getProfilePhotoFile(): File = File(context.filesDir, "user_profile_avatar.jpg")
+
+    fun deleteProfilePhoto() {
+        val f = getProfilePhotoFile()
+        if (f.exists()) f.delete()
+    }
 
     fun exportAllCsv(): String {
         val types = getDayTypesMap()
