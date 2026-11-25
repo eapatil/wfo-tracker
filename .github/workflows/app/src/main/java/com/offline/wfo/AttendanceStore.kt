@@ -5,8 +5,8 @@ import android.content.SharedPreferences
 import android.location.Location
 import android.net.Uri
 import android.provider.DocumentsContract
-import java.io.File
 import java.io.BufferedReader
+import java.io.File
 import java.io.InputStreamReader
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -287,12 +287,21 @@ class AttendanceStore(private val context: Context) {
 
     fun setUserName(name: String) {
         prefs.edit().putString(KEY_USER_NAME, sanitizeImportedText(name).trim()).apply()
+        triggerSilentAutoBackup()
     }
 
     fun isFullAppLockEnabled(): Boolean = prefs.getBoolean(KEY_FULL_APP_LOCK, false)
 
     fun setFullAppLockEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_FULL_APP_LOCK, enabled).apply()
+        triggerSilentAutoBackup()
+    }
+
+    fun getProfilePhotoFile(): File = File(context.filesDir, "user_profile_avatar.jpg")
+
+    fun deleteProfilePhoto() {
+        val f = getProfilePhotoFile()
+        if (f.exists()) f.delete()
     }
 
     // ==================== TRACKING MODE, WI-FI & GEOFENCE ====================
@@ -1302,13 +1311,6 @@ class AttendanceStore(private val context: Context) {
             monthLines.forEach { appendLine(it) }
         }.trim()
     }
-    
-    fun getProfilePhotoFile(): File = File(context.filesDir, "user_profile_avatar.jpg")
-
-    fun deleteProfilePhoto() {
-        val f = getProfilePhotoFile()
-        if (f.exists()) f.delete()
-    }
 
     fun exportAllCsv(): String {
         val types = getDayTypesMap()
@@ -1461,8 +1463,12 @@ class AttendanceStore(private val context: Context) {
             if (idxLast >= 0 && cols.size > idxLast && cols[idxLast].isNotBlank()) {
                 lastSeen[dateStr] = cols[idxLast].trim()
             }
-            if (idxAuto >= 0 && cols.size > idxAuto && cols[idxAuto].equals("true", ignoreCase = true)) {
-                autoSet.add(dateStr)
+            if (idxAuto >= 0 && cols.size > idxAuto) {
+                if (cols[idxAuto].equals("true", ignoreCase = true)) {
+                    autoSet.add(dateStr)
+                } else if (cols[idxAuto].equals("false", ignoreCase = true)) {
+                    autoSet.remove(dateStr)
+                }
             }
             if (idxNote >= 0 && cols.size > idxNote && cols[idxNote].isNotBlank()) {
                 notes[dateStr] = sanitizeImportedText(cols[idxNote]).trim()
