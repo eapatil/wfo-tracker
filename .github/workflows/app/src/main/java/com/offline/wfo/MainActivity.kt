@@ -1893,18 +1893,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         autoPlanBtn = makeSmallChipButton("✨ Auto-Plan") {
-            if (!ensureEditUnlocked()) return@makeSmallChipButton
-            autoPlanBtn.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-            animateCellPop(autoPlanBtn)
-            val modified = store.autoPlanRemainingDaysForMonth(selectedMonth)
-            syncBackgroundAndWidget()
-            refreshAllViews(animateCharts = true)
-            if (modified.isNotEmpty()) {
-                showUndoBanner("Auto-planned ${modified.size} office day(s)", modified)
-                showStatusPopup(true, "Auto-planned ${modified.size} office day(s)")
-            } else {
-                showStatusPopup(false, "Monthly target days are already planned or met")
-            }
+            handleAutoPlanClicked()
         }
         calHeaderRow.addView(calTitle)
         calHeaderRow.addView(clearPlanBtn)
@@ -2727,7 +2716,7 @@ class MainActivity : AppCompatActivity() {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         importBtn.setOnClickListener {
-            if (!ensureEditUnlocked()) return@setOnClickListener
+            if (!ensureEditUnlocked()) return@makePillButton
             launchCsvImport()
         }
 
@@ -4189,15 +4178,20 @@ class MainActivity : AppCompatActivity() {
                         }
                         view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                         animateCellPop(view)
+                        val prevType = dtype
                         val resulting = store.applyManualDayType(date, activeTapMode)
                         syncBackgroundAndWidget()
                         refreshAllViews(animateCharts = false)
-                        val msg = if (resulting == DayType.NONE) {
-                            "Cleared $dateStr"
+                        if (activeTapMode == DayType.OFFICE && resulting == DayType.OFFICE && prevType != DayType.OFFICE) {
+                            handleUnplannedOfficeLogged(date)
                         } else {
-                            "Marked $dateStr as ${resulting.name}"
+                            val msg = if (resulting == DayType.NONE) {
+                                "Cleared $dateStr"
+                            } else {
+                                "Marked $dateStr as ${resulting.name}"
+                            }
+                            showStatusPopup(true, msg)
                         }
-                        showStatusPopup(true, msg)
                     }
 
                     cellWrapper.setOnLongClickListener { view ->
@@ -4246,6 +4240,19 @@ class MainActivity : AppCompatActivity() {
         container.addView(spanTv)
 
         if (isEditUnlocked) {
+            if (info.type == DayType.PLANNED) {
+                val missedBtn = makeSmallChipButton("Missed Plan? (Leave / Holiday / Alternate)") {
+                    dialogRef?.dismiss()
+                    showMissedPlannedDayFlow(date)
+                }.apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { setMargins(0, 0, 0, 12) }
+                }
+                container.addView(missedBtn)
+            }
+
             val switchLabel = TextView(this).apply {
                 text = "Quick Status Change:"
                 textSize = 12f
@@ -4333,7 +4340,7 @@ class MainActivity : AppCompatActivity() {
         dialogRef = builder.show()
     }
 
-        private fun handleAutoPlanClicked() {
+    private fun handleAutoPlanClicked() {
         if (!ensureEditUnlocked()) return
         val monthStats = store.getMonthStats(selectedMonth)
         val isJanuaryOrEmptyHolidays =
@@ -4464,7 +4471,7 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton("Cancel", null)
             .show()
     }
-    
+
     private fun saveCompressedAvatar(uri: Uri) {
         runCatching {
             val rawBmp = contentResolver.openInputStream(uri)?.use { stream ->
