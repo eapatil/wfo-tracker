@@ -6,7 +6,6 @@ import android.location.Location
 import android.net.Uri
 import android.provider.DocumentsContract
 import java.io.BufferedReader
-import java.io.File
 import java.io.InputStreamReader
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -203,14 +202,26 @@ class AttendanceStore(private val context: Context) {
         prefs.edit().putString(KEY_ARRIVAL_MINUTES_SAMPLES, samples.joinToString(",")).apply()
     }
 
+    fun getArrivalSamplesRaw(): String = prefs.getString(KEY_ARRIVAL_MINUTES_SAMPLES, "") ?: ""
+
     fun getLearnedArrivalWindowMinutes(): Pair<Int, Int> {
-        val raw = prefs.getString(KEY_ARRIVAL_MINUTES_SAMPLES, "") ?: ""
+        val raw = getArrivalSamplesRaw()
         val samples = raw.split(",").mapNotNull { it.trim().toIntOrNull() }
         if (samples.isEmpty()) return 540 to 630
         val avg = samples.average().roundToInt()
         val start = (avg - 45).coerceIn(360, 720)
         val end = (avg + 60).coerceIn(start + 30, 900)
         return start to end
+    }
+
+    /**
+     * Returns the check time for a Planned Office day: 1 hour (60 minutes)
+     * after the upper end of the learned arrival window to allow for traffic/errands.
+     */
+    fun getPlannedNotArrivedCheckTime(): LocalTime {
+        val (_, endMinutes) = getLearnedArrivalWindowMinutes()
+        val bufferedMinutes = (endMinutes + 60).coerceIn(480, 1260)
+        return LocalTime.of(bufferedMinutes / 60, bufferedMinutes % 60)
     }
 
     fun getLearnedArrivalWindowLabel(): String {
@@ -226,7 +237,7 @@ class AttendanceStore(private val context: Context) {
         if (tType == DayType.HOLIDAY || tType == DayType.LEAVE) return false
         val (startMin, endMin) = getLearnedArrivalWindowMinutes()
         val curMin = nowTime.hour * 60 + nowTime.minute
-        return curMin in (startMin - 15)..(endMin + 30)
+        return curMin in (startMin - 15)..(endMin + 90)
     }
 
     fun rebalanceAdaptivePlannedDays(ym: YearMonth, today: LocalDate = LocalDate.now()) {
@@ -268,6 +279,7 @@ class AttendanceStore(private val context: Context) {
 
     fun setSetupComplete(complete: Boolean) {
         prefs.edit().putBoolean(KEY_SETUP_COMPLETE, complete).apply()
+        if (complete) triggerSilentAutoBackup()
     }
 
     fun getUserName(): String = prefs.getString(KEY_USER_NAME, "")?.trim() ?: ""
@@ -282,13 +294,6 @@ class AttendanceStore(private val context: Context) {
         prefs.edit().putBoolean(KEY_FULL_APP_LOCK, enabled).apply()
     }
 
-    fun getProfilePhotoFile(): File = File(context.filesDir, "user_profile_avatar.jpg")
-
-    fun deleteProfilePhoto() {
-        val f = getProfilePhotoFile()
-        if (f.exists()) f.delete()
-    }
-
     // ==================== TRACKING MODE, WI-FI & GEOFENCE ====================
 
     fun getTrackingMode(): TrackingMode {
@@ -298,6 +303,7 @@ class AttendanceStore(private val context: Context) {
 
     fun setTrackingMode(mode: TrackingMode) {
         prefs.edit().putString(KEY_TRACKING_MODE, mode.name).apply()
+        triggerSilentAutoBackup()
     }
 
     fun getTargetSsids(): List<String> {
@@ -317,12 +323,14 @@ class AttendanceStore(private val context: Context) {
         if (current.any { it.equals(clean, ignoreCase = true) }) return false
         current.add(clean)
         prefs.edit().putString(KEY_TARGET_SSIDS, current.joinToString(",")).apply()
+        triggerSilentAutoBackup()
         return true
     }
 
     fun removeTargetSsid(ssid: String) {
         val updated = getTargetSsids().filterNot { it.equals(ssid, ignoreCase = true) }
         prefs.edit().putString(KEY_TARGET_SSIDS, updated.joinToString(",")).apply()
+        triggerSilentAutoBackup()
     }
 
     fun getOfficeLocationName(): String = prefs.getString(KEY_OFFICE_LOC_NAME, "")?.trim() ?: ""
@@ -343,10 +351,12 @@ class AttendanceStore(private val context: Context) {
             .putLong(KEY_OFFICE_LNG, lng.toBits())
             .putInt(KEY_OFFICE_RADIUS, radiusMeters.coerceIn(50, 5000))
             .apply()
+        triggerSilentAutoBackup()
     }
 
     fun setGeofenceRadiusMeters(radiusMeters: Int) {
         prefs.edit().putInt(KEY_OFFICE_RADIUS, radiusMeters.coerceIn(50, 5000)).apply()
+        triggerSilentAutoBackup()
     }
 
     fun setLastKnownLocation(lat: Double, lng: Double) {
@@ -374,34 +384,62 @@ class AttendanceStore(private val context: Context) {
 
     fun setTargetPercent(pct: Int) {
         prefs.edit().putInt(KEY_TARGET_PCT, pct.coerceIn(5, 100)).apply()
+        triggerSilentAutoBackup()
     }
 
     fun isRoundUpEnabled(): Boolean = prefs.getBoolean(KEY_ROUND_UP, true)
-    fun setRoundUpEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_ROUND_UP, enabled).apply()
+    fun setRoundUpEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_ROUND_UP, enabled).apply()
+        triggerSilentAutoBackup()
+    }
 
     fun isExcludeHolidaysEnabled(): Boolean = prefs.getBoolean(KEY_EXCL_HOLIDAYS, true)
-    fun setExcludeHolidaysEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_EXCL_HOLIDAYS, enabled).apply()
+    fun setExcludeHolidaysEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_EXCL_HOLIDAYS, enabled).apply()
+        triggerSilentAutoBackup()
+    }
 
     fun isExcludeLeavesEnabled(): Boolean = prefs.getBoolean(KEY_EXCL_LEAVES, true)
-    fun setExcludeLeavesEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_EXCL_LEAVES, enabled).apply()
+    fun setExcludeLeavesEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_EXCL_LEAVES, enabled).apply()
+        triggerSilentAutoBackup()
+    }
 
     fun isConnectAlertEnabled(): Boolean = prefs.getBoolean(KEY_ALERT_CONNECT, true)
-    fun setConnectAlertEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_ALERT_CONNECT, enabled).apply()
+    fun setConnectAlertEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_ALERT_CONNECT, enabled).apply()
+        triggerSilentAutoBackup()
+    }
 
     fun isDisconnectAlertEnabled(): Boolean = prefs.getBoolean(KEY_ALERT_DISCONNECT, true)
-    fun setDisconnectAlertEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_ALERT_DISCONNECT, enabled).apply()
+    fun setDisconnectAlertEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_ALERT_DISCONNECT, enabled).apply()
+        triggerSilentAutoBackup()
+    }
 
     fun isPlannedRemindersEnabled(): Boolean = prefs.getBoolean(KEY_ALERT_PLANNED, true)
-    fun setPlannedRemindersEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_ALERT_PLANNED, enabled).apply()
+    fun setPlannedRemindersEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_ALERT_PLANNED, enabled).apply()
+        triggerSilentAutoBackup()
+    }
 
     fun isMorningNudgeEnabled(): Boolean = prefs.getBoolean(KEY_ALERT_MORNING, true)
-    fun setMorningNudgeEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_ALERT_MORNING, enabled).apply()
+    fun setMorningNudgeEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_ALERT_MORNING, enabled).apply()
+        triggerSilentAutoBackup()
+    }
 
     fun isTargetBufferAlertEnabled(): Boolean = prefs.getBoolean(KEY_ALERT_TARGET_BUFFER, true)
-    fun setTargetBufferAlertEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_ALERT_TARGET_BUFFER, enabled).apply()
+    fun setTargetBufferAlertEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_ALERT_TARGET_BUFFER, enabled).apply()
+        triggerSilentAutoBackup()
+    }
 
     fun isQuarterPaceAlertEnabled(): Boolean = prefs.getBoolean(KEY_ALERT_QUARTER, true)
-    fun setQuarterPaceAlertEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_ALERT_QUARTER, enabled).apply()
+    fun setQuarterPaceAlertEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_ALERT_QUARTER, enabled).apply()
+        triggerSilentAutoBackup()
+    }
 
     // ==================== PRIORITY WEEKDAYS ====================
 
@@ -429,6 +467,7 @@ class AttendanceStore(private val context: Context) {
             current.removeAt(idx)
         }
         prefs.edit().putString(KEY_PREFERRED_WEEKDAYS, current.joinToString(",") { it.name }).apply()
+        triggerSilentAutoBackup()
     }
 
     // ==================== PRESENCE & ATTENDANCE MUTATIONS ====================
@@ -1094,7 +1133,7 @@ class AttendanceStore(private val context: Context) {
             holidayDays = totalHolidays,
             actualPercent = actualPct,
             isEarlyDriftWarning = false,
-            driftSummary = "ℹ️ Strictly monthly mandate ($targetPct%/month — no quarterly carryover)"
+            driftSummary = "Strictly monthly mandate ($targetPct%/month — no quarterly carryover)"
         )
     }
 
@@ -1270,13 +1309,58 @@ class AttendanceStore(private val context: Context) {
         val lastSeen = getStringMap(KEY_LAST_SEEN)
         val sources = getStringMap(KEY_SOURCE_MAP)
         val autoSet = getAutoLoggedSet()
+
         val uName = sanitizeImportedText(getUserName()).trim()
+        val fullLock = isFullAppLockEnabled()
+        val trackingMode = getTrackingMode().name
+        val ssids = getTargetSsids().joinToString(",")
+        val locName = sanitizeImportedText(getOfficeLocationName()).trim()
+        val hasLoc = hasOfficeLocationConfigured()
+        val latStr = if (hasLoc) String.format(Locale.US, "%.6f", getOfficeLat()) else ""
+        val lngStr = if (hasLoc) String.format(Locale.US, "%.6f", getOfficeLng()) else ""
+        val radiusMeters = getGeofenceRadiusMeters()
+        val targetPct = getTargetPercent()
+        val roundUp = isRoundUpEnabled()
+        val exclHol = isExcludeHolidaysEnabled()
+        val exclLeave = isExcludeLeavesEnabled()
+        val prioWeekdays = getPreferredWeekdaysPriority().joinToString(",") { it.name }
+        val alertConnect = isConnectAlertEnabled()
+        val alertDisconnect = isDisconnectAlertEnabled()
+        val alertPlanned = isPlannedRemindersEnabled()
+        val alertMorning = isMorningNudgeEnabled()
+        val alertTargetBuffer = isTargetBufferAlertEnabled()
+        val alertQuarter = isQuarterPaceAlertEnabled()
+        val arrivalSamples = getArrivalSamplesRaw()
+        val backupTreeUri = getAutoBackupTreeUri()
 
         val allKeys = (types.keys + notes.keys + firstSeen.keys + lastSeen.keys).toSortedSet()
         return buildString {
             if (uName.isNotEmpty()) {
                 appendLine("# meta_user_name=${csvEscape(uName)}")
             }
+            appendLine("# meta_full_app_lock=$fullLock")
+            appendLine("# meta_tracking_mode=$trackingMode")
+            appendLine("# meta_target_ssids=${csvEscape(ssids)}")
+            appendLine("# meta_office_loc_name=${csvEscape(locName)}")
+            appendLine("# meta_office_lat=$latStr")
+            appendLine("# meta_office_lng=$lngStr")
+            appendLine("# meta_office_radius=$radiusMeters")
+            appendLine("# meta_target_percent=$targetPct")
+            appendLine("# meta_round_up=$roundUp")
+            appendLine("# meta_exclude_holidays=$exclHol")
+            appendLine("# meta_exclude_leaves=$exclLeave")
+            appendLine("# meta_preferred_weekdays=$prioWeekdays")
+            appendLine("# meta_alert_connect=$alertConnect")
+            appendLine("# meta_alert_disconnect=$alertDisconnect")
+            appendLine("# meta_alert_planned=$alertPlanned")
+            appendLine("# meta_alert_morning=$alertMorning")
+            appendLine("# meta_alert_target_buffer=$alertTargetBuffer")
+            appendLine("# meta_alert_quarter=$alertQuarter")
+            appendLine("# meta_arrival_samples=${csvEscape(arrivalSamples)}")
+            if (backupTreeUri.isNotBlank()) {
+                appendLine("# meta_backup_tree_uri=${csvEscape(backupTreeUri)}")
+            }
+
             appendLine("date,type,source,first_seen,last_seen,duration_hours,auto_logged,note")
             for (k in allKeys) {
                 val t = types[k] ?: DayType.NONE
@@ -1305,12 +1389,7 @@ class AttendanceStore(private val context: Context) {
         val rawLines = csvText.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
         if (rawLines.isEmpty()) return 0
 
-        rawLines.firstOrNull { it.startsWith("# meta_user_name=", ignoreCase = true) }?.let { metaLine ->
-            val extractedName = parseCsvLine(metaLine.substringAfter("=")).firstOrNull()?.trim().orEmpty()
-            if (extractedName.isNotEmpty() && getUserName().isEmpty()) {
-                setUserName(extractedName)
-            }
-        }
+        restoreSetupMetadataFromCsvLines(rawLines)
 
         val lines = rawLines.filterNot { it.startsWith("#") }
         if (lines.isEmpty()) return 0
@@ -1395,6 +1474,137 @@ class AttendanceStore(private val context: Context) {
             }
         }
         return importedCount
+    }
+
+    private fun restoreSetupMetadataFromCsvLines(rawLines: List<String>) {
+        val metaEntries = mutableMapOf<String, String>()
+        for (line in rawLines) {
+            if (!line.startsWith("# meta_", ignoreCase = true)) continue
+            val eqIdx = line.indexOf('=')
+            if (eqIdx <= 2) continue
+            val key = line.substring(2, eqIdx).trim().lowercase(Locale.US)
+            val rawVal = line.substring(eqIdx + 1).trim()
+            val parsedVal = parseCsvLine(rawVal).firstOrNull()?.trim().orEmpty()
+            metaEntries[key] = parsedVal
+        }
+        if (metaEntries.isEmpty()) return
+
+        val editor = prefs.edit()
+        var restoredAnySetting = false
+
+        metaEntries["meta_user_name"]?.takeIf { it.isNotEmpty() }?.let { name ->
+            if (getUserName().isEmpty()) {
+                editor.putString(KEY_USER_NAME, sanitizeImportedText(name).trim())
+                restoredAnySetting = true
+            }
+        }
+        metaEntries["meta_full_app_lock"]?.toBooleanStrictOrNull()?.let { lock ->
+            editor.putBoolean(KEY_FULL_APP_LOCK, lock)
+            restoredAnySetting = true
+        }
+        metaEntries["meta_tracking_mode"]?.let { modeName ->
+            runCatching { TrackingMode.valueOf(modeName.uppercase(Locale.US)) }.getOrNull()?.let { mode ->
+                editor.putString(KEY_TRACKING_MODE, mode.name)
+                restoredAnySetting = true
+            }
+        }
+        metaEntries["meta_target_ssids"]?.let { ssidCsv ->
+            val cleaned = ssidCsv.split(",").map { sanitizeImportedText(it).trim() }.filter { it.isNotEmpty() }.distinct()
+            if (cleaned.isNotEmpty() || getTargetSsids().isEmpty()) {
+                editor.putString(KEY_TARGET_SSIDS, cleaned.joinToString(","))
+                restoredAnySetting = true
+            }
+        }
+
+        val locName = metaEntries["meta_office_loc_name"]?.let { sanitizeImportedText(it).trim() }
+        val latVal = metaEntries["meta_office_lat"]?.toDoubleOrNull()
+        val lngVal = metaEntries["meta_office_lng"]?.toDoubleOrNull()
+        val radiusVal = metaEntries["meta_office_radius"]?.toIntOrNull()?.coerceIn(50, 5000)
+
+        if (radiusVal != null) {
+            editor.putInt(KEY_OFFICE_RADIUS, radiusVal)
+            restoredAnySetting = true
+        }
+        if (latVal != null && lngVal != null && latVal in -90.0..90.0 && lngVal in -180.0..180.0 &&
+            !(latVal == 0.0 && lngVal == 0.0)
+        ) {
+            editor.putLong(KEY_OFFICE_LAT, latVal.toBits())
+            editor.putLong(KEY_OFFICE_LNG, lngVal.toBits())
+            if (!locName.isNullOrEmpty()) {
+                editor.putString(KEY_OFFICE_LOC_NAME, locName)
+            }
+            restoredAnySetting = true
+        } else if (!locName.isNullOrEmpty()) {
+            editor.putString(KEY_OFFICE_LOC_NAME, locName)
+            restoredAnySetting = true
+        }
+
+        metaEntries["meta_target_percent"]?.toIntOrNull()?.coerceIn(5, 100)?.let { pct ->
+            editor.putInt(KEY_TARGET_PCT, pct)
+            restoredAnySetting = true
+        }
+        metaEntries["meta_round_up"]?.toBooleanStrictOrNull()?.let { v ->
+            editor.putBoolean(KEY_ROUND_UP, v)
+            restoredAnySetting = true
+        }
+        metaEntries["meta_exclude_holidays"]?.toBooleanStrictOrNull()?.let { v ->
+            editor.putBoolean(KEY_EXCL_HOLIDAYS, v)
+            restoredAnySetting = true
+        }
+        metaEntries["meta_exclude_leaves"]?.toBooleanStrictOrNull()?.let { v ->
+            editor.putBoolean(KEY_EXCL_LEAVES, v)
+            restoredAnySetting = true
+        }
+        metaEntries["meta_preferred_weekdays"]?.takeIf { it.isNotEmpty() }?.let { rawPrio ->
+            val validDays = rawPrio.split(",").mapNotNull { token ->
+                runCatching { DayOfWeek.valueOf(token.trim().uppercase(Locale.US)) }.getOrNull()
+            }.distinct()
+            if (validDays.isNotEmpty()) {
+                editor.putString(KEY_PREFERRED_WEEKDAYS, validDays.joinToString(",") { it.name })
+                restoredAnySetting = true
+            }
+        }
+        metaEntries["meta_alert_connect"]?.toBooleanStrictOrNull()?.let { v ->
+            editor.putBoolean(KEY_ALERT_CONNECT, v)
+            restoredAnySetting = true
+        }
+        metaEntries["meta_alert_disconnect"]?.toBooleanStrictOrNull()?.let { v ->
+            editor.putBoolean(KEY_ALERT_DISCONNECT, v)
+            restoredAnySetting = true
+        }
+        metaEntries["meta_alert_planned"]?.toBooleanStrictOrNull()?.let { v ->
+            editor.putBoolean(KEY_ALERT_PLANNED, v)
+            restoredAnySetting = true
+        }
+        metaEntries["meta_alert_morning"]?.toBooleanStrictOrNull()?.let { v ->
+            editor.putBoolean(KEY_ALERT_MORNING, v)
+            restoredAnySetting = true
+        }
+        metaEntries["meta_alert_target_buffer"]?.toBooleanStrictOrNull()?.let { v ->
+            editor.putBoolean(KEY_ALERT_TARGET_BUFFER, v)
+            restoredAnySetting = true
+        }
+        metaEntries["meta_alert_quarter"]?.toBooleanStrictOrNull()?.let { v ->
+            editor.putBoolean(KEY_ALERT_QUARTER, v)
+            restoredAnySetting = true
+        }
+        metaEntries["meta_arrival_samples"]?.takeIf { it.isNotEmpty() }?.let { samplesRaw ->
+            val validSamples = samplesRaw.split(",").mapNotNull { it.trim().toIntOrNull() }.filter { it in 360..840 }
+            if (validSamples.isNotEmpty()) {
+                editor.putString(KEY_ARRIVAL_MINUTES_SAMPLES, validSamples.joinToString(","))
+                restoredAnySetting = true
+            }
+        }
+        metaEntries["meta_backup_tree_uri"]?.takeIf { it.isNotEmpty() }?.let { uriStr ->
+            if (getAutoBackupTreeUri().isBlank()) {
+                editor.putString(KEY_BACKUP_TREE_URI, uriStr)
+                restoredAnySetting = true
+            }
+        }
+
+        if (restoredAnySetting) {
+            editor.apply()
+        }
     }
 
     private fun sanitizeImportedText(raw: String): String {
