@@ -1285,7 +1285,7 @@ class AttendanceStore(private val context: Context) {
                 "Office Recommended Today" to "Zero monthly buffer left — ${mStats.remainingDays} day(s) needed across ${mStats.availableWeekdaysLeft} weekday(s)."
             consecutiveWfh >= 3 ->
                 "Office Recommended Today" to "$consecutiveWfh consecutive WFH weekdays — logging office today protects your monthly buffer."
-                        mStats.bufferDays == 1 || wStats.remainingThisWeek > wStats.weekdaysLeftThisWeek ->
+                                    mStats.bufferDays == 1 || wStats.remainingThisWeek > wStats.weekdaysLeftThisWeek ->
                 "Watch Monthly Buffer Today" to "Only ${mStats.bufferDays} buffer day left; ${wStats.remainingThisWeek} needed for weekly pace."
             else ->
                 "Safe to WFH Today" to "${mStats.bufferDays} monthly buffer day(s) left • ${wStats.remainingThisWeek} needed this week."
