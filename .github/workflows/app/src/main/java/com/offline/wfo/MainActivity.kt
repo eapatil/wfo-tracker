@@ -388,6 +388,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         store.performDailyRolloverIfNeeded()
+        store.backupNowAsync()
         startMonitorServiceIfPermitted()
         refreshAllViews(animateCharts = false)
         if (appLockOverlay.visibility == View.VISIBLE) {
@@ -409,6 +410,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
+        store.backupNowAsync()
         stopAllLoopingAnimations()
         if (store.isSetupComplete() && !isAwaitingSystemIntent && !isChangingConfigurations) {
             isEditUnlocked = false
@@ -2861,43 +2863,46 @@ class MainActivity : AppCompatActivity() {
         }
         rootContent.addView(readinessRow)
 
+        val learnedWindow = store.getLearnedArrivalWindowLabel()
+        val lateCheckFormatted = store.getPlannedNotArrivedCheckTime()
+            .format(DateTimeFormatter.ofPattern("HH:mm"))
+
         val sections = listOf(
             Triple(
-                "1. How Auto-Tracking Works",
+                "1. How Auto-Tracking & Shift Learning Work",
                 "#4F46E5",
                 listOf(
                     "Background Monitor: Runs automatically via WifiMonitorService once Location permission is allowed.",
                     "Flexible Matching: Tracks via Office Wi-Fi SSID, GPS Geofence radius, or Both.",
                     "Smart Timestamps: Logs arrival (first_seen), refreshes active presence (last_seen), and records departure when you leave.",
-                    "Commute Learning: Learns your typical arrival window and tightens checks around your commute."
+                    "Learned Shift Window ($learnedWindow): Automatically learns your typical arrival time from check-ins with no manual shift picker required."
                 )
             ),
             Triple(
-                "2. Monthly Mandate & Smart Planning",
+                "2. Planned Day + 1-Hour Buffer & Monthly Mandate",
                 "#10B981",
                 listOf(
+                    "Planned + 1h Buffer ($lateCheckFormatted): Triggers only on weekdays marked Planned Office when not yet logged as Office, waiting 1 full hour past your learned arrival window to allow for traffic or errands.",
                     "Strictly Monthly: Calculated per calendar month with zero quarterly carryover.",
-                    "Working Days & Buffer: Excludes weekends and (when enabled) marked Holidays and Leaves to show remaining WFH buffer.",
-                    "Smart Auto-Plan & Clear Plan: Schedules only the remaining needed days using your weekday priority order, cleans stale planned notes on clear, auto-trims when holidays/leaves reduce your target, and supports UNDO."
+                    "Smart Auto-Plan & Clear Plan: Schedules only the remaining needed days using your weekday priority order, cleans stale planned notes on clear, and supports UNDO."
                 )
             ),
             Triple(
-                "3. Setup Order & Required Permissions",
+                "3. Silent vs. Audible Notifications",
                 "#F59E0B",
                 listOf(
-                    "Recommended Setup Order: Grant permissions first, link your backup folder to auto-restore saved name and logs, then confirm your profile, Wi-Fi/geofence, and monthly policy.",
-                    "Location (Allow all the time) & GPS ON: Required for background geofence checks and Wi-Fi SSID detection.",
-                    "Notifications & Exact Alarms: Delivers check-in, departure, and planned-day reminders on time.",
-                    "Unrestricted Battery: Prevents Android from sleeping the background monitor."
+                    "Silent Channel: Ongoing foreground tracker status and passive daily nudges stay silent without sound or vibration.",
+                    "Audible Action Channel: Sounds and vibrates when attendance is captured, on check-out/disconnect, or when a planned day hasn't been logged past the 1-hour buffer.",
+                    "Required Permissions: Keep Location (Allow all the time), GPS ON, Exact Alarms, and Unrestricted Battery enabled."
                 )
             ),
             Triple(
-                "4. Appearance, Widget & Reinstall Backup",
+                "4. Full Setup & Attendance CSV Backup",
                 "#0284C7",
                 listOf(
-                    "System / Light / Dark Theme: Switch anytime in Settings with high-contrast palettes across all charts and cards.",
-                    "Home Screen Widget: Pin OfficePace Glance from Settings (or your launcher's Widgets picker) for live monthly status.",
-                    "CSV Name & Live Backup: Saves officepace_attendance_autobackup.csv with your name metadata (# meta_user_name=), timestamps, and notes—link the folder or restore CSV after reinstall to recover both."
+                    "Automatic Backup Triggers: Saves officepace_attendance_autobackup.csv on setting/log changes, every time the app opens, and when locking or leaving the app.",
+                    "Complete Setup Metadata (# meta_*): Saves and restores your name, app lock, tracking mode, Wi-Fi SSIDs, office location/radius, target %, rounding/exclusions, weekday priorities, all alert toggles, learned arrival samples, and backup folder URI (excluding profile photo).",
+                    "Home Screen Widget: Pin OfficePace Glance from Settings with today's date, underlined weekday strip, and dynamic active-office line."
                 )
             )
         )
