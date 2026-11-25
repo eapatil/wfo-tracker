@@ -2714,12 +2714,13 @@ class MainActivity : AppCompatActivity() {
         }
         exportBtn.setOnClickListener { launchCsvExport() }
 
-        val importBtn = makePillButton("📂 Restore CSV", "#CBD5E1", "#0F172A").apply {
+           val importBtn = makePillButton("📂 Restore CSV", "#CBD5E1", "#0F172A").apply {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         importBtn.setOnClickListener {
-            if (!ensureEditUnlocked()) return@makePillButton
-            launchCsvImport()
+            if (ensureEditUnlocked()) {
+                launchCsvImport()
+            }
         }
 
         backupRow.addView(exportBtn)
