@@ -185,7 +185,6 @@ class AttendanceStore(private val context: Context) {
         }
 
         prefs.edit().putString(KEY_LAST_ROLLOVER_DATE, todayStr).apply()
-        rebalanceAdaptivePlannedDays(YearMonth.from(nowDate), nowDate)
         if (changed) {
             triggerSilentAutoBackup()
         }
@@ -215,10 +214,6 @@ class AttendanceStore(private val context: Context) {
         return start to end
     }
 
-    /**
-     * Returns the check time for a Planned Office day: 1 hour (60 minutes)
-     * after the upper end of the learned arrival window to allow for traffic/errands.
-     */
     fun getPlannedNotArrivedCheckTime(): LocalTime {
         val (_, endMinutes) = getLearnedArrivalWindowMinutes()
         val bufferedMinutes = (endMinutes + 60).coerceIn(480, 1260)
@@ -241,50 +236,83 @@ class AttendanceStore(private val context: Context) {
         return curMin in (startMin - 15)..(endMin + 90)
     }
 
-    fun rebalanceAdaptivePlannedDays(ym: YearMonth, today: LocalDate = LocalDate.now()) {
-        val stats = getMonthStats(ym, today)
+    /**
+     * Returns available empty weekdays (DayType.NONE) from startDate through month end:
+     * 1st: preferred weekdays in priority order,
+     * 2nd: remaining empty weekdays in chronological order.
+     */
+    fun getAlternateEmptyWeekdays(
+        ym: YearMonth,
+        startDate: LocalDate = LocalDate.now().plusDays(1)
+    ): List<LocalDate> {
+        val priorities = getPreferredWeekdaysPriority()
+        val emptyWeekdays = mutableListOf<LocalDate>()
+        for (day in 1..ym.lengthOfMonth()) {
+            val d = ym.atDay(day)
+            if (d.isBefore(startDate)) continue
+            if (d.dayOfWeek == DayOfWeek.SATURDAY || d.dayOfWeek == DayOfWeek.SUNDAY) continue
+            if (getDayType(d) == DayType.NONE) {
+                emptyWeekdays.add(d)
+            }
+        }
+
+        val preferredFirst = emptyWeekdays
+            .filter { priorities.contains(it.dayOfWeek) }
+            .sortedWith(
+                compareBy<LocalDate> { priorities.indexOf(it.dayOfWeek) }
+                    .thenBy { it }
+            )
+
+        val secondaryEmpty = emptyWeekdays
+            .filterNot { priorities.contains(it.dayOfWeek) }
+            .sorted()
+
+        return preferredFirst + secondaryEmpty
+    }
+
+    fun movePlannedDayToAlternateDate(
+        missedDate: LocalDate,
+        alternateDate: LocalDate,
+        missedDayChoice: DayType = DayType.NONE
+    ): Map<LocalDate, DayType> {
         val map = getDayTypesMap().toMutableMap()
         val notes = getStringMap(KEY_DAY_NOTES).toMutableMap()
-        val existingPlanned = map.filter { (k, v) ->
-            v == DayType.PLANNED && runCatching {
-                val d = LocalDate.parse(k)
-                YearMonth.from(d) == ym && !d.isBefore(today)
-            }.getOrDefault(false)
-        }.keys.toList()
+        val previous = linkedMapOf<LocalDate, DayType>()
 
-        if (existingPlanned.isEmpty()) return
-
-        if (stats.remainingDays <= 0) {
-            existingPlanned.forEach { key ->
-                map.remove(key)
-                if (notes[key].equals("Planned Office", ignoreCase = true)) {
-                    notes.remove(key)
+        val prevMissedType = map[missedDate.toString()] ?: DayType.NONE
+        previous[missedDate] = prevMissedType
+        when (missedDayChoice) {
+            DayType.LEAVE -> {
+                map[missedDate.toString()] = DayType.LEAVE
+                if (notes[missedDate.toString()].equals("Planned Office", ignoreCase = true)) {
+                    notes[missedDate.toString()] = "Leave"
                 }
             }
-            saveDayTypesMap(map)
-            saveStringMap(KEY_DAY_NOTES, notes)
-            return
-        }
-
-        val desiredCount = stats.remainingDays
-        if (existingPlanned.size > desiredCount) {
-            val priorities = getPreferredWeekdaysPriority()
-            val sortedLowestPriorityFirst = existingPlanned.sortedWith(
-                compareByDescending<String> { k ->
-                    val dow = runCatching { LocalDate.parse(k).dayOfWeek }.getOrNull()
-                    val idx = if (dow != null) priorities.indexOf(dow) else -1
-                    if (idx >= 0) idx else 99
-                }.thenByDescending { it }
-            )
-            sortedLowestPriorityFirst.take(existingPlanned.size - desiredCount).forEach { key ->
-                map.remove(key)
-                if (notes[key].equals("Planned Office", ignoreCase = true)) {
-                    notes.remove(key)
+            DayType.HOLIDAY -> {
+                map[missedDate.toString()] = DayType.HOLIDAY
+                if (notes[missedDate.toString()].equals("Planned Office", ignoreCase = true)) {
+                    notes[missedDate.toString()] = "Holiday"
                 }
             }
-            saveDayTypesMap(map)
-            saveStringMap(KEY_DAY_NOTES, notes)
+            else -> {
+                map.remove(missedDate.toString())
+                if (notes[missedDate.toString()].equals("Planned Office", ignoreCase = true)) {
+                    notes.remove(missedDate.toString())
+                }
+            }
         }
+
+        val prevAltType = map[alternateDate.toString()] ?: DayType.NONE
+        previous[alternateDate] = prevAltType
+        map[alternateDate.toString()] = DayType.PLANNED
+        if (notes[alternateDate.toString()].isNullOrBlank()) {
+            notes[alternateDate.toString()] = "Planned Office"
+        }
+
+        saveDayTypesMap(map)
+        saveStringMap(KEY_DAY_NOTES, notes)
+        triggerSilentAutoBackup()
+        return previous
     }
 
     // ==================== SETUP & PROFILE ====================
@@ -563,7 +591,6 @@ class AttendanceStore(private val context: Context) {
         saveStringMap(KEY_SOURCE_MAP, sourceMap)
         prefs.edit().putStringSet(KEY_AUTO_LOGGED_DATES, autoSet).apply()
         saveDayTypesMap(dayMap)
-        rebalanceAdaptivePlannedDays(YearMonth.from(nowDate), nowDate)
         triggerSilentAutoBackup()
         return isNewOfficeDay
     }
@@ -605,7 +632,6 @@ class AttendanceStore(private val context: Context) {
             }
         }
         saveDayTypesMap(map)
-        rebalanceAdaptivePlannedDays(YearMonth.from(date))
         triggerSilentAutoBackup()
         return next
     }
@@ -620,7 +646,6 @@ class AttendanceStore(private val context: Context) {
             notes.remove(dateStr)
             saveStringMap(KEY_DAY_NOTES, notes)
         }
-        rebalanceAdaptivePlannedDays(YearMonth.from(date))
         triggerSilentAutoBackup()
     }
 
@@ -633,7 +658,6 @@ class AttendanceStore(private val context: Context) {
     fun restoreBatchDates(previousStates: Map<LocalDate, DayType>) {
         val map = getDayTypesMap().toMutableMap()
         val notes = getStringMap(KEY_DAY_NOTES).toMutableMap()
-        val affectedMonths = mutableSetOf<YearMonth>()
         var notesChanged = false
 
         previousStates.forEach { (date, prevType) ->
@@ -647,11 +671,9 @@ class AttendanceStore(private val context: Context) {
             } else {
                 map[key] = prevType
             }
-            affectedMonths.add(YearMonth.from(date))
         }
         saveDayTypesMap(map)
         if (notesChanged) saveStringMap(KEY_DAY_NOTES, notes)
-        affectedMonths.forEach { rebalanceAdaptivePlannedDays(it) }
         triggerSilentAutoBackup()
     }
 
@@ -704,7 +726,6 @@ class AttendanceStore(private val context: Context) {
         }
         if (removed.isNotEmpty()) {
             saveDayTypesMap(map)
-            rebalanceAdaptivePlannedDays(YearMonth.from(today), today)
             triggerSilentAutoBackup()
         }
         return removed
@@ -1265,9 +1286,9 @@ class AttendanceStore(private val context: Context) {
             consecutiveWfh >= 3 ->
                 "Office Recommended Today" to "$consecutiveWfh consecutive WFH weekdays — logging office today protects your monthly buffer."
             mStats.bufferDays == 1 || wStats.remainingThisWeek > wStats.weekdaysLeftThisWeek ->
-                "Watch Monthly Buffer Today" to "Only ${mStats.bufferDays} buffer day left; ${wStats.remainingThisWeek} needed for weekly pace."
+                "Watch Monthly Buffer Today" to "Only ${mStats.bufferDays} buffer day left; ${w.remainingThisWeek} needed for weekly pace."
             else ->
-                "Safe to WFH Today" to "${mStats.bufferDays} monthly buffer day(s) left • ${wStats.remainingThisWeek} needed this week."
+                "Safe to WFH Today" to "${mStats.bufferDays} monthly buffer day(s) left • ${w.remainingThisWeek} needed this week."
         }
 
         return RhythmStats(
@@ -1668,18 +1689,15 @@ class AttendanceStore(private val context: Context) {
         if (foundDates.isEmpty()) return emptyMap()
         val map = getDayTypesMap().toMutableMap()
         val modified = mutableMapOf<LocalDate, DayType>()
-        val affectedMonths = mutableSetOf<YearMonth>()
         foundDates.sorted().forEach { d ->
             val prev = map[d.toString()] ?: DayType.NONE
             if (prev != DayType.HOLIDAY) {
                 modified[d] = prev
                 map[d.toString()] = DayType.HOLIDAY
-                affectedMonths.add(YearMonth.from(d))
             }
         }
         if (modified.isNotEmpty()) {
             saveDayTypesMap(map)
-            affectedMonths.forEach { rebalanceAdaptivePlannedDays(it) }
             triggerSilentAutoBackup()
         }
         return modified
