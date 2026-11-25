@@ -244,6 +244,7 @@ class AttendanceStore(private val context: Context) {
     fun rebalanceAdaptivePlannedDays(ym: YearMonth, today: LocalDate = LocalDate.now()) {
         val stats = getMonthStats(ym, today)
         val map = getDayTypesMap().toMutableMap()
+        val notes = getStringMap(KEY_DAY_NOTES).toMutableMap()
         val existingPlanned = map.filter { (k, v) ->
             v == DayType.PLANNED && runCatching {
                 val d = LocalDate.parse(k)
@@ -254,8 +255,14 @@ class AttendanceStore(private val context: Context) {
         if (existingPlanned.isEmpty()) return
 
         if (stats.remainingDays <= 0) {
-            existingPlanned.forEach { map.remove(it) }
+            existingPlanned.forEach { key ->
+                map.remove(key)
+                if (notes[key].equals("Planned Office", ignoreCase = true)) {
+                    notes.remove(key)
+                }
+            }
             saveDayTypesMap(map)
+            saveStringMap(KEY_DAY_NOTES, notes)
             return
         }
 
@@ -269,8 +276,14 @@ class AttendanceStore(private val context: Context) {
                     if (idx >= 0) idx else 99
                 }.thenByDescending { it }
             )
-            sortedLowestPriorityFirst.take(existingPlanned.size - desiredCount).forEach { map.remove(it) }
+            sortedLowestPriorityFirst.take(existingPlanned.size - desiredCount).forEach { key ->
+                map.remove(key)
+                if (notes[key].equals("Planned Office", ignoreCase = true)) {
+                    notes.remove(key)
+                }
+            }
             saveDayTypesMap(map)
+            saveStringMap(KEY_DAY_NOTES, notes)
         }
     }
 
@@ -704,6 +717,7 @@ class AttendanceStore(private val context: Context) {
 
         val today = LocalDate.now()
         val map = getDayTypesMap().toMutableMap()
+        val notes = getStringMap(KEY_DAY_NOTES).toMutableMap()
         val priorities = getPreferredWeekdaysPriority()
 
         val candidates = mutableListOf<LocalDate>()
@@ -726,11 +740,16 @@ class AttendanceStore(private val context: Context) {
 
         val modified = mutableMapOf<LocalDate, DayType>()
         for (d in sortedCandidates.take(needed)) {
-            modified[d] = map[d.toString()] ?: DayType.NONE
-            map[d.toString()] = DayType.PLANNED
+            val key = d.toString()
+            modified[d] = map[key] ?: DayType.NONE
+            map[key] = DayType.PLANNED
+            if (notes[key].isNullOrBlank()) {
+                notes[key] = "Planned Office"
+            }
         }
         if (modified.isNotEmpty()) {
             saveDayTypesMap(map)
+            saveStringMap(KEY_DAY_NOTES, notes)
             triggerSilentAutoBackup()
         }
         return modified
@@ -1734,6 +1753,13 @@ class AttendanceStore(private val context: Context) {
             BufferedReader(InputStreamReader(stream)).readText()
         } ?: return 0
         return importCsvText(text, autoBackupAfter = false)
+    }
+
+    fun backupNowAsync() {
+        if (getAutoBackupTreeUri().isBlank()) return
+        Thread {
+            runCatching { triggerSilentAutoBackup() }
+        }.start()
     }
 
     fun triggerSilentAutoBackup(): Boolean {
