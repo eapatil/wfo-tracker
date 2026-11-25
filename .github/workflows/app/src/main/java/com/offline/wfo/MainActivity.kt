@@ -4333,6 +4333,138 @@ class MainActivity : AppCompatActivity() {
         dialogRef = builder.show()
     }
 
+        private fun handleAutoPlanClicked() {
+        if (!ensureEditUnlocked()) return
+        val monthStats = store.getMonthStats(selectedMonth)
+        val isJanuaryOrEmptyHolidays =
+            store.isExcludeHolidaysEnabled() &&
+                (selectedMonth.monthValue == 1 || monthStats.holidayDays == 0)
+
+        if (isJanuaryOrEmptyHolidays) {
+            val promptTitle = if (selectedMonth.monthValue == 1) {
+                "New Year Holiday Check (${monthStats.monthLabel})"
+            } else {
+                "No Holidays Marked (${monthStats.monthLabel})"
+            }
+            AlertDialog.Builder(this)
+                .setTitle(promptTitle)
+                .setMessage(
+                    "Are you sure there are no holidays in ${monthStats.monthLabel} yet? " +
+                        "Auto-Plan will schedule days based on current working days."
+                )
+                .setPositiveButton("Yes, Auto-Plan Now") { _, _ ->
+                    executeAutoPlanForSelectedMonth()
+                }
+                .setNeutralButton("Import Holidays") { _, _ ->
+                    launchHolidayImport()
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        } else {
+            executeAutoPlanForSelectedMonth()
+        }
+    }
+
+    private fun executeAutoPlanForSelectedMonth() {
+        autoPlanBtn.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        animateCellPop(autoPlanBtn)
+        val modified = store.autoPlanRemainingDaysForMonth(selectedMonth)
+        syncBackgroundAndWidget()
+        refreshAllViews(animateCharts = true)
+        if (modified.isNotEmpty()) {
+            showUndoBanner("Auto-planned ${modified.size} office day(s)", modified)
+            showStatusPopup(true, "Auto-planned ${modified.size} office day(s)")
+        } else {
+            showStatusPopup(false, "Monthly target days are already planned or met")
+        }
+    }
+
+    private fun handleUnplannedOfficeLogged(date: LocalDate) {
+        val updatedStats = store.getMonthStats(YearMonth.from(date))
+        val msg = if (updatedStats.remainingDays == 0) {
+            "Great job! Extra office day on $date logged — ${updatedStats.targetPercent}% monthly mandate met with extra cushion."
+        } else {
+            "Nice extra office day on $date! Kept existing plans intact • ${updatedStats.remainingDays} still needed • ${maxOf(0, updatedStats.bufferDays)} WFH buffer left."
+        }
+        showStatusPopup(true, msg)
+    }
+
+    private fun showMissedPlannedDayFlow(missedDate: LocalDate) {
+        if (!ensureEditUnlocked()) return
+        val formattedDate = missedDate.format(DateTimeFormatter.ofPattern("EEE, dd MMM"))
+
+        // Step 1: Ask whether the missed planned day was Leave or Holiday (or keep unmarked)
+        AlertDialog.Builder(this)
+            .setTitle("Missed Planned Day ($formattedDate)")
+            .setMessage("Step 1 of 2: Was $formattedDate a Leave or Holiday?")
+            .setPositiveButton("Mark as Leave") { _, _ ->
+                showAlternateDayPickerDialog(missedDate, DayType.LEAVE)
+            }
+            .setNeutralButton("Mark as Holiday") { _, _ ->
+                showAlternateDayPickerDialog(missedDate, DayType.HOLIDAY)
+            }
+            .setNegativeButton("Pick Alternate Only") { _, _ ->
+                showAlternateDayPickerDialog(missedDate, DayType.NONE)
+            }
+            .show()
+    }
+
+    private fun showAlternateDayPickerDialog(missedDate: LocalDate, missedDayChoice: DayType) {
+        val ym = YearMonth.from(missedDate)
+        val startSearchDate = maxOf(LocalDate.now().plusDays(1), missedDate.plusDays(1))
+        val candidates = store.getAlternateEmptyWeekdays(ym, startSearchDate)
+        val priorities = store.getPreferredWeekdaysPriority()
+
+        val labels = candidates.map { d ->
+            val dowShort = d.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())
+            val prefTag = if (priorities.contains(d.dayOfWeek)) "★ Preferred" else "Empty Day"
+            "${d.format(DateTimeFormatter.ofPattern("dd MMM"))} ($dowShort) — $prefTag"
+        }.toTypedArray()
+
+        AlertDialog.Builder(this)
+            .setTitle("Step 2: Pick Alternate Empty Day")
+            .setMessage(
+                if (candidates.isEmpty()) {
+                    "No empty weekdays left in ${ym.format(DateTimeFormatter.ofPattern("MMMM yyyy"))}."
+                } else {
+                    "Preferred empty weekdays are listed first, followed by other empty weekdays:"
+                }
+            )
+            .setItems(labels) { _, which ->
+                val chosenAlt = candidates[which]
+                val undoMap = store.movePlannedDayToAlternateDate(missedDate, chosenAlt, missedDayChoice)
+                syncBackgroundAndWidget()
+                refreshAllViews(animateCharts = true)
+                showUndoBanner("Moved plan to ${chosenAlt.format(DateTimeFormatter.ofPattern("dd MMM"))}", undoMap)
+
+                val postStats = store.getMonthStats(ym)
+                val statusMsg = if (postStats.bufferDays >= 0) {
+                    "Moved to ${chosenAlt.format(DateTimeFormatter.ofPattern("dd MMM (EEE)"))} — On track (${postStats.remainingDays} needed, ${maxOf(0, postStats.bufferDays)} WFH buffer left)"
+                } else {
+                    "Moved to ${chosenAlt.format(DateTimeFormatter.ofPattern("dd MMM (EEE)"))} — Shortfall risk (${postStats.remainingDays} needed across ${postStats.availableWeekdaysLeft} left)"
+                }
+                showStatusPopup(true, statusMsg)
+            }
+            .setNeutralButton("Skip Alternate (Recalculate Only)") { _, _ ->
+                val undoMap = linkedMapOf(missedDate to store.getDayType(missedDate))
+                if (missedDayChoice == DayType.LEAVE || missedDayChoice == DayType.HOLIDAY) {
+                    store.setExplicitDayType(missedDate, missedDayChoice)
+                } else {
+                    store.setExplicitDayType(missedDate, DayType.NONE)
+                }
+                syncBackgroundAndWidget()
+                refreshAllViews(animateCharts = true)
+                showUndoBanner("Updated $missedDate", undoMap)
+                val postStats = store.getMonthStats(ym)
+                showStatusPopup(
+                    true,
+                    "Recalculated: ${postStats.remainingDays} still needed • ${maxOf(0, postStats.bufferDays)} WFH buffer left"
+                )
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+    
     private fun saveCompressedAvatar(uri: Uri) {
         runCatching {
             val rawBmp = contentResolver.openInputStream(uri)?.use { stream ->
