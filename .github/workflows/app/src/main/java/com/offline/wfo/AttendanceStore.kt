@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.location.Location
 import android.net.Uri
 import android.provider.DocumentsContract
+import java.io.File
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.time.DayOfWeek
