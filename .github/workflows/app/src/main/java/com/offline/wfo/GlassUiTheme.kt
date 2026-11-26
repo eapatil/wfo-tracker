@@ -32,22 +32,22 @@ object GlassUiTheme {
     // Light Theme: Frosted Soft White Panel
     val lightCanvasStart = Color.parseColor("#EEF2FF")
     val lightCanvasEnd = Color.parseColor("#E2E8F0")
-    val lightGlassSurface = Color.parseColor("#B8FFFFFF")
-    val lightGlassBorder = Color.parseColor("#99CBD5E1")
-    val lightGlassHighlight = Color.parseColor("#E6FFFFFF")
+    val lightGlassSurface = Color.parseColor("#CCFFFFFF")
+    val lightGlassBorder = Color.parseColor("#B3CBD5E1")
+    val lightGlassHighlight = Color.parseColor("#F2FFFFFF")
     val lightTextPrimary = Color.parseColor("#0F172A")
     val lightTextSecondary = Color.parseColor("#334155")
-    val textSecondaryLightGlass = Color.parseColor("#334155")
+    val textSecondaryLightGlass = Color.parseColor("#1E293B")
 
     // Dark Theme: Smoked Deep Velvet Glass
     val darkCanvasStart = Color.parseColor("#090D16")
     val darkCanvasEnd = Color.parseColor("#05070F")
     val backdropBaseDark = Color.parseColor("#060914")
-    val darkGlassSurface = Color.parseColor("#6E0F172A")
+    val darkGlassSurface = Color.parseColor("#730F172A")
     val cardFillDark = Color.parseColor("#B310172A")
     val navDockDark = Color.parseColor("#CC0D1322")
-    val darkGlassBorder = Color.parseColor("#1AFFFFFF")
-    val darkGlassHighlight = Color.parseColor("#3894A3B8")
+    val darkGlassBorder = Color.parseColor("#24FFFFFF")
+    val darkGlassHighlight = Color.parseColor("#4294A3B8")
     val darkTextPrimary = Color.parseColor("#FFFFFF")
     val darkTextSecondary = Color.parseColor("#CBD5E1")
     val textSecondaryDark = Color.parseColor("#CBD5E1")
@@ -58,7 +58,7 @@ object GlassUiTheme {
     val orbViolet = Color.parseColor("#8B5CF6")
 
     val subtleSurfaceDark = Color.parseColor("#661E293B")
-    val subtleSurfaceLightGlass = Color.parseColor("#8CF8FAFC")
+    val subtleSurfaceLightGlass = Color.parseColor("#99FFFFFF")
 
     val textOnAccent = Color.parseColor("#FFFFFF")
 
@@ -106,11 +106,11 @@ object GlassUiTheme {
 
     fun statusTint(isDark: Boolean, kind: String): Int {
         return when (kind) {
-            "success" -> if (isDark) statusSuccessTint else Color.parseColor("#A7F3D0")
-            "warning" -> if (isDark) statusWarningTint else Color.parseColor("#FDE68A")
-            "danger" -> if (isDark) statusDangerTint else Color.parseColor("#FECACA")
-            "holiday" -> if (isDark) statusHolidayTint else Color.parseColor("#DDD6FE")
-            else -> if (isDark) statusInfoTint else Color.parseColor("#C7D2FE")
+            "success" -> if (isDark) statusSuccessTint else Color.parseColor("#D9D1FAE5")
+            "warning" -> if (isDark) statusWarningTint else Color.parseColor("#D9FEF3C7")
+            "danger" -> if (isDark) statusDangerTint else Color.parseColor("#D9FEE2E2")
+            "holiday" -> if (isDark) statusHolidayTint else Color.parseColor("#D9EDE9FE")
+            else -> if (isDark) statusInfoTint else Color.parseColor("#D9E0E7FF")
         }
     }
 
@@ -145,7 +145,7 @@ object GlassUiTheme {
 
     // ==================== BLUR HELPERS (ANDROID 12+) ====================
 
-    fun applyGlassBlur(view: View, radiusPx: Float = 20f) {
+    fun applyGlassBlur(view: View, radiusPx: Float = 18f) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             runCatching {
                 view.setRenderEffect(
@@ -216,7 +216,7 @@ object GlassUiTheme {
             basePaint.shader = LinearGradient(0f, 0f, w, h, startCol, endCol, Shader.TileMode.CLAMP)
             canvas.drawRect(0f, 0f, w, h, basePaint)
 
-            val orbAlphaBase = if (isDark) 82 else 64
+            val orbAlphaBase = if (isDark) 86 else 68
             val cx1 = w * (0.18f + 0.10f * sin(phase.toDouble()).toFloat())
             val cy1 = h * (0.16f + 0.06f * cos(phase.toDouble()).toFloat())
             orbPaint.color = withAlpha(orbIndigo, orbAlphaBase)
@@ -252,7 +252,7 @@ object GlassUiTheme {
         override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
     }
 
-    // ==================== LAYER 1: FROSTED GLASS CARD + SPECULAR RIM ====================
+    // ==================== LAYER 1: FLOATING FROSTED GLASS CARD ====================
 
     fun glassCard(
         isDark: Boolean,
@@ -260,6 +260,11 @@ object GlassUiTheme {
         tintColor: Int? = null
     ): Drawable {
         return object : Drawable() {
+            private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.FILL
+                color = Color.parseColor(if (isDark) "#33000000" else "#1A0F172A")
+                maskFilter = BlurMaskFilter(18f, BlurMaskFilter.Blur.NORMAL)
+            }
             private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.FILL
                 color = tintColor ?: if (isDark) darkGlassSurface else lightGlassSurface
@@ -277,27 +282,35 @@ object GlassUiTheme {
 
             override fun draw(canvas: Canvas) {
                 val rect = RectF(
-                    bounds.left + 1.5f,
-                    bounds.top + 1.5f,
-                    bounds.right - 1.5f,
-                    bounds.bottom - 1.5f
+                    bounds.left + 4f,
+                    bounds.top + 3f,
+                    bounds.right - 4f,
+                    bounds.bottom - 5f
                 )
+                val shadowRect = RectF(
+                    rect.left,
+                    rect.top + 4f,
+                    rect.right,
+                    rect.bottom + 4f
+                )
+                canvas.drawRoundRect(shadowRect, radiusPx, radiusPx, shadowPaint)
                 canvas.drawRoundRect(rect, radiusPx, radiusPx, fillPaint)
                 canvas.drawRoundRect(rect, radiusPx, radiusPx, baseBorderPaint)
 
-                // Clean top specular sheen line without cutting across card body
                 val sheenStartX = rect.left + radiusPx * 0.6f
                 val sheenEndX = (rect.right - radiusPx * 0.6f).coerceAtLeast(sheenStartX + 8f)
                 canvas.drawLine(sheenStartX, rect.top + 1f, sheenEndX, rect.top + 1f, highlightPaint)
             }
 
             override fun setAlpha(alpha: Int) {
+                shadowPaint.alpha = alpha
                 fillPaint.alpha = alpha
                 baseBorderPaint.alpha = alpha
                 highlightPaint.alpha = alpha
             }
 
             override fun setColorFilter(colorFilter: ColorFilter?) {
+                shadowPaint.colorFilter = colorFilter
                 fillPaint.colorFilter = colorFilter
                 baseBorderPaint.colorFilter = colorFilter
                 highlightPaint.colorFilter = colorFilter
@@ -344,9 +357,9 @@ object GlassUiTheme {
         ).apply {
             cornerRadius = radiusPx
             if (translucent) {
-                alpha = 204
+                alpha = 184
             }
-            setStroke(1, if (translucent) lightGlassHighlight else lightGlassBorder)
+            setStroke(1, lightGlassHighlight)
         }
     }
 
@@ -371,7 +384,7 @@ object GlassUiTheme {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = 26f
             setColor(if (isDark) navDockDark else lightGlassSurface)
-            setStroke(1, if (isDark) darkGlassHighlight else lightGlassBorder)
+            setStroke(1, if (isDark) darkGlassHighlight else lightGlassHighlight)
         }
     }
 
