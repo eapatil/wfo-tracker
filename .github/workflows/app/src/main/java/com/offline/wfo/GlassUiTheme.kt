@@ -20,7 +20,9 @@ import android.view.View
 import android.view.animation.LinearInterpolator
 import android.widget.TextView
 import java.lang.ref.WeakReference
+import java.util.Locale
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 object GlassUiTheme {
@@ -30,25 +32,30 @@ object GlassUiTheme {
     // Light Theme: Frosted Soft White Panel
     val lightCanvasStart = Color.parseColor("#F1F5F9")
     val lightCanvasEnd = Color.parseColor("#E2E8F0")
-    val lightGlassSurface = Color.parseColor("#66FFFFFF") // ~40% frosted white (0.40)
-    val lightGlassBorder = Color.parseColor("#73FFFFFF")  // ~45% border (0.45)
-    val lightGlassHighlight = Color.parseColor("#BFFFFFFF") // ~75% top/left highlight (0.75)
+    val lightGlassSurface = Color.parseColor("#66FFFFFF")
+    val lightGlassBorder = Color.parseColor("#73FFFFFF")
+    val lightGlassHighlight = Color.parseColor("#BFFFFFFF")
     val lightTextPrimary = Color.parseColor("#0F172A")
     val lightTextSecondary = Color.parseColor("#475569")
+    val textSecondaryLightGlass = Color.parseColor("#A5B4FC")
 
     // Dark Theme: Smoked Deep Velvet Glass
     val darkCanvasStart = Color.parseColor("#090D16")
     val darkCanvasEnd = Color.parseColor("#05070F")
-    val darkGlassSurface = Color.parseColor("#590F172A") // ~35% deep slate micro-opacity (0.35)
-    val darkGlassBorder = Color.parseColor("#0FFFFFFF")  // ~6% subtle border (0.06)
-    val darkGlassHighlight = Color.parseColor("#29FFFFFF") // ~16% top/left highlight (0.16)
+    val darkGlassSurface = Color.parseColor("#590F172A")
+    val darkGlassBorder = Color.parseColor("#0FFFFFFF")
+    val darkGlassHighlight = Color.parseColor("#29FFFFFF")
     val darkTextPrimary = Color.parseColor("#FFFFFF")
     val darkTextSecondary = Color.parseColor("#94A3B8")
+    val textSecondaryDark = Color.parseColor("#94A3B8")
 
     // Shared Accents & Sub-Surfaces
     val orbIndigo = Color.parseColor("#6366F1")
     val orbCyan = Color.parseColor("#06B6D4")
     val orbViolet = Color.parseColor("#8B5CF6")
+
+    val subtleSurfaceDark = Color.parseColor("#591E293B")
+    val subtleSurfaceLightGlass = Color.parseColor("#59FFFFFF")
 
     val textOnAccent = Color.parseColor("#FFFFFF")
 
@@ -65,7 +72,20 @@ object GlassUiTheme {
     val accentSlate = Color.parseColor("#334155")
     val accentSlateEnd = Color.parseColor("#475569")
 
-    // High-contrast status colors tuned for both frosted light and smoked dark glass
+    // Status Tint Tokens (used by MainActivity & statusTint)
+    val statusSuccessTint = Color.parseColor("#59064E3B")
+    val statusWarningTint = Color.parseColor("#59451A03")
+    val statusDangerTint = Color.parseColor("#59450A0A")
+    val statusInfoTint = Color.parseColor("#591E1B4B")
+    val statusHolidayTint = Color.parseColor("#592E1065")
+
+    // Status Text Tokens (default dark-glass bright colors + isDark overloads)
+    val statusSuccessText: Int = Color.parseColor("#34D399")
+    val statusWarningText: Int = Color.parseColor("#FBBF24")
+    val statusDangerText: Int = Color.parseColor("#F87171")
+    val statusInfoText: Int = Color.parseColor("#A5B4FC")
+    val statusHolidayText: Int = Color.parseColor("#C4B5FD")
+
     fun statusSuccessText(isDark: Boolean): Int =
         Color.parseColor(if (isDark) "#34D399" else "#047857")
 
@@ -83,11 +103,11 @@ object GlassUiTheme {
 
     fun statusTint(isDark: Boolean, kind: String): Int {
         return when (kind) {
-            "success" -> Color.parseColor(if (isDark) "#59064E3B" else "#80D1FAE5")
-            "warning" -> Color.parseColor(if (isDark) "#59451A03" else "#80FEF3C7")
-            "danger" -> Color.parseColor(if (isDark) "#59450A0A" else "#80FEE2E2")
-            "holiday" -> Color.parseColor(if (isDark) "#592E1065" else "#80EDE9FE")
-            else -> Color.parseColor(if (isDark) "#591E1B4B" else "#80E0E7FF")
+            "success" -> if (isDark) statusSuccessTint else Color.parseColor("#80D1FAE5")
+            "warning" -> if (isDark) statusWarningTint else Color.parseColor("#80FEF3C7")
+            "danger" -> if (isDark) statusDangerTint else Color.parseColor("#80FEE2E2")
+            "holiday" -> if (isDark) statusHolidayTint else Color.parseColor("#80EDE9FE")
+            else -> if (isDark) statusInfoTint else Color.parseColor("#80E0E7FF")
         }
     }
 
@@ -262,7 +282,6 @@ object GlassUiTheme {
                 canvas.drawRoundRect(rect, radiusPx, radiusPx, fillPaint)
                 canvas.drawRoundRect(rect, radiusPx, radiusPx, baseBorderPaint)
 
-                // Directional top & left specular highlight edge
                 val topHighlight = RectF(
                     rect.left + 1f,
                     rect.top + 1f,
@@ -303,9 +322,7 @@ object GlassUiTheme {
         return GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = radiusPx
-            setColor(
-                if (isDark) Color.parseColor("#421E293B") else Color.parseColor("#59FFFFFF")
-            )
+            setColor(if (isDark) subtleSurfaceDark else subtleSurfaceLightGlass)
             setStroke(
                 1,
                 if (isDark) darkGlassHighlight else lightGlassBorder
@@ -329,7 +346,7 @@ object GlassUiTheme {
             if (translucent) {
                 alpha = 196
             }
-            setStroke(1, Color.parseColor("#40FFFFFF"))
+            setStroke(1, lightGlassBorder)
         }
     }
 
@@ -353,7 +370,7 @@ object GlassUiTheme {
         return GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = 26f
-            setColor(if (isDark) Color.parseColor("#B3090D16") else Color.parseColor("#C7FFFFFF"))
+            setColor(if (isDark) darkGlassSurface else lightGlassSurface)
             setStroke(1, if (isDark) darkGlassHighlight else lightGlassHighlight)
         }
     }
