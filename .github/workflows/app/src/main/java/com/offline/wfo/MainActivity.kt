@@ -11,6 +11,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlarmManager
 import android.app.AlertDialog
+import android.app.Dialog
 import android.app.KeyguardManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -56,6 +57,7 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
+import android.view.ViewGroup
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
@@ -63,10 +65,12 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
@@ -74,7 +78,6 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import java.io.FileOutputStream
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -129,9 +132,15 @@ class MainActivity : AppCompatActivity() {
     private var isEditUnlocked: Boolean = false
     private var isAppAuthenticated: Boolean = false
     private var isAwaitingSystemIntent: Boolean = false
+    private var isRestoringData: Boolean = false
     private var autoPromptedBgLocation: Boolean = false
     private var isDark: Boolean = false
     private var hasPlayedOpenEntrance: Boolean = false
+
+    // Blocking Restore Overlay Views
+    private lateinit var restoreBlockingOverlay: LinearLayout
+    private lateinit var restoreOverlayTitleView: TextView
+    private lateinit var restoreOverlayDetailView: TextView
 
     // Lock Screen Live Animation & Status Card State
     private lateinit var lockIconView: TextView
@@ -283,7 +292,9 @@ class MainActivity : AppCompatActivity() {
 
     private val updateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            refreshAllViews(animateCharts = false)
+            if (!isRestoringData) {
+                refreshAllViews(animateCharts = false)
+            }
         }
     }
 
@@ -332,6 +343,17 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         store = AttendanceStore(this)
 
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (isRestoringData) {
+                    return
+                }
+                isEnabled = false
+                onBackPressedDispatcher.onBackPressed()
+                isEnabled = true
+            }
+        })
+
         if (savedInstanceState != null) {
             savedInstanceState.getString(STATE_SELECTED_MONTH)?.let { ymStr ->
                 runCatching { YearMonth.parse(ymStr) }.getOrNull()?.let { selectedMonth = it }
@@ -362,10 +384,12 @@ class MainActivity : AppCompatActivity() {
         setupScroll = buildSetupWizardView()
         mainScaffold = buildMainScaffold()
         appLockOverlay = buildAppLockOverlay()
+        restoreBlockingOverlay = buildRestoreBlockingOverlay()
 
         frameRoot.addView(setupScroll)
         frameRoot.addView(mainScaffold)
         frameRoot.addView(appLockOverlay)
+        frameRoot.addView(restoreBlockingOverlay)
         setContentView(frameRoot)
 
         if (!store.isSetupComplete()) {
@@ -388,10 +412,12 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         store.performDailyRolloverIfNeeded()
-        store.backupNowAsync()
-        startMonitorServiceIfPermitted()
-        refreshAllViews(animateCharts = false)
-        if (appLockOverlay.visibility == View.VISIBLE) {
+        if (!isRestoringData) {
+            store.backupNowAsync()
+            startMonitorServiceIfPermitted()
+            refreshAllViews(animateCharts = false)
+        }
+        if (appLockOverlay.visibility == View.VISIBLE && !isRestoringData) {
             startLockScreenRunningAnimation()
         }
         ContextCompat.registerReceiver(
@@ -410,9 +436,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
-        store.backupNowAsync()
+        if (!isRestoringData) {
+            store.backupNowAsync()
+        }
         stopAllLoopingAnimations()
-        if (store.isSetupComplete() && !isAwaitingSystemIntent && !isChangingConfigurations) {
+        if (store.isSetupComplete() && !isAwaitingSystemIntent && !isChangingConfigurations && !isRestoringData) {
             isEditUnlocked = false
             if (store.isFullAppLockEnabled()) {
                 isAppAuthenticated = false
@@ -456,8 +484,13 @@ class MainActivity : AppCompatActivity() {
             }
             REQ_PICK_PHOTO -> {
                 if (resultCode == Activity.RESULT_OK && data?.data != null) {
-                    saveCompressedAvatar(data.data!!)
+                    val saved = store.saveProfilePhotoPair(data.data!!)
                     refreshAllViews(animateCharts = false)
+                    if (saved) {
+                        showStatusPopup(true, "Saved compressed & original profile photo")
+                    } else {
+                        showStatusPopup(false, "Could not load selected photo")
+                    }
                 } else {
                     showStatusPopup(false, "Profile photo selection cancelled")
                 }
@@ -465,41 +498,7 @@ class MainActivity : AppCompatActivity() {
             REQ_PICK_BACKUP_FOLDER -> {
                 if (resultCode == Activity.RESULT_OK && data?.data != null) {
                     val treeUri = data.data!!
-                    val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                        Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                    val permGranted = runCatching {
-                        contentResolver.takePersistableUriPermission(treeUri, flags)
-                        true
-                    }.getOrDefault(false)
-                    store.setAutoBackupTreeUri(treeUri.toString())
-
-                    val hadLocalDataBefore = store.getAllMarkedDates().isNotEmpty()
-                    val importedCount = store.restoreExistingBackupFromFolder(treeUri)
-                    val synced = store.triggerSilentAutoBackup()
-
-                    if (::setupNameInput.isInitialized && store.getUserName().isNotEmpty()) {
-                        setupNameInput.setText(store.getUserName())
-                    }
-
-                    if (importedCount > 0) {
-                        activeLogFilter = LogFilter.ALL
-                        syncBackgroundAndWidget()
-                        refreshAllViews(animateCharts = true)
-                        val syncNote = if (synced) " & auto-backup synced" else ""
-                        showStatusPopup(true, "Restored $importedCount date(s)$syncNote")
-                    } else {
-                        refreshAllViews(animateCharts = false)
-                        if (synced) {
-                            showStatusPopup(
-                                true,
-                                if (hadLocalDataBefore) "Auto-backup folder linked & synced" else "Auto-backup folder configured"
-                            )
-                        } else if (!permGranted) {
-                            showStatusPopup(false, "Folder selected, but persistable write permission was not granted")
-                        } else {
-                            showStatusPopup(false, "Folder linked, but could not write backup file yet")
-                        }
-                    }
+                    runFolderRestoreWithBlockingOverlay(treeUri)
                 } else {
                     showStatusPopup(false, "Backup folder selection cancelled")
                 }
@@ -542,27 +541,288 @@ class MainActivity : AppCompatActivity() {
             }
             REQ_IMPORT_CSV -> {
                 if (resultCode == Activity.RESULT_OK && data?.data != null) {
-                    runCatching {
-                        val count = store.importFromUri(data.data!!, autoBackupAfter = true)
-                        if (::setupNameInput.isInitialized && store.getUserName().isNotEmpty()) {
-                            setupNameInput.setText(store.getUserName())
-                        }
-                        activeLogFilter = LogFilter.ALL
-                        syncBackgroundAndWidget()
-                        refreshAllViews(animateCharts = true)
-                        if (count > 0) {
-                            showStatusPopup(true, "Restored $count date(s) from CSV")
-                        } else {
-                            showStatusPopup(false, "No valid attendance rows found in selected CSV")
-                        }
-                    }.onFailure {
-                        showStatusPopup(false, "Could not read selected CSV file")
-                    }
+                    runCsvImportWithBlockingOverlay(data.data!!)
                 } else {
                     showStatusPopup(false, "CSV restore cancelled")
                 }
             }
         }
+    }
+
+    private fun runFolderRestoreWithBlockingOverlay(treeUri: Uri) {
+        showBlockingRestoreOverlay(
+            title = "Restoring data...",
+            detail = "Checking backup folder & restoring settings, weekday priorities, and logs."
+        )
+        Thread {
+            val outcome = runCatching {
+                val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                val permGranted = runCatching {
+                    contentResolver.takePersistableUriPermission(treeUri, flags)
+                    true
+                }.getOrDefault(false)
+
+                store.setAutoBackupTreeUri(treeUri.toString())
+                val hadLocalDataBefore = store.getAllMarkedDates().isNotEmpty()
+                val importedCount = store.restoreExistingBackupFromFolder(treeUri)
+                val synced = store.triggerSilentAutoBackup()
+
+                FolderRestoreOutcome(
+                    permGranted = permGranted,
+                    hadLocalDataBefore = hadLocalDataBefore,
+                    importedCount = importedCount,
+                    synced = synced
+                )
+            }
+
+            runOnUiThread {
+                hideBlockingRestoreOverlay()
+                outcome.onSuccess { res ->
+                    syncRestoredSetupInputs()
+                    if (res.importedCount > 0) {
+                        activeLogFilter = LogFilter.ALL
+                        syncBackgroundAndWidget()
+                        refreshAllViews(animateCharts = true)
+                        val syncNote = if (res.synced) " & auto-backup synced" else ""
+                        showStatusPopup(true, "Restored ${res.importedCount} item(s)$syncNote")
+                    } else {
+                        refreshAllViews(animateCharts = false)
+                        if (res.synced) {
+                            showStatusPopup(
+                                true,
+                                if (res.hadLocalDataBefore) {
+                                    "No prior backup file found — created & synced new backup"
+                                } else {
+                                    "No prior backup file found — created new backup folder"
+                                }
+                            )
+                        } else if (!res.permGranted) {
+                            showStatusPopup(false, "Folder selected, but persistable write permission was not granted")
+                        } else {
+                            showStatusPopup(false, "Folder linked, but could not write backup file yet")
+                        }
+                    }
+                }.onFailure {
+                    refreshAllViews(animateCharts = false)
+                    showStatusPopup(false, "Could not complete folder restore")
+                }
+            }
+        }.start()
+    }
+
+    private fun runCsvImportWithBlockingOverlay(uri: Uri) {
+        showBlockingRestoreOverlay(
+            title = "Restoring data...",
+            detail = "Importing CSV rows, weekday priorities, and full-lock preferences."
+        )
+        Thread {
+            val result = runCatching {
+                store.importFromUri(uri, autoBackupAfter = true)
+            }
+            runOnUiThread {
+                hideBlockingRestoreOverlay()
+                result.onSuccess { count ->
+                    syncRestoredSetupInputs()
+                    activeLogFilter = LogFilter.ALL
+                    syncBackgroundAndWidget()
+                    refreshAllViews(animateCharts = true)
+                    if (count > 0) {
+                        showStatusPopup(true, "Restored $count date(s) from CSV")
+                    } else {
+                        showStatusPopup(false, "No valid attendance rows found in selected CSV")
+                    }
+                }.onFailure {
+                    refreshAllViews(animateCharts = false)
+                    showStatusPopup(false, "Could not read selected CSV file")
+                }
+            }
+        }.start()
+    }
+
+    private fun syncRestoredSetupInputs() {
+        if (::setupNameInput.isInitialized && store.getUserName().isNotEmpty()) {
+            setupNameInput.setText(store.getUserName())
+        }
+        if (::setupFullLockSwitch.isInitialized) {
+            setupFullLockSwitch.isChecked = store.isFullAppLockEnabled()
+        }
+        if (::setupSsidInput.isInitialized) {
+            setupSsidInput.setText(store.getTargetSsids().joinToString(", "))
+        }
+        if (::setupRoundUpSwitch.isInitialized) {
+            setupRoundUpSwitch.isChecked = store.isRoundUpEnabled()
+        }
+        if (::setupExclHolidaySwitch.isInitialized) {
+            setupExclHolidaySwitch.isChecked = store.isExcludeHolidaysEnabled()
+        }
+        if (::setupExclLeaveSwitch.isInitialized) {
+            setupExclLeaveSwitch.isChecked = store.isExcludeLeavesEnabled()
+        }
+        if (::setupConnectAlertSwitch.isInitialized) {
+            setupConnectAlertSwitch.isChecked = store.isConnectAlertEnabled()
+        }
+        if (::setupDisconnectAlertSwitch.isInitialized) {
+            setupDisconnectAlertSwitch.isChecked = store.isDisconnectAlertEnabled()
+        }
+        if (::setupPlanReminderSwitch.isInitialized) {
+            setupPlanReminderSwitch.isChecked = store.isPlannedRemindersEnabled()
+        }
+        if (::setupMorningNudgeSwitch.isInitialized) {
+            setupMorningNudgeSwitch.isChecked = store.isMorningNudgeEnabled()
+        }
+        if (::setupTargetBufferAlertSwitch.isInitialized) {
+            setupTargetBufferAlertSwitch.isChecked = store.isTargetBufferAlertEnabled()
+        }
+        if (::setupQuarterAlertSwitch.isInitialized) {
+            setupQuarterAlertSwitch.isChecked = store.isQuarterPaceAlertEnabled()
+        }
+    }
+
+    private data class FolderRestoreOutcome(
+        val permGranted: Boolean,
+        val hadLocalDataBefore: Boolean,
+        val importedCount: Int,
+        val synced: Boolean
+    )
+
+    private fun showBlockingRestoreOverlay(title: String, detail: String) {
+        isRestoringData = true
+        stopAllLoopingAnimations()
+        if (::restoreBlockingOverlay.isInitialized) {
+            restoreOverlayTitleView.text = title
+            restoreOverlayDetailView.text = detail
+            restoreBlockingOverlay.alpha = 1f
+            restoreBlockingOverlay.visibility = View.VISIBLE
+            restoreBlockingOverlay.bringToFront()
+        }
+    }
+
+    private fun hideBlockingRestoreOverlay() {
+        isRestoringData = false
+        if (::restoreBlockingOverlay.isInitialized) {
+            restoreBlockingOverlay.visibility = View.GONE
+        }
+    }
+
+    private fun buildRestoreBlockingOverlay(): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.parseColor("#CC0B1120"))
+            setPadding(48, 48, 48, 48)
+            isClickable = true
+            isFocusable = true
+            isFocusableInTouchMode = true
+            visibility = View.GONE
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+
+            val card = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                background = roundedBox("#162032", "#4F46E5", 22f, 2)
+                setPadding(36, 32, 36, 32)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            }
+
+            val spinner = ProgressBar(this@MainActivity).apply {
+                isIndeterminate = true
+                layoutParams = LinearLayout.LayoutParams(84, 84).apply {
+                    setMargins(0, 0, 0, 18)
+                }
+            }
+
+            restoreOverlayTitleView = TextView(this@MainActivity).apply {
+                text = "Restoring data..."
+                textSize = 18f
+                setTypeface(null, Typeface.BOLD)
+                setTextColor(Color.WHITE)
+                gravity = Gravity.CENTER
+            }
+
+            restoreOverlayDetailView = TextView(this@MainActivity).apply {
+                text = "Please wait while your backup data is applied."
+                textSize = 13f
+                setTextColor(Color.parseColor("#CBD5E1"))
+                gravity = Gravity.CENTER
+                setPadding(0, 8, 0, 0)
+            }
+
+            card.addView(spinner)
+            card.addView(restoreOverlayTitleView)
+            card.addView(restoreOverlayDetailView)
+            addView(card)
+        }
+    }
+
+    private fun showFullScreenProfilePhotoDialog() {
+        val targetFile = store.getFullScreenProfilePhotoFile()
+        if (!targetFile.exists() || targetFile.length() == 0L) {
+            showStatusPopup(false, "No profile photo saved yet")
+            return
+        }
+
+        val fullBmp = runCatching {
+            val opts = BitmapFactory.Options().apply {
+                inSampleSize = 1
+            }
+            BitmapFactory.decodeFile(targetFile.absolutePath, opts)
+        }.getOrNull()
+
+        if (fullBmp == null) {
+            showStatusPopup(false, "Unable to open full-screen profile photo")
+            return
+        }
+
+        val dialog = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+        val container = FrameLayout(this).apply {
+            setBackgroundColor(Color.BLACK)
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            setOnClickListener { dialog.dismiss() }
+        }
+
+        val photoView = ImageView(this).apply {
+            setImageBitmap(fullBmp)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            adjustViewBounds = true
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                Gravity.CENTER
+            )
+            setOnClickListener { dialog.dismiss() }
+        }
+
+        val closeBtn = TextView(this).apply {
+            text = "✕ Close"
+            textSize = 13f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(Color.WHITE)
+            background = roundedBox("#660F172A", "#94A3B8", 16f, 1)
+            setPadding(24, 12, 24, 12)
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP or Gravity.END
+            ).apply {
+                setMargins(24, 36, 24, 24)
+            }
+            setOnClickListener { dialog.dismiss() }
+        }
+
+        container.addView(photoView)
+        container.addView(closeBtn)
+        dialog.setContentView(container)
+        dialog.show()
     }
 
     override fun onRequestPermissionsResult(
@@ -1014,18 +1274,7 @@ class MainActivity : AppCompatActivity() {
     private fun showSetupMode() {
         stopLockScreenRunningAnimation()
         appLockOverlay.visibility = View.GONE
-        setupNameInput.setText(store.getUserName())
-        setupSsidInput.setText(store.getTargetSsids().joinToString(", "))
-        setupFullLockSwitch.isChecked = store.isFullAppLockEnabled()
-        setupRoundUpSwitch.isChecked = store.isRoundUpEnabled()
-        setupExclHolidaySwitch.isChecked = store.isExcludeHolidaysEnabled()
-        setupExclLeaveSwitch.isChecked = store.isExcludeLeavesEnabled()
-        setupConnectAlertSwitch.isChecked = store.isConnectAlertEnabled()
-        setupDisconnectAlertSwitch.isChecked = store.isDisconnectAlertEnabled()
-        setupPlanReminderSwitch.isChecked = store.isPlannedRemindersEnabled()
-        setupMorningNudgeSwitch.isChecked = store.isMorningNudgeEnabled()
-        setupTargetBufferAlertSwitch.isChecked = store.isTargetBufferAlertEnabled()
-        setupQuarterAlertSwitch.isChecked = store.isQuarterPaceAlertEnabled()
+        syncRestoredSetupInputs()
         setupScroll.visibility = View.VISIBLE
         mainScaffold.visibility = View.GONE
         refreshAllViews(animateCharts = false)
@@ -1250,7 +1499,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(cTextPrimary())
         }
         val subtitle = TextView(this).apply {
-            text = "1. Grant permissions → 2. Link backup folder (auto-restores name & logs) → 3. Confirm profile → 4. Office & policy."
+            text = "1. Grant permissions → 2. Link backup folder (auto-restores name, photo & logs) → 3. Confirm profile → 4. Office & policy."
             textSize = 13f
             setTextColor(cTextSecondary())
             setPadding(0, 6, 0, 18)
@@ -1329,6 +1578,9 @@ class MainActivity : AppCompatActivity() {
         setupAvatarView = ImageView(this).apply {
             layoutParams = LinearLayout.LayoutParams(128, 128)
             scaleType = ImageView.ScaleType.CENTER_CROP
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { showFullScreenProfilePhotoDialog() }
         }
         val photoBtnCol = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1598,6 +1850,9 @@ class MainActivity : AppCompatActivity() {
         dashAvatarView = ImageView(this).apply {
             layoutParams = LinearLayout.LayoutParams(88, 88)
             scaleType = ImageView.ScaleType.CENTER_CROP
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { showFullScreenProfilePhotoDialog() }
         }
         val greetingCol = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -2900,16 +3155,19 @@ class MainActivity : AppCompatActivity() {
                 listOf(
                     "Silent Channel: Ongoing foreground tracker status and passive daily nudges stay silent without sound or vibration.",
                     "Audible Action Channel: Sounds and vibrates when attendance is captured, on check-out/disconnect, or when a planned day hasn't been logged past the 1-hour buffer.",
+                    "Unplanned Arrival Appreciation: Celebrates extra office days logged without a prior Planned mark once per day without reshuffling your existing plans.",
                     "Required Permissions: Keep Location (Allow all the time), GPS ON, Exact Alarms, and Unrestricted Battery enabled."
                 )
             ),
             Triple(
-                "4. Full Setup & Attendance CSV Backup",
+                "4. Full Setup, Profile Photo & Attendance CSV Backup",
                 "#0284C7",
                 listOf(
-                    "Automatic Backup Triggers: Saves officepace_attendance_autobackup.csv on setting/log changes, every time the app opens, and when locking or leaving the app.",
-                    "Complete Setup Metadata (# meta_*): Saves and restores your name, app lock, tracking mode, Wi-Fi SSIDs, office location/radius, target %, rounding/exclusions, weekday priorities, all alert toggles, learned arrival samples, and backup folder URI (excluding profile photo).",
-                    "Home Screen Widget: Pin OfficePace Glance from Settings with today's date, underlined weekday strip, and dynamic active-office line."
+                    "Blocking Restore Screen: Displays a \"Restoring data...\" screen that freezes touches and back presses during folder restore or CSV import until completion.",
+                    "Automatic Backup Triggers: Saves officepace_attendance_autobackup.csv plus two profile photo copies (officepace_profile_avatar.jpg and officepace_profile_avatar_original.jpg) on changes, app open, and lock/exit.",
+                    "Two-Copy Profile Photo & Full-Screen View: Uses a fast compressed thumbnail for the header/setup avatar and keeps a high-res original for full-screen viewing when you tap your avatar.",
+                    "Complete Setup Metadata (# meta_*): Saves and restores your name, full app lock, tracking mode, Wi-Fi SSIDs, office location/radius, target %, rounding/exclusions, weekday priorities, all alert toggles, learned arrival samples, and backup folder URI.",
+                    "Home Screen Widget: Pin OfficePace Glance from Settings with today's date, underlined weekday strip, active office status, and in-radius distance (Inside {radius}m office zone (~{dist}m away))."
                 )
             )
         )
@@ -3502,6 +3760,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun refreshAllViews(animateCharts: Boolean = false) {
         updateLockScreenStatusCard()
+
+        if (::setupFullLockSwitch.isInitialized && !setupFullLockSwitch.isPressed) {
+            setupFullLockSwitch.isChecked = store.isFullAppLockEnabled()
+        }
 
         val locOk = hasLocationPermission()
         val notifOk = hasNotificationPermission()
@@ -4544,27 +4806,6 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
-    }
-
-    private fun saveCompressedAvatar(uri: Uri) {
-        runCatching {
-            val rawBmp = contentResolver.openInputStream(uri)?.use { stream ->
-                BitmapFactory.decodeStream(stream)
-            } ?: return
-
-            val size = minOf(rawBmp.width, rawBmp.height)
-            val xOffset = (rawBmp.width - size) / 2
-            val yOffset = (rawBmp.height - size) / 2
-            val square = Bitmap.createBitmap(rawBmp, xOffset, yOffset, size, size)
-            val scaled = Bitmap.createScaledBitmap(square, 256, 256, true)
-
-            FileOutputStream(store.getProfilePhotoFile()).use { out ->
-                scaled.compress(Bitmap.CompressFormat.JPEG, 90, out)
-            }
-            showStatusPopup(true, "Profile photo updated")
-        }.onFailure {
-            showStatusPopup(false, "Could not load selected photo")
-        }
     }
 
     private fun loadCircularAvatarBitmap(): Bitmap {
