@@ -42,7 +42,10 @@ object GlassUiTheme {
     // Dark Theme: Smoked Deep Velvet Glass
     val darkCanvasStart = Color.parseColor("#090D16")
     val darkCanvasEnd = Color.parseColor("#05070F")
+    val backdropBaseDark = Color.parseColor("#060914")
     val darkGlassSurface = Color.parseColor("#590F172A")
+    val cardFillDark = Color.parseColor("#B310172A")
+    val navDockDark = Color.parseColor("#CC0D1322")
     val darkGlassBorder = Color.parseColor("#0FFFFFFF")
     val darkGlassHighlight = Color.parseColor("#29FFFFFF")
     val darkTextPrimary = Color.parseColor("#FFFFFF")
@@ -72,7 +75,7 @@ object GlassUiTheme {
     val accentSlate = Color.parseColor("#334155")
     val accentSlateEnd = Color.parseColor("#475569")
 
-    // Status Tint Tokens (used by MainActivity & statusTint)
+    // Status Tint Tokens
     val statusSuccessTint = Color.parseColor("#59064E3B")
     val statusWarningTint = Color.parseColor("#59451A03")
     val statusDangerTint = Color.parseColor("#59450A0A")
