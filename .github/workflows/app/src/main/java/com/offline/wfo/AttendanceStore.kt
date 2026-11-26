@@ -236,11 +236,15 @@ class AttendanceStore(private val context: Context) {
         return curMin in (startMin - 15)..(endMin + 90)
     }
 
-    /**
-     * Returns available empty weekdays (DayType.NONE) from startDate through month end:
-     * 1st: preferred weekdays in priority order,
-     * 2nd: remaining empty weekdays in chronological order.
-     */
+    fun wasPlannedBeforeOffice(date: LocalDate): Boolean {
+        val notes = getStringMap(KEY_DAY_NOTES)[date.toString()].orEmpty()
+        return notes.equals("Planned Office", ignoreCase = true)
+    }
+
+    fun claimUnplannedAppreciationOnce(date: LocalDate): Boolean {
+        return claimOnceFlag("notif_unplanned_appreciation_$date")
+    }
+
     fun getAlternateEmptyWeekdays(
         ym: YearMonth,
         startDate: LocalDate = LocalDate.now().plusDays(1)
@@ -1285,7 +1289,7 @@ class AttendanceStore(private val context: Context) {
                 "Office Recommended Today" to "Zero monthly buffer left — ${mStats.remainingDays} day(s) needed across ${mStats.availableWeekdaysLeft} weekday(s)."
             consecutiveWfh >= 3 ->
                 "Office Recommended Today" to "$consecutiveWfh consecutive WFH weekdays — logging office today protects your monthly buffer."
-                                    mStats.bufferDays == 1 || wStats.remainingThisWeek > wStats.weekdaysLeftThisWeek ->
+            mStats.bufferDays == 1 || wStats.remainingThisWeek > wStats.weekdaysLeftThisWeek ->
                 "Watch Monthly Buffer Today" to "Only ${mStats.bufferDays} buffer day left; ${wStats.remainingThisWeek} needed for weekly pace."
             else ->
                 "Safe to WFH Today" to "${mStats.bufferDays} monthly buffer day(s) left • ${wStats.remainingThisWeek} needed this week."
