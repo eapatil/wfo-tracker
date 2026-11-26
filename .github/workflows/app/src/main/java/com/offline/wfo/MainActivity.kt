@@ -4431,6 +4431,116 @@ class MainActivity : AppCompatActivity() {
                                 dayNumTv.setTextColor(cTextSecondary())
                                 cellWrapper.alpha = 0.72f
                             } else {
+    private fun renderCalendarGrid(stats: MonthStats) {
+        calendarContainer.removeAllViews()
+        val today = LocalDate.now()
+        val ym = stats.yearMonth
+
+        fun glassyFill(baseColor: Int, alpha: Int = 148): Int {
+            return Color.argb(
+                alpha,
+                Color.red(baseColor),
+                Color.green(baseColor),
+                Color.blue(baseColor)
+            )
+        }
+
+        val headerRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun").forEach { dayName ->
+            val tv = TextView(this).apply {
+                text = dayName
+                textSize = 12f
+                setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+                setTextColor(cTextSecondary())
+                gravity = Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                setPadding(0, 4, 0, 8)
+            }
+            headerRow.addView(tv)
+        }
+        calendarContainer.addView(headerRow)
+
+        val firstDayOffset = ym.atDay(1).dayOfWeek.value - 1
+        val daysInMonth = ym.lengthOfMonth()
+        var currentDay = 1
+
+        while (currentDay <= daysInMonth) {
+            val weekRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(0, 3, 0, 3)
+            }
+            for (col in 0..6) {
+                val cellWrapper = FrameLayout(this).apply {
+                    layoutParams = LinearLayout.LayoutParams(0, 88, 1f).apply {
+                        setMargins(4, 0, 4, 0)
+                    }
+                }
+                if ((currentDay == 1 && col < firstDayOffset) || currentDay > daysInMonth) {
+                    // Empty placeholder cell
+                } else {
+                    val date = ym.atDay(currentDay)
+                    val dateStr = date.toString()
+                    val dtype = stats.dayTypeMap[dateStr] ?: DayType.NONE
+                    val isWeekend = date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY
+                    val isToday = date == today
+                    val hasNote = store.getDayNote(dateStr).isNotEmpty()
+
+                    val dayNumTv = TextView(this).apply {
+                        text = currentDay.toString()
+                        gravity = Gravity.CENTER
+                        textSize = 13f
+                        layoutParams = FrameLayout.LayoutParams(
+                            FrameLayout.LayoutParams.MATCH_PARENT,
+                            FrameLayout.LayoutParams.MATCH_PARENT
+                        )
+                    }
+
+                    when (dtype) {
+                        DayType.OFFICE -> {
+                            dayNumTv.setTextColor(GlassUiTheme.textOnAccent)
+                            dayNumTv.setTypeface(null, Typeface.BOLD)
+                            cellWrapper.background = roundedBox(
+                                glassyFill(GlassUiTheme.accentEmerald, 152),
+                                if (isToday) GlassUiTheme.accentBlueEnd else GlassUiTheme.accentEmeraldEnd,
+                                16f,
+                                if (isToday) 6 else 2
+                            )
+                        }
+                        DayType.PLANNED -> {
+                            dayNumTv.setTextColor(GlassUiTheme.statusInfoText(isDark))
+                            dayNumTv.setTypeface(null, Typeface.BOLD)
+                            cellWrapper.background = dashedBox(
+                                GlassUiTheme.statusTint(isDark, "info"),
+                                if (isToday) GlassUiTheme.accentBlueEnd else GlassUiTheme.accentIndigoEnd,
+                                16f,
+                                if (isToday) 6 else 4
+                            )
+                        }
+                        DayType.LEAVE -> {
+                            dayNumTv.setTextColor(GlassUiTheme.textOnAccent)
+                            dayNumTv.setTypeface(null, Typeface.BOLD)
+                            cellWrapper.background = roundedBox(
+                                glassyFill(GlassUiTheme.accentAmber, 152),
+                                if (isToday) GlassUiTheme.accentBlueEnd else GlassUiTheme.accentAmberEnd,
+                                16f,
+                                if (isToday) 6 else 2
+                            )
+                        }
+                        DayType.HOLIDAY -> {
+                            dayNumTv.setTextColor(GlassUiTheme.textOnAccent)
+                            dayNumTv.setTypeface(null, Typeface.BOLD)
+                            cellWrapper.background = roundedBox(
+                                glassyFill(GlassUiTheme.accentPurple, 152),
+                                if (isToday) GlassUiTheme.accentBlueEnd else GlassUiTheme.accentPurpleEnd,
+                                16f,
+                                if (isToday) 6 else 2
+                            )
+                        }
+                        DayType.NONE -> {
+                            if (isWeekend) {
+                                dayNumTv.setTextColor(cTextSecondary())
+                                cellWrapper.alpha = 0.72f
+                            } else {
                                 dayNumTv.setTextColor(cTextPrimary())
                             }
                             cellWrapper.background = GlassUiTheme.glassSubtleSurface(isDark, 16f)
@@ -4506,6 +4616,7 @@ class MainActivity : AppCompatActivity() {
             calendarContainer.addView(weekRow)
         }
     }
+
 
     private fun showDayInspectorDialog(date: LocalDate) {
         val info = store.getDayInspectorInfo(date)
