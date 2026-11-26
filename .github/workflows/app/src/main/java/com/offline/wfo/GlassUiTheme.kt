@@ -61,41 +61,43 @@ object GlassUiTheme {
 
     // ==================== LIGHT THEME: FROSTED GLACIER & IRIS MIST ====================
 
-    private val lightCanvasStart = Color.parseColor("#EBF0F8")
+    private val lightCanvasStart = Color.parseColor("#E9EFF8")
     private val lightCanvasEnd = Color.parseColor("#DCE6F5")
-    private val lightGlassSurfaceTop = Color.parseColor("#D4FFFFFF")
-    private val lightGlassSurfaceBottom = Color.parseColor("#A8F8FAFC")
-    private val lightGlassSurface = Color.parseColor("#B8FFFFFF")
-    private val lightGlassBorder = Color.parseColor("#8FA3B8CC")
-    private val lightGlassHighlight = Color.parseColor("#F7FFFFFF")
-    private val lightSubtleSurface = Color.parseColor("#94F8FAFC")
-    private val lightNavDock = Color.parseColor("#DCFFFFFF")
-    private val lightTextPrimary = Color.parseColor("#0B1220")
-    private val lightTextSecondary = Color.parseColor("#3B4963")
+    private val lightGlassSurfaceTop = Color.parseColor("#DCFFFFFF")
+    private val lightGlassSurfaceBottom = Color.parseColor("#A6F8FAFC")
+    private val lightGlassSurface = Color.parseColor("#BCFFFFFF")
+    private val lightGlassBorder = Color.parseColor("#8CA3B8CC")
+    private val lightGlassHighlight = Color.parseColor("#FAFFFFFF")
+    private val lightGlassShimmer = Color.parseColor("#66FFFFFF")
+    private val lightSubtleSurface = Color.parseColor("#8CF1F5F9")
+    private val lightNavDock = Color.parseColor("#E0FFFFFF")
+    private val lightTextPrimary = Color.parseColor("#0A101D")
+    private val lightTextSecondary = Color.parseColor("#374660")
     private val lightShadow = Color.parseColor("#181E293B")
 
-    private val lightOrbOne = Color.parseColor("#6366F1")   // Iris Blue
-    private val lightOrbTwo = Color.parseColor("#14B8A6")   // Mint Teal
-    private val lightOrbThree = Color.parseColor("#8B5CF6") // Soft Violet
-    private val lightOrbFour = Color.parseColor("#0EA5E9")  // Sky Mist
+    private val lightOrbOne = Color.parseColor("#6366F1")   // Iris Indigo
+    private val lightOrbTwo = Color.parseColor("#0D9488")   // Deep Mint Teal
+    private val lightOrbThree = Color.parseColor("#8B5CF6") // Soft Amethyst
+    private val lightOrbFour = Color.parseColor("#0284C7")  // Glacier Blue
 
     // ==================== DARK THEME: NOCTURNE AURORA & SMOKED SLATE ====================
 
-    private val darkCanvasStart = Color.parseColor("#080C14")
-    private val darkCanvasEnd = Color.parseColor("#04060B")
-    private val darkGlassSurfaceTop = Color.parseColor("#8A131D31")
-    private val darkGlassSurfaceBottom = Color.parseColor("#6E0B111E")
-    private val darkGlassSurface = Color.parseColor("#7A0E1626")
+    private val darkCanvasStart = Color.parseColor("#070B14")
+    private val darkCanvasEnd = Color.parseColor("#03050A")
+    private val darkGlassSurfaceTop = Color.parseColor("#8F141E33")
+    private val darkGlassSurfaceBottom = Color.parseColor("#6B0A101C")
+    private val darkGlassSurface = Color.parseColor("#7D0E1626")
     private val darkGlassBorder = Color.parseColor("#24FFFFFF")
-    private val darkGlassHighlight = Color.parseColor("#4D94A3B8")
-    private val darkSubtleSurface = Color.parseColor("#66172236")
-    private val darkNavDock = Color.parseColor("#C20A0F1C")
+    private val darkGlassHighlight = Color.parseColor("#5494A3B8")
+    private val darkGlassShimmer = Color.parseColor("#26E2E8F0")
+    private val darkSubtleSurface = Color.parseColor("#63162033")
+    private val darkNavDock = Color.parseColor("#C4090E1A")
     private val darkTextPrimary = Color.parseColor("#F8FAFC")
     private val darkTextSecondary = Color.parseColor("#9FB0C7")
-    private val darkShadow = Color.parseColor("#3D000000")
+    private val darkShadow = Color.parseColor("#40000000")
 
     private val darkOrbOne = Color.parseColor("#4338CA")    // Royal Indigo
-    private val darkOrbTwo = Color.parseColor("#0891B2")    // Deep Cyan-Teal
+    private val darkOrbTwo = Color.parseColor("#0891B2")    // Electric Cyan-Teal
     private val darkOrbThree = Color.parseColor("#6D28D9")  // Velvet Violet
     private val darkOrbFour = Color.parseColor("#059669")   // Aurora Emerald
 
@@ -151,12 +153,12 @@ object GlassUiTheme {
     fun accentColors(isDark: Boolean, role: AccentRole): Pair<Int, Int> {
         return if (isDark) {
             when (role) {
-                AccentRole.PRIMARY -> Color.parseColor("#4338CA") to Color.parseColor("#6366F1")
+                AccentRole.PRIMARY -> Color.parseColor("#3730A3") to Color.parseColor("#6366F1")
                 AccentRole.SECONDARY -> Color.parseColor("#0E7490") to Color.parseColor("#22D3EE")
                 AccentRole.SUCCESS -> Color.parseColor("#047857") to Color.parseColor("#34D399")
                 AccentRole.WARNING -> Color.parseColor("#B45309") to Color.parseColor("#FBBF24")
                 AccentRole.DANGER -> Color.parseColor("#B91C1C") to Color.parseColor("#F87171")
-                AccentRole.SPECIAL -> Color.parseColor("#6D28D9") to Color.parseColor("#A78BFA")
+                AccentRole.SPECIAL -> Color.parseColor("#5B21B6") to Color.parseColor("#A78BFA")
                 AccentRole.NEUTRAL -> Color.parseColor("#334155") to Color.parseColor("#64748B")
             }
         } else {
@@ -306,7 +308,7 @@ object GlassUiTheme {
     private class CanvasBackdropDrawable(private val isDark: Boolean) : Drawable() {
         private val basePaint = Paint(Paint.ANTI_ALIAS_FLAG)
         private val orbPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            maskFilter = BlurMaskFilter(215f, BlurMaskFilter.Blur.NORMAL)
+            maskFilter = BlurMaskFilter(220f, BlurMaskFilter.Blur.NORMAL)
         }
 
         private var phase: Float = 0f
@@ -320,7 +322,7 @@ object GlassUiTheme {
             if (animator != null) return
             val selfRef = WeakReference(this)
             animator = ValueAnimator.ofFloat(0f, (Math.PI * 2.0).toFloat()).apply {
-                duration = 16000L
+                duration = 15000L
                 repeatCount = ValueAnimator.INFINITE
                 repeatMode = ValueAnimator.RESTART
                 interpolator = LinearInterpolator()
@@ -350,36 +352,35 @@ object GlassUiTheme {
             basePaint.shader = LinearGradient(0f, 0f, w, h, startCol, endCol, Shader.TileMode.CLAMP)
             canvas.drawRect(0f, 0f, w, h, basePaint)
 
-            val orbAlphaBase = if (isDark) 88 else 64
+            val orbAlphaBase = if (isDark) 92 else 68
             val o1 = if (isDark) darkOrbOne else lightOrbOne
             val o2 = if (isDark) darkOrbTwo else lightOrbTwo
             val o3 = if (isDark) darkOrbThree else lightOrbThree
             val o4 = if (isDark) darkOrbFour else lightOrbFour
 
-            // Zoom-in / zoom-out breathing + orbital drift across four multi-color pools
-            val zoom1 = 0.94f + 0.12f * sin(phase.toDouble()).toFloat()
-            val cx1 = w * (0.18f + 0.11f * sin(phase.toDouble()).toFloat())
-            val cy1 = h * (0.16f + 0.07f * cos(phase.toDouble()).toFloat())
+            val zoom1 = 0.92f + 0.14f * sin(phase.toDouble()).toFloat()
+            val cx1 = w * (0.18f + 0.12f * sin(phase.toDouble()).toFloat())
+            val cy1 = h * (0.16f + 0.08f * cos(phase.toDouble()).toFloat())
             orbPaint.color = withAlpha(o1, orbAlphaBase)
-            canvas.drawCircle(cx1, cy1, minDim * 0.42f * zoom1, orbPaint)
+            canvas.drawCircle(cx1, cy1, minDim * 0.43f * zoom1, orbPaint)
 
-            val zoom2 = 0.96f + 0.10f * cos((phase * 0.85f + 0.7f).toDouble()).toFloat()
-            val cx2 = w * (0.85f + 0.09f * cos((phase * 0.85f).toDouble()).toFloat())
-            val cy2 = h * (0.48f + 0.08f * sin((phase * 0.85f).toDouble()).toFloat())
-            orbPaint.color = withAlpha(o2, (orbAlphaBase * 0.88f).roundToInt())
-            canvas.drawCircle(cx2, cy2, minDim * 0.39f * zoom2, orbPaint)
+            val zoom2 = 0.94f + 0.12f * cos((phase * 0.85f + 0.7f).toDouble()).toFloat()
+            val cx2 = w * (0.85f + 0.10f * cos((phase * 0.85f).toDouble()).toFloat())
+            val cy2 = h * (0.48f + 0.09f * sin((phase * 0.85f).toDouble()).toFloat())
+            orbPaint.color = withAlpha(o2, (orbAlphaBase * 0.90f).roundToInt())
+            canvas.drawCircle(cx2, cy2, minDim * 0.40f * zoom2, orbPaint)
 
-            val zoom3 = 0.95f + 0.11f * sin((phase * 0.65f + 1.4f).toDouble()).toFloat()
-            val cx3 = w * (0.34f + 0.12f * sin((phase * 0.65f + 1.4f).toDouble()).toFloat())
-            val cy3 = h * (0.85f + 0.06f * cos((phase * 0.65f + 1.4f).toDouble()).toFloat())
-            orbPaint.color = withAlpha(o3, (orbAlphaBase * 0.90f).roundToInt())
-            canvas.drawCircle(cx3, cy3, minDim * 0.44f * zoom3, orbPaint)
+            val zoom3 = 0.93f + 0.13f * sin((phase * 0.65f + 1.4f).toDouble()).toFloat()
+            val cx3 = w * (0.34f + 0.13f * sin((phase * 0.65f + 1.4f).toDouble()).toFloat())
+            val cy3 = h * (0.85f + 0.07f * cos((phase * 0.65f + 1.4f).toDouble()).toFloat())
+            orbPaint.color = withAlpha(o3, (orbAlphaBase * 0.92f).roundToInt())
+            canvas.drawCircle(cx3, cy3, minDim * 0.45f * zoom3, orbPaint)
 
-            val zoom4 = 0.92f + 0.12f * cos((phase * 0.55f + 2.2f).toDouble()).toFloat()
-            val cx4 = w * (0.72f + 0.10f * sin((phase * 0.55f + 2.2f).toDouble()).toFloat())
-            val cy4 = h * (0.28f + 0.08f * cos((phase * 0.55f + 2.2f).toDouble()).toFloat())
-            orbPaint.color = withAlpha(o4, (orbAlphaBase * 0.72f).roundToInt())
-            canvas.drawCircle(cx4, cy4, minDim * 0.34f * zoom4, orbPaint)
+            val zoom4 = 0.90f + 0.14f * cos((phase * 0.55f + 2.2f).toDouble()).toFloat()
+            val cx4 = w * (0.72f + 0.11f * sin((phase * 0.55f + 2.2f).toDouble()).toFloat())
+            val cy4 = h * (0.28f + 0.09f * cos((phase * 0.55f + 2.2f).toDouble()).toFloat())
+            orbPaint.color = withAlpha(o4, (orbAlphaBase * 0.76f).roundToInt())
+            canvas.drawCircle(cx4, cy4, minDim * 0.35f * zoom4, orbPaint)
         }
 
         override fun setAlpha(alpha: Int) {
@@ -401,7 +402,7 @@ object GlassUiTheme {
         override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
     }
 
-    // ==================== LAYER 1: DUAL-COLOR FROSTED GLASS CARD ====================
+    // ==================== LAYER 1: SHIMMERING DUAL-COLOR FROSTED GLASS CARD ====================
 
     fun glassCard(
         isDark: Boolean,
@@ -417,6 +418,9 @@ object GlassUiTheme {
             private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.FILL
             }
+            private val sheenPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.FILL
+            }
             private val baseBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.STROKE
                 strokeWidth = 1.5f
@@ -428,7 +432,35 @@ object GlassUiTheme {
                 color = if (isDark) darkGlassHighlight else lightGlassHighlight
             }
 
-            private fun updateShader(rect: RectF) {
+            private var shimmerProgress: Float = 0.25f
+            private var shimmerAnimator: ValueAnimator? = null
+
+            init {
+                startShimmer()
+            }
+
+            private fun startShimmer() {
+                if (shimmerAnimator != null) return
+                val selfRef = WeakReference(this)
+                shimmerAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+                    duration = 7500L
+                    repeatCount = ValueAnimator.INFINITE
+                    repeatMode = ValueAnimator.RESTART
+                    interpolator = AccelerateDecelerateInterpolator()
+                    addUpdateListener { va ->
+                        val target = selfRef.get()
+                        if (target == null) {
+                            va.cancel()
+                            return@addUpdateListener
+                        }
+                        target.shimmerProgress = va.animatedValue as Float
+                        target.invalidateSelf()
+                    }
+                    start()
+                }
+            }
+
+            private fun updateShaders(rect: RectF) {
                 val topCol = tintColor ?: if (isDark) darkGlassSurfaceTop else lightGlassSurfaceTop
                 val botCol = if (tintColor != null) {
                     Color.argb(
@@ -449,6 +481,20 @@ object GlassUiTheme {
                     botCol,
                     Shader.TileMode.CLAMP
                 )
+
+                val bandW = (rect.width() * 0.45f).coerceAtLeast(60f)
+                val sweepStartX = rect.left - bandW + (rect.width() + bandW * 2f) * shimmerProgress
+                val sweepEndX = sweepStartX + bandW
+                val shimmerCol = if (isDark) darkGlassShimmer else lightGlassShimmer
+                sheenPaint.shader = LinearGradient(
+                    sweepStartX,
+                    rect.top,
+                    sweepEndX,
+                    rect.bottom,
+                    intArrayOf(Color.TRANSPARENT, shimmerCol, Color.TRANSPARENT),
+                    floatArrayOf(0f, 0.5f, 1f),
+                    Shader.TileMode.CLAMP
+                )
             }
 
             override fun draw(canvas: Canvas) {
@@ -464,9 +510,10 @@ object GlassUiTheme {
                     rect.right,
                     rect.bottom + 4f
                 )
-                updateShader(rect)
+                updateShaders(rect)
                 canvas.drawRoundRect(shadowRect, radiusPx, radiusPx, shadowPaint)
                 canvas.drawRoundRect(rect, radiusPx, radiusPx, fillPaint)
+                canvas.drawRoundRect(rect, radiusPx, radiusPx, sheenPaint)
                 canvas.drawRoundRect(rect, radiusPx, radiusPx, baseBorderPaint)
 
                 val sheenStartX = rect.left + radiusPx * 0.6f
@@ -477,6 +524,7 @@ object GlassUiTheme {
             override fun setAlpha(alpha: Int) {
                 shadowPaint.alpha = alpha
                 fillPaint.alpha = alpha
+                sheenPaint.alpha = alpha
                 baseBorderPaint.alpha = alpha
                 highlightPaint.alpha = alpha
             }
@@ -484,6 +532,7 @@ object GlassUiTheme {
             override fun setColorFilter(colorFilter: ColorFilter?) {
                 shadowPaint.colorFilter = colorFilter
                 fillPaint.colorFilter = colorFilter
+                sheenPaint.colorFilter = colorFilter
                 baseBorderPaint.colorFilter = colorFilter
                 highlightPaint.colorFilter = colorFilter
             }
@@ -501,7 +550,7 @@ object GlassUiTheme {
     fun glassCardHex(isDark: Boolean, radiusPx: Float = cardRadiusPx, tintHex: String): Drawable =
         glassCard(isDark, radiusPx, runCatching { Color.parseColor(tintHex) }.getOrNull())
 
-    // ==================== LAYER 2: SUBTLE INNER GLASS SURFACE ====================
+    // ==================== LAYER 2: RECESSED SUBTLE GLASS SURFACE ====================
 
     fun glassSubtleSurface(isDark: Boolean, radiusPx: Float = subtleRadiusPx): GradientDrawable {
         return GradientDrawable().apply {
@@ -523,7 +572,7 @@ object GlassUiTheme {
         radiusPx: Float = buttonRadiusPx,
         translucent: Boolean = true
     ): GradientDrawable {
-        val alphaVal = if (translucent) 146 else 255
+        val alphaVal = if (translucent) 156 else 255
         val sGlass = Color.argb(alphaVal, Color.red(startColor), Color.green(startColor), Color.blue(startColor))
         val eGlass = Color.argb(alphaVal, Color.red(endColor), Color.green(endColor), Color.blue(endColor))
         return GradientDrawable(
@@ -581,7 +630,7 @@ object GlassUiTheme {
         return when (type) {
             DayType.OFFICE -> {
                 val (startCol, endCol) = accentColors(isDark, AccentRole.SUCCESS)
-                val fill = Color.argb(156, Color.red(endCol), Color.green(endCol), Color.blue(endCol))
+                val fill = Color.argb(162, Color.red(endCol), Color.green(endCol), Color.blue(endCol))
                 val border = if (isToday) todayRing else startCol
                 roundedShape(fill, border, cellRadiusPx, strokeW)
             }
@@ -592,13 +641,13 @@ object GlassUiTheme {
             }
             DayType.LEAVE -> {
                 val (startCol, endCol) = accentColors(isDark, AccentRole.WARNING)
-                val fill = Color.argb(156, Color.red(endCol), Color.green(endCol), Color.blue(endCol))
+                val fill = Color.argb(162, Color.red(endCol), Color.green(endCol), Color.blue(endCol))
                 val border = if (isToday) todayRing else startCol
                 roundedShape(fill, border, cellRadiusPx, strokeW)
             }
             DayType.HOLIDAY -> {
                 val (startCol, endCol) = accentColors(isDark, AccentRole.SPECIAL)
-                val fill = Color.argb(156, Color.red(endCol), Color.green(endCol), Color.blue(endCol))
+                val fill = Color.argb(162, Color.red(endCol), Color.green(endCol), Color.blue(endCol))
                 val border = if (isToday) todayRing else startCol
                 roundedShape(fill, border, cellRadiusPx, strokeW)
             }
