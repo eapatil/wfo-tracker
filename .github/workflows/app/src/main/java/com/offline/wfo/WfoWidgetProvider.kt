@@ -52,6 +52,19 @@ class WfoWidgetProvider : AppWidgetProvider() {
             val isOnOffice = store.wasConnectedToOfficeWifi()
             val activeSrc = store.getActiveOfficeSsid()
             val mode = store.getTrackingMode()
+            val radius = store.getGeofenceRadiusMeters()
+            val hasLoc = store.hasOfficeLocationConfigured()
+            val locName = store.getOfficeLocationName().ifEmpty { "Office Zone" }
+
+            val distMeters: Float? = if (hasLoc && store.hasLastKnownLocation()) {
+                store.distanceToOfficeMeters(store.getLastKnownLat(), store.getLastKnownLng())
+            } else {
+                null
+            }
+
+            val isInsideRadius = hasLoc &&
+                (mode == TrackingMode.LOCATION_ONLY || mode == TrackingMode.BOTH) &&
+                ((distMeters != null && distMeters <= radius) || (distMeters == null && isOnOffice))
 
             val views = RemoteViews(context.packageName, R.layout.wfo_widget)
 
@@ -62,12 +75,29 @@ class WfoWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_month_title, "OfficePace • $todayStamp")
             views.setTextViewText(R.id.widget_updated_time, "Updated $nowTime")
 
-            // Dedicated Sub-Line: Shown only when actively connected to an office Wi-Fi / zone
-            if (isOnOffice && activeSrc.isNotEmpty()) {
-                views.setViewVisibility(R.id.widget_source_detail, View.VISIBLE)
-                views.setTextViewText(R.id.widget_source_detail, "📍 $activeSrc ($shortMonthYear)")
-            } else {
-                views.setViewVisibility(R.id.widget_source_detail, View.GONE)
+            // Dedicated Sub-Line: Shows in-radius zone & distance when inside geofence, or active office source
+            when {
+                isInsideRadius && distMeters != null -> {
+                    views.setViewVisibility(R.id.widget_source_detail, View.VISIBLE)
+                    views.setTextViewText(
+                        R.id.widget_source_detail,
+                        "📍 Inside ${radius}m office zone (~${distMeters.toInt()}m away)"
+                    )
+                }
+                isInsideRadius -> {
+                    views.setViewVisibility(R.id.widget_source_detail, View.VISIBLE)
+                    views.setTextViewText(
+                        R.id.widget_source_detail,
+                        "📍 Inside ${radius}m office zone"
+                    )
+                }
+                isOnOffice && activeSrc.isNotEmpty() -> {
+                    views.setViewVisibility(R.id.widget_source_detail, View.VISIBLE)
+                    views.setTextViewText(R.id.widget_source_detail, "📍 $activeSrc ($shortMonthYear)")
+                }
+                else -> {
+                    views.setViewVisibility(R.id.widget_source_detail, View.GONE)
+                }
             }
 
             // Live Today Status Pill
