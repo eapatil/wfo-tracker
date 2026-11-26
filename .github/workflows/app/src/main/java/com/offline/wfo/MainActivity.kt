@@ -4998,9 +4998,9 @@ class MainActivity : AppCompatActivity() {
             .replace("\u2212", "-")
     }
 
-    private fun cTextPrimary(): Int = Color.parseColor(if (isDark) "#F8FAFC" else "#F1F5F9")
-    private fun cTextSecondary(): Int = Color.parseColor(if (isDark) "#CBD5E1" else "#94A3B8")
-    private fun cBorder(): String = if (isDark) "#47FFFFFF" else "#52FFFFFF"
+    private fun cTextPrimary(): Int = GlassUiTheme.textPrimaryColor(isDark)
+    private fun cTextSecondary(): Int = GlassUiTheme.textSecondaryColor(isDark)
+    private fun cBorder(): String = GlassUiTheme.borderHex(isDark)
 
     private fun makePersonalFooterView(): TextView {
         return TextView(this).apply {
