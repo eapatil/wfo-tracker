@@ -372,7 +372,7 @@ class MainActivity : AppCompatActivity() {
         ensureAlertNotificationChannel()
 
         val frameRoot = FrameLayout(this).apply {
-            setBackgroundColor(cBg())
+            background = GlassUiTheme.ambientBackdrop(isDark)
         }
 
         ViewCompat.setOnApplyWindowInsetsListener(frameRoot) { view, insets ->
@@ -723,7 +723,7 @@ class MainActivity : AppCompatActivity() {
             val card = LinearLayout(this@MainActivity).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                background = roundedBox("#162032", "#4F46E5", 22f, 2)
+                background = GlassUiTheme.glassCard(true, 26f, "#CC131D33")
                 setPadding(36, 32, 36, 32)
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -807,7 +807,7 @@ class MainActivity : AppCompatActivity() {
             textSize = 13f
             setTypeface(null, Typeface.BOLD)
             setTextColor(Color.WHITE)
-            background = roundedBox("#660F172A", "#94A3B8", 16f, 1)
+            background = GlassUiTheme.glassCard(true, 18f, "#800F172A")
             setPadding(24, 12, 24, 12)
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -1372,7 +1372,7 @@ class MainActivity : AppCompatActivity() {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setBackgroundColor(cBg())
+            background = GlassUiTheme.ambientBackdrop(isDark)
             setPadding(44, 40, 44, 44)
             visibility = View.GONE
 
@@ -1495,7 +1495,7 @@ class MainActivity : AppCompatActivity() {
         val title = TextView(this).apply {
             text = "OfficePace Setup"
             textSize = 24f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(cTextPrimary())
         }
         val subtitle = TextView(this).apply {
@@ -1618,7 +1618,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(cTextPrimary())
             setHintTextColor(cTextSecondary())
             setPadding(24, 20, 24, 20)
-            background = roundedBox(cInputBg(), cBorder(), 16f, 1)
+            background = GlassUiTheme.glassSubtleSurface(isDark, 18f)
         }
         profileCard.addView(setupNameInput)
         addSpacer(profileCard, 12)
@@ -1661,7 +1661,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(cTextPrimary())
             setHintTextColor(cTextSecondary())
             setPadding(24, 20, 24, 20)
-            background = roundedBox(cInputBg(), cBorder(), 16f, 1)
+            background = GlassUiTheme.glassSubtleSurface(isDark, 18f)
         }
 
         setupLocationSummaryView = TextView(this).apply {
@@ -1692,7 +1692,7 @@ class MainActivity : AppCompatActivity() {
         }
         setupTargetPctView = TextView(this).apply {
             textSize = 15f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(cTextPrimary())
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
@@ -1839,13 +1839,14 @@ class MainActivity : AppCompatActivity() {
 
         topHeaderBar = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(28, 16, 28, 8)
+            setPadding(24, 14, 24, 8)
         }
 
         val profileHeader = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 0, 0, 8)
+            background = GlassUiTheme.glassCard(isDark, 24f)
+            setPadding(16, 12, 16, 12)
         }
         dashAvatarView = ImageView(this).apply {
             layoutParams = LinearLayout.LayoutParams(88, 88)
@@ -1861,7 +1862,7 @@ class MainActivity : AppCompatActivity() {
         }
         dashGreetingView = TextView(this).apply {
             textSize = 18f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(cTextPrimary())
         }
 
@@ -1878,7 +1879,7 @@ class MainActivity : AppCompatActivity() {
         }
         dashServiceStatusView = TextView(this).apply {
             textSize = 12f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
         }
         statusRow.addView(heartbeatDotView)
         statusRow.addView(dashServiceStatusView)
@@ -1909,16 +1910,20 @@ class MainActivity : AppCompatActivity() {
 
         todayLiveStripView = TextView(this).apply {
             textSize = 12f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             gravity = Gravity.CENTER
             setPadding(16, 10, 16, 10)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 8, 0, 0) }
         }
         topHeaderBar.addView(todayLiveStripView)
 
         undoBannerRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = roundedBox("#1E293B", "#4F46E5", 16f, 2)
+            background = GlassUiTheme.glassCard(true, 18f, "#CC1E293B")
             setPadding(20, 12, 16, 12)
             visibility = View.GONE
             layoutParams = LinearLayout.LayoutParams(
@@ -1928,7 +1933,7 @@ class MainActivity : AppCompatActivity() {
         }
         undoBannerText = TextView(this).apply {
             textSize = 12f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(Color.WHITE)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
@@ -1984,9 +1989,13 @@ class MainActivity : AppCompatActivity() {
 
         val bottomNav = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            elevation = 8f
-            background = roundedBox(cCardHex(), cBorder(), 0f, 1)
-            setPadding(16, 10, 16, 10)
+            elevation = 0f
+            background = GlassUiTheme.glassNavDock(isDark)
+            setPadding(14, 10, 14, 10)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(20, 4, 20, 12) }
         }
         navHomeBtn = makeNavTabButton("📅 Home") { switchTab(ActiveTab.HOME) }
         navAnalyticsBtn = makeNavTabButton("📊 Analytics") { switchTab(ActiveTab.ANALYTICS) }
@@ -2007,7 +2016,7 @@ class MainActivity : AppCompatActivity() {
         val scroll = ScrollView(this)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(28, 6, 28, 44)
+            setPadding(24, 6, 24, 44)
         }
         scroll.addView(root)
 
@@ -2023,7 +2032,7 @@ class MainActivity : AppCompatActivity() {
         }
         monthTitleView = TextView(this).apply {
             textSize = 19f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             gravity = Gravity.CENTER
             setTextColor(cTextPrimary())
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
@@ -2047,11 +2056,11 @@ class MainActivity : AppCompatActivity() {
 
         briefingCardView = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(22, 14, 22, 14)
+            setPadding(22, 16, 22, 16)
         }
         briefingHeadlineView = TextView(this).apply {
             textSize = 14f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
         }
         briefingSubView = TextView(this).apply {
             textSize = 12.5f
@@ -2060,7 +2069,7 @@ class MainActivity : AppCompatActivity() {
         }
         briefingWeeklyView = TextView(this).apply {
             textSize = 12.5f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setPadding(0, 6, 0, 0)
         }
         briefingRecoveryView = TextView(this).apply {
@@ -2083,7 +2092,7 @@ class MainActivity : AppCompatActivity() {
         addSpacer(root, 12)
 
         heroCardContainer = makeCardContainer().apply {
-            setPadding(24, 16, 24, 16)
+            setPadding(24, 18, 24, 18)
         }
         circularRingView = CircularProgressRingView(this).apply {
             layoutParams = LinearLayout.LayoutParams(280, 280).apply {
@@ -2098,10 +2107,10 @@ class MainActivity : AppCompatActivity() {
         }
         heroProjectedView = TextView(this).apply {
             textSize = 12.5f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(Color.parseColor(if (isDark) "#A5B4FC" else "#4F46E5"))
             gravity = Gravity.CENTER
-            setPadding(14, 8, 14, 8)
+            setPadding(14, 10, 14, 10)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -2113,7 +2122,7 @@ class MainActivity : AppCompatActivity() {
 
         val kpiRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            background = roundedBox(cInputBg(), cBorder(), 16f, 1)
+            background = GlassUiTheme.glassSubtleSurface(isDark, 18f)
             setPadding(12, 12, 12, 12)
         }
         val (colWorking, numWorking) = makeColorCodedKpiColumn("Working Days")
@@ -2130,7 +2139,7 @@ class MainActivity : AppCompatActivity() {
         addSpacer(root, 12)
 
         calendarCardContainer = makeCardContainer().apply {
-            setPadding(22, 16, 22, 16)
+            setPadding(22, 18, 22, 18)
         }
         val calHeaderRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -2294,12 +2303,12 @@ class MainActivity : AppCompatActivity() {
         addSpacer(root, 12)
 
         val logCard = makeCardContainer().apply {
-            setPadding(22, 16, 22, 16)
+            setPadding(22, 18, 22, 18)
         }
         logHeaderToggleView = TextView(this).apply {
             text = "Monthly Log & Timestamps   ▼"
             textSize = 15f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(cTextPrimary())
             isClickable = true
             isFocusable = true
@@ -2323,10 +2332,10 @@ class MainActivity : AppCompatActivity() {
 
         logSummaryBarView = TextView(this).apply {
             textSize = 12f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(cTextPrimary())
             gravity = Gravity.CENTER
-            background = roundedBox(cInputBg(), cBorder(), 12f, 1)
+            background = GlassUiTheme.glassSubtleSurface(isDark, 14f)
             setPadding(14, 8, 14, 8)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -2369,7 +2378,7 @@ class MainActivity : AppCompatActivity() {
         val scroll = ScrollView(this)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(28, 8, 28, 48)
+            setPadding(24, 8, 24, 48)
         }
         scroll.addView(root)
 
@@ -2393,7 +2402,7 @@ class MainActivity : AppCompatActivity() {
 
         runRateFollowThroughView = TextView(this).apply {
             textSize = 13f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(cTextPrimary())
             setPadding(0, 4, 0, 4)
         }
@@ -2404,7 +2413,7 @@ class MainActivity : AppCompatActivity() {
         trendCard.addView(runRateFollowThroughView)
         trendCard.addView(bufferTrajectoryView)
         root.addView(trendCard)
-        addSpacer(root, 16)
+        addSpacer(root, 14)
 
         val qtdCard = makeCardContainer()
         qtdTitleView = makeSectionTitle("Quarter-to-Date Rollup")
@@ -2420,7 +2429,7 @@ class MainActivity : AppCompatActivity() {
         }
         rhythmView = TextView(this).apply {
             textSize = 13f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(Color.parseColor(if (isDark) "#A5B4FC" else "#4F46E5"))
         }
         qtdCard.addView(qtdTitleView)
@@ -2428,7 +2437,7 @@ class MainActivity : AppCompatActivity() {
         qtdCard.addView(qtdLeaveHolView)
         qtdCard.addView(rhythmView)
         root.addView(qtdCard)
-        addSpacer(root, 16)
+        addSpacer(root, 14)
 
         val simCard = makeCardContainer()
         val simHeaderRow = LinearLayout(this).apply {
@@ -2463,7 +2472,7 @@ class MainActivity : AppCompatActivity() {
         }
         simLeaveCountView = TextView(this).apply {
             textSize = 14f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(cTextPrimary())
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
@@ -2488,7 +2497,7 @@ class MainActivity : AppCompatActivity() {
         }
         simHolidayCountView = TextView(this).apply {
             textSize = 14f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(cTextPrimary())
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
@@ -2508,12 +2517,12 @@ class MainActivity : AppCompatActivity() {
 
         simResultView = TextView(this).apply {
             textSize = 13f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setPadding(20, 16, 20, 16)
         }
         simCard.addView(simResultView)
         root.addView(simCard)
-        addSpacer(root, 18)
+        addSpacer(root, 16)
 
         val copySnapshotBtn = makePillButton("📎 Copy Audit Snapshot", "#0284C7", "#FFFFFF") {
             val snap = store.buildMonthlySummaryReport(selectedMonth)
@@ -2554,7 +2563,7 @@ class MainActivity : AppCompatActivity() {
         val scroll = ScrollView(this)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(28, 8, 28, 48)
+            setPadding(24, 8, 24, 48)
         }
         scroll.addView(root)
 
@@ -2580,7 +2589,7 @@ class MainActivity : AppCompatActivity() {
         themeRow.addView(themeDarkBtn)
         themeCard.addView(themeRow)
         root.addView(themeCard)
-        addSpacer(root, 16)
+        addSpacer(root, 14)
 
         val modeCard = makeCardContainer()
         modeCard.addView(makeSectionTitle("Tracking Mode"))
@@ -2626,13 +2635,13 @@ class MainActivity : AppCompatActivity() {
         }
         modeCard.addView(trackingModeHintView)
         root.addView(modeCard)
-        addSpacer(root, 16)
+        addSpacer(root, 14)
 
         locationSectionCard = makeCardContainer()
         locationSectionCard.addView(makeSectionTitle("Office Geofence Location"))
         selectedOfficeView = TextView(this).apply {
             textSize = 14f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(cTextPrimary())
             setPadding(0, 8, 0, 4)
         }
@@ -2654,7 +2663,7 @@ class MainActivity : AppCompatActivity() {
         val radiusLabel = TextView(this).apply {
             text = "Geofence Radius:"
             textSize = 12f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(cTextSecondary())
             setPadding(0, 14, 0, 8)
         }
@@ -2662,7 +2671,7 @@ class MainActivity : AppCompatActivity() {
         locationSectionCard.addView(buildRadiusSelectorRow())
 
         root.addView(locationSectionCard)
-        addSpacer(root, 16)
+        addSpacer(root, 14)
 
         val priorityCard = makeCardContainer()
         priorityCard.addView(makeSectionTitle("Auto-Plan Preferred Weekdays (Priority Order)"))
@@ -2679,13 +2688,13 @@ class MainActivity : AppCompatActivity() {
         priorityCard.addView(priorityWeekdaysContainer)
         priorityOrderPreviewView = TextView(this).apply {
             textSize = 12f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(Color.parseColor(if (isDark) "#A5B4FC" else "#4F46E5"))
             setPadding(0, 10, 0, 0)
         }
         priorityCard.addView(priorityOrderPreviewView)
         root.addView(priorityCard)
-        addSpacer(root, 16)
+        addSpacer(root, 14)
 
         wifiSectionCard = makeCardContainer()
         wifiSectionCard.addView(makeSectionTitle("Office Wi-Fi Auto-Detection"))
@@ -2732,7 +2741,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(cTextPrimary())
             setHintTextColor(cTextSecondary())
             setPadding(20, 18, 20, 18)
-            background = roundedBox(cInputBg(), cBorder(), 16f, 1)
+            background = GlassUiTheme.glassSubtleSurface(isDark, 16f)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         val addManualSsidBtn = makeSmallChipButton("+ Add") {
@@ -2754,7 +2763,7 @@ class MainActivity : AppCompatActivity() {
         manualWifiRow.addView(addManualSsidBtn)
         wifiSectionCard.addView(manualWifiRow)
         root.addView(wifiSectionCard)
-        addSpacer(root, 16)
+        addSpacer(root, 14)
 
         val notifCard = makeCardContainer()
         val notifHeaderRow = LinearLayout(this).apply {
@@ -2796,14 +2805,14 @@ class MainActivity : AppCompatActivity() {
 
         settingsNotifPermStatusView = TextView(this).apply {
             textSize = 12f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setPadding(4, 0, 4, 8)
         }
         notifBodyView.addView(settingsNotifPermStatusView)
 
         settingsExactAlarmStatusView = TextView(this).apply {
             textSize = 12f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setPadding(16, 12, 16, 12)
         }
         notifBodyView.addView(settingsExactAlarmStatusView)
@@ -2854,7 +2863,7 @@ class MainActivity : AppCompatActivity() {
             if (notifBodyView.isShown) animateTabReveal(notifBodyView)
         }
         root.addView(notifCard)
-        addSpacer(root, 16)
+        addSpacer(root, 14)
 
         val holidayCard = makeCardContainer()
         val holHeaderRow = LinearLayout(this).apply {
@@ -2916,7 +2925,7 @@ class MainActivity : AppCompatActivity() {
 
         upcomingHolLeaveSummaryView = TextView(this).apply {
             textSize = 12f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setPadding(14, 8, 14, 8)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -2952,7 +2961,7 @@ class MainActivity : AppCompatActivity() {
             if (holidayBodyView.isShown) animateTabReveal(holidayBodyView)
         }
         root.addView(holidayCard)
-        addSpacer(root, 16)
+        addSpacer(root, 14)
 
         val backupCard = makeCardContainer()
         backupCard.addView(makeSectionTitle("Backup, Widget & Data Portability"))
@@ -2998,7 +3007,7 @@ class MainActivity : AppCompatActivity() {
         backupRow.addView(importBtn)
         backupCard.addView(backupRow)
         root.addView(backupCard)
-        addSpacer(root, 16)
+        addSpacer(root, 14)
 
         val setupWizardBtn = makePillButton("🛠️ Edit Policy Rules, Profile & Permissions", "#4F46E5", "#FFFFFF") {
             if (isEditUnlocked) {
@@ -3175,7 +3184,7 @@ class MainActivity : AppCompatActivity() {
         sections.forEachIndexed { idx, (heading, accentHex, bullets) ->
             val cardWrapper = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
-                background = roundedBox(cInputBg(), cBorder(), 18f, 1)
+                background = GlassUiTheme.glassSubtleSurface(isDark, 20f)
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
@@ -3202,7 +3211,7 @@ class MainActivity : AppCompatActivity() {
             val headerTv = TextView(this).apply {
                 text = heading
                 textSize = 14f
-                setTypeface(null, Typeface.BOLD)
+                setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
                 setTextColor(Color.parseColor(accentHex))
                 setPadding(0, 0, 0, 10)
             }
@@ -3327,7 +3336,7 @@ class MainActivity : AppCompatActivity() {
 
         upcomingHolLeaveSummaryView.text = "🎉 $holCount Upcoming Holiday(s)   •   🌴 $leaveCount Upcoming Leave(s)"
         upcomingHolLeaveSummaryView.setTextColor(cTextPrimary())
-        upcomingHolLeaveSummaryView.background = roundedBox(cInputBg(), cBorder(), 12f, 1)
+        upcomingHolLeaveSummaryView.background = GlassUiTheme.glassSubtleSurface(isDark, 14f)
 
         upcomingHolLeaveListView.removeAllViews()
         if (items.isEmpty()) {
@@ -3346,7 +3355,7 @@ class MainActivity : AppCompatActivity() {
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                background = roundedBox(cInputBg(), cBorder(), 14f, 1)
+                background = GlassUiTheme.glassSubtleSurface(isDark, 16f)
                 setPadding(16, 10, 12, 10)
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -3787,7 +3796,7 @@ class MainActivity : AppCompatActivity() {
                 ThemeChoice.DARK -> "Dark"
             }
             val activeSurface = if (isDark) "Dark" else "Light"
-            activeThemeStatusView.text = "Selected: $modeName • Active: $activeSurface (high-contrast palette)"
+            activeThemeStatusView.text = "Selected: $modeName • Active: $activeSurface (glassmorphism UI)"
         }
 
         val avatarBmp = loadCircularAvatarBitmap()
@@ -3898,7 +3907,7 @@ class MainActivity : AppCompatActivity() {
 
         lockToggleBtn.text = if (isEditUnlocked) "🔓 Unlocked" else "🔒 Locked"
         lockToggleBtn.background = roundedBox(
-            if (isEditUnlocked) (if (isDark) "#064E3B" else "#D1FAE5") else cInputBg(),
+            if (isEditUnlocked) (if (isDark) "#064E3B" else "#D1FAE5") else (if (isDark) "#660F172A" else "#80FFFFFF"),
             if (isEditUnlocked) "#10B981" else cBorder(),
             16f,
             2
@@ -3926,57 +3935,52 @@ class MainActivity : AppCompatActivity() {
                 val srcTag = if (activeSource.isNotEmpty()) " ($activeSource)" else ""
                 todayLiveStripView.text = "🟢 $todayStamp • At Office$srcTag"
                 todayLiveStripView.setTextColor(if (isDark) Color.parseColor("#A7F3D0") else Color.parseColor("#065F46"))
-                todayLiveStripView.background = roundedBox(
-                    if (isDark) "#064E3B" else "#D1FAE5",
-                    "#10B981",
-                    16f,
-                    2
+                todayLiveStripView.background = GlassUiTheme.glassCard(
+                    isDark,
+                    18f,
+                    if (isDark) "#8C064E3B" else "#B8D1FAE5"
                 )
             }
             todayType == DayType.OFFICE -> {
                 todayLiveStripView.text = "✅ $todayStamp • Office Day Logged"
                 todayLiveStripView.setTextColor(if (isDark) Color.parseColor("#A7F3D0") else Color.parseColor("#065F46"))
-                todayLiveStripView.background = roundedBox(
-                    if (isDark) "#064E3B" else "#ECFDF5",
-                    "#10B981",
-                    16f,
-                    1
+                todayLiveStripView.background = GlassUiTheme.glassCard(
+                    isDark,
+                    18f,
+                    if (isDark) "#8C064E3B" else "#B8ECFDF5"
                 )
             }
             todayType == DayType.PLANNED -> {
                 todayLiveStripView.text = "📅 $todayStamp • Planned Office Day"
                 todayLiveStripView.setTextColor(if (isDark) Color.parseColor("#C7D2FE") else Color.parseColor("#3730A3"))
-                todayLiveStripView.background = roundedBox(
-                    if (isDark) "#1E1B4B" else "#EEF2FF",
-                    "#6366F1",
-                    16f,
-                    1
+                todayLiveStripView.background = GlassUiTheme.glassCard(
+                    isDark,
+                    18f,
+                    if (isDark) "#8C1E1B4B" else "#B8EEF2FF"
                 )
             }
             todayType == DayType.LEAVE -> {
                 todayLiveStripView.text = "🌴 $todayStamp • On Leave"
                 todayLiveStripView.setTextColor(if (isDark) Color.parseColor("#FDE68A") else Color.parseColor("#92400E"))
-                todayLiveStripView.background = roundedBox(
-                    if (isDark) "#451A03" else "#FEF3C7",
-                    "#F59E0B",
-                    16f,
-                    1
+                todayLiveStripView.background = GlassUiTheme.glassCard(
+                    isDark,
+                    18f,
+                    if (isDark) "#8C451A03" else "#B8FEF3C7"
                 )
             }
             todayType == DayType.HOLIDAY -> {
                 todayLiveStripView.text = "🎉 $todayStamp • Holiday"
                 todayLiveStripView.setTextColor(if (isDark) Color.parseColor("#DDD6FE") else Color.parseColor("#5B21B6"))
-                todayLiveStripView.background = roundedBox(
-                    if (isDark) "#2E1065" else "#F5F3FF",
-                    "#8B5CF6",
-                    16f,
-                    1
+                todayLiveStripView.background = GlassUiTheme.glassCard(
+                    isDark,
+                    18f,
+                    if (isDark) "#8C2E1065" else "#B8F5F3FF"
                 )
             }
             else -> {
                 todayLiveStripView.text = "🏠 $todayStamp • WFH ($disconnectedLabel)"
                 todayLiveStripView.setTextColor(cTextSecondary())
-                todayLiveStripView.background = roundedBox(cCardHex(), cBorder(), 16f, 1)
+                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f)
             }
         }
 
@@ -3997,36 +4001,31 @@ class MainActivity : AppCompatActivity() {
 
         val progressColorHex: String
         val cardFillHex: String
-        val cardStrokeHex: String
         val headlineColor: Int
         val subColor: Int
 
         when {
             s.remainingDays == 0 -> {
                 progressColorHex = "#10B981"
-                cardFillHex = if (isDark) "#064E3B" else "#ECFDF5"
-                cardStrokeHex = "#10B981"
+                cardFillHex = if (isDark) "#8C064E3B" else "#B8ECFDF5"
                 headlineColor = if (isDark) Color.parseColor("#A7F3D0") else Color.parseColor("#065F46")
                 subColor = if (isDark) Color.parseColor("#D1FAE5") else Color.parseColor("#047857")
             }
             plannedCoversTarget -> {
                 progressColorHex = "#10B981"
-                cardFillHex = if (isDark) "#064E3B" else "#ECFDF5"
-                cardStrokeHex = "#10B981"
+                cardFillHex = if (isDark) "#8C064E3B" else "#B8ECFDF5"
                 headlineColor = if (isDark) Color.parseColor("#A7F3D0") else Color.parseColor("#065F46")
                 subColor = if (isDark) Color.parseColor("#D1FAE5") else Color.parseColor("#047857")
             }
             s.bufferDays <= 0 -> {
                 progressColorHex = "#EF4444"
-                cardFillHex = if (isDark) "#450A0A" else "#FEF2F2"
-                cardStrokeHex = "#EF4444"
+                cardFillHex = if (isDark) "#8C450A0A" else "#B8FEF2F2"
                 headlineColor = if (isDark) Color.parseColor("#FECACA") else Color.parseColor("#991B1B")
                 subColor = if (isDark) Color.parseColor("#FEE2E2") else Color.parseColor("#B91C1C")
             }
             else -> {
                 progressColorHex = "#4F46E5"
-                cardFillHex = if (isDark) "#1E293B" else "#FFFBEB"
-                cardStrokeHex = if (isDark) "#475569" else "#FCD34D"
+                cardFillHex = if (isDark) "#8C1E293B" else "#B8FFFBEB"
                 headlineColor = if (isDark) Color.parseColor("#FDE68A") else Color.parseColor("#92400E")
                 subColor = if (isDark) Color.parseColor("#E2E8F0") else Color.parseColor("#78350F")
             }
@@ -4037,7 +4036,7 @@ class MainActivity : AppCompatActivity() {
         val isPastMonth = selectedMonth.isBefore(currentYm)
 
         if (::briefingCardView.isInitialized) {
-            briefingCardView.background = roundedBox(cardFillHex, cardStrokeHex, 18f, 1)
+            briefingCardView.background = GlassUiTheme.glassCard(isDark, 24f, cardFillHex)
 
             if (isCurrentMonth) {
                 briefingHeadlineView.text = if (s.remainingDays > 0 && plannedCoversTarget) {
@@ -4120,12 +4119,11 @@ class MainActivity : AppCompatActivity() {
 
         if (s.futurePlannedDays > 0) {
             heroProjectedView.visibility = View.VISIBLE
-            heroProjectedView.background = roundedBox(
-                if (plannedCoversTarget) (if (isDark) "#064E3B" else "#ECFDF5")
-                else (if (isDark) "#1E1B4B" else "#EEF2FF"),
-                if (plannedCoversTarget) "#10B981" else "#6366F1",
-                12f,
-                1
+            heroProjectedView.background = GlassUiTheme.glassCard(
+                isDark,
+                16f,
+                if (plannedCoversTarget) (if (isDark) "#8C064E3B" else "#B8ECFDF5")
+                else (if (isDark) "#8C1E1B4B" else "#B8EEF2FF")
             )
             heroProjectedView.setTextColor(
                 if (plannedCoversTarget) {
@@ -4248,11 +4246,10 @@ class MainActivity : AppCompatActivity() {
                 " (Holiday exclusion is OFF in Setup)"
             else -> ""
         }
-        simResultView.background = roundedBox(
-            if (isDark) "#0F172A" else "#EEF2FF",
-            if (isDark) "#334155" else "#C7D2FE",
-            14f,
-            1
+        simResultView.background = GlassUiTheme.glassCard(
+            isDark,
+            16f,
+            if (isDark) "#8C0F172A" else "#B8EEF2FF"
         )
         simResultView.setTextColor(if (isDark) Color.parseColor("#C7D2FE") else Color.parseColor("#3730A3"))
         simResultView.text =
@@ -4337,11 +4334,10 @@ class MainActivity : AppCompatActivity() {
             val chipRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                background = roundedBox(
-                    if (isDark) "#1E293B" else "#EFF6FF",
-                    if (isDark) "#334155" else "#BFDBFE",
-                    16f,
-                    1
+                background = GlassUiTheme.glassCard(
+                    isDark,
+                    18f,
+                    if (isDark) "#8C1E293B" else "#B8EFF6FF"
                 )
                 setPadding(22, 14, 18, 14)
                 layoutParams = LinearLayout.LayoutParams(
@@ -4352,7 +4348,7 @@ class MainActivity : AppCompatActivity() {
             val nameTv = TextView(this).apply {
                 text = "📶  $ssid"
                 textSize = 14f
-                setTypeface(null, Typeface.BOLD)
+                setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
                 setTextColor(if (isDark) Color.parseColor("#93C5FD") else Color.parseColor("#1E3A8A"))
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
@@ -4387,7 +4383,7 @@ class MainActivity : AppCompatActivity() {
             val tv = TextView(this).apply {
                 text = dayName
                 textSize = 12f
-                setTypeface(null, Typeface.BOLD)
+                setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
                 setTextColor(cTextSecondary())
                 gravity = Gravity.CENTER
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
@@ -4442,7 +4438,7 @@ class MainActivity : AppCompatActivity() {
                             dayNumTv.setTextColor(if (isDark) Color.parseColor("#C7D2FE") else Color.parseColor("#3730A3"))
                             dayNumTv.setTypeface(null, Typeface.BOLD)
                             cellWrapper.background = dashedBox(
-                                if (isDark) "#1E1B4B" else "#EEF2FF",
+                                if (isDark) "#8C1E1B4B" else "#B8EEF2FF",
                                 if (isToday) "#2563EB" else "#6366F1",
                                 16f,
                                 if (isToday) 6 else 4
@@ -4462,15 +4458,10 @@ class MainActivity : AppCompatActivity() {
                             if (isWeekend) {
                                 dayNumTv.setTextColor(cTextSecondary())
                                 cellWrapper.alpha = 0.72f
-                                cellWrapper.background = roundedBox(cInputBg(), if (isToday) "#2563EB" else cBorder(), 16f, if (isToday) 5 else 1)
+                                cellWrapper.background = GlassUiTheme.glassSubtleSurface(isDark, 16f)
                             } else {
                                 dayNumTv.setTextColor(cTextPrimary())
-                                cellWrapper.background = roundedBox(
-                                    if (isDark) "#2A3649" else "#E2E8F0",
-                                    if (isToday) "#2563EB" else cBorder(),
-                                    16f,
-                                    if (isToday) 6 else 1
-                                )
+                                cellWrapper.background = GlassUiTheme.glassSubtleSurface(isDark, 16f)
                             }
                         }
                     }
@@ -5055,10 +5046,10 @@ class MainActivity : AppCompatActivity() {
             .replace("\u2212", "-")
     }
 
-    private fun cBg(): Int = Color.parseColor(if (isDark) "#0B1120" else "#F1F5F9")
-    private fun cCardHex(): String = if (isDark) "#162032" else "#FFFFFF"
-    private fun cInputBg(): String = if (isDark) "#0F172A" else "#F8FAFC"
-    private fun cBorder(): String = if (isDark) "#2A3950" else "#CBD5E1"
+    private fun cBg(): Int = Color.parseColor(if (isDark) "#070B19" else "#E0E7FF")
+    private fun cCardHex(): String = if (isDark) "#8C17223B" else "#B8FFFFFF"
+    private fun cInputBg(): String = if (isDark) "#660F172A" else "#80FFFFFF"
+    private fun cBorder(): String = if (isDark) "#3894A3B8" else "#CCFFFFFF"
     private fun cTextPrimary(): Int = Color.parseColor(if (isDark) "#F8FAFC" else "#0F172A")
     private fun cTextSecondary(): Int = Color.parseColor(if (isDark) "#CBD5E1" else "#475569")
 
@@ -5075,18 +5066,18 @@ class MainActivity : AppCompatActivity() {
     private fun makeCardContainer(): LinearLayout {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            elevation = 3f
+            elevation = 0f
             setPadding(24, 20, 24, 20)
-            background = roundedBox(cCardHex(), cBorder(), 22f, 1)
+            background = GlassUiTheme.glassCard(isDark, 26f)
         }
     }
 
     private fun makeSectionTitle(textStr: String): TextView {
         return TextView(this).apply {
             text = textStr
-            textSize = 16f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(cTextPrimary())
+            GlassUiTheme.styleGlassSectionHeader(this, isDark)
         }
     }
 
@@ -5099,13 +5090,20 @@ class MainActivity : AppCompatActivity() {
         return TextView(this).apply {
             text = label
             textSize = 14f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(Color.parseColor(textHex))
             gravity = Gravity.CENTER
             isClickable = true
             isFocusable = true
             setPadding(24, 18, 24, 18)
-            background = roundedBox(bgHex, bgHex, 18f, 0)
+            background = when (bgHex.uppercase(Locale.US)) {
+                "#4F46E5" -> GlassUiTheme.glassAccentButton("#6366F1", "#4F46E5", 20f)
+                "#0284C7" -> GlassUiTheme.glassAccentButton("#0EA5E9", "#0284C7", 20f)
+                "#10B981" -> GlassUiTheme.glassAccentButton("#10B981", "#059669", 20f)
+                "#8B5CF6" -> GlassUiTheme.glassAccentButton("#A855F7", "#7C3AED", 20f)
+                "#334155" -> GlassUiTheme.glassAccentButton("#475569", "#1E293B", 20f)
+                else -> GlassUiTheme.glassAccentButton(bgHex, bgHex, 20f)
+            }
             setOnClickListener {
                 animateCellPop(it)
                 onClick()
@@ -5117,13 +5115,13 @@ class MainActivity : AppCompatActivity() {
         return TextView(this).apply {
             text = label
             textSize = 12f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(cTextPrimary())
             gravity = Gravity.CENTER
             isClickable = true
             isFocusable = true
             setPadding(18, 12, 18, 12)
-            background = roundedBox(cInputBg(), cBorder(), 14f, 1)
+            background = GlassUiTheme.glassSubtleSurface(isDark, 15f)
             setOnClickListener { onClick() }
         }
     }
@@ -5132,7 +5130,7 @@ class MainActivity : AppCompatActivity() {
         return TextView(this).apply {
             text = label
             textSize = 13f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             gravity = Gravity.CENTER
             isClickable = true
             isFocusable = true
@@ -5144,16 +5142,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun styleNavTab(btn: TextView, selected: Boolean) {
         if (selected) {
-            btn.setTextColor(if (isDark) Color.parseColor("#E0E7FF") else Color.parseColor("#3730A3"))
-            btn.background = roundedBox(
-                if (isDark) "#312E81" else "#EEF2FF",
-                if (isDark) "#6366F1" else "#818CF8",
-                16f,
-                2
-            )
+            btn.setTextColor(Color.WHITE)
+            btn.background = GlassUiTheme.glassAccentButton("#6366F1", "#4F46E5", 18f)
         } else {
             btn.setTextColor(cTextSecondary())
-            btn.background = roundedBox(cInputBg(), cBorder(), 16f, 1)
+            btn.background = GlassUiTheme.glassSubtleSurface(isDark, 18f)
         }
     }
 
@@ -5161,7 +5154,7 @@ class MainActivity : AppCompatActivity() {
         return TextView(this).apply {
             text = label
             textSize = 12f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             gravity = Gravity.CENTER
             isClickable = true
             isFocusable = true
@@ -5174,10 +5167,10 @@ class MainActivity : AppCompatActivity() {
     private fun styleModeChip(chip: TextView, selected: Boolean, activeHex: String) {
         if (selected) {
             chip.setTextColor(Color.WHITE)
-            chip.background = roundedBox(activeHex, activeHex, 14f, 0)
+            chip.background = GlassUiTheme.glassAccentButton(activeHex, activeHex, 15f)
         } else {
             chip.setTextColor(cTextSecondary())
-            chip.background = roundedBox(cInputBg(), cBorder(), 14f, 1)
+            chip.background = GlassUiTheme.glassSubtleSurface(isDark, 15f)
         }
     }
 
@@ -5189,14 +5182,14 @@ class MainActivity : AppCompatActivity() {
         }
         val numTv = TextView(this).apply {
             textSize = 18f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(cTextPrimary())
             gravity = Gravity.CENTER
         }
         val labelTv = TextView(this).apply {
             text = caption
             textSize = 11.5f
-            setTypeface(null, Typeface.BOLD)
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(cTextSecondary())
             gravity = Gravity.CENTER
             setPadding(0, 2, 0, 0)
