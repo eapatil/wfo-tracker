@@ -24,18 +24,90 @@ import kotlin.math.sin
 
 object GlassUiTheme {
 
-    // ==================== CENTRALIZED TEXT & BORDER TOKENS ====================
+    // ==================== CENTRALIZED COLOR TOKENS ====================
 
-    fun textPrimaryColor(isDark: Boolean): Int {
-        return Color.parseColor(if (isDark) "#FFFFFF" else "#F8FAFC")
-    }
+    val backdropBaseDark = Color.parseColor("#060914")
+    val backdropBaseLightGlass = Color.parseColor("#090E1C")
 
-    fun textSecondaryColor(isDark: Boolean): Int {
-        return Color.parseColor(if (isDark) "#E2E8F0" else "#CBD5E1")
-    }
+    val orbIndigo = Color.parseColor("#4F46E5")
+    val orbCyan = Color.parseColor("#0891B2")
+    val orbViolet = Color.parseColor("#7E22CE")
 
-    fun borderHex(isDark: Boolean): String {
-        return if (isDark) "#59FFFFFF" else "#4DFFFFFF"
+    val cardFillDark = Color.parseColor("#B310172A")
+    val cardFillLightGlass = Color.parseColor("#A8141D34")
+
+    val subtleSurfaceDark = Color.parseColor("#7A1E2B48")
+    val subtleSurfaceLightGlass = Color.parseColor("#73223152")
+
+    val navDockDark = Color.parseColor("#CC0D1322")
+    val navDockLightGlass = Color.parseColor("#C411182B")
+
+    val textPrimaryDark = Color.parseColor("#F1F5F9")
+    val textPrimaryLightGlass = Color.parseColor("#E2E8F0")
+
+    val textSecondaryDark = Color.parseColor("#94A3B8")
+    val textSecondaryLightGlass = Color.parseColor("#A5B4FC")
+
+    val textOnAccent = Color.parseColor("#F8FAFC")
+
+    val borderDark = Color.parseColor("#38818CF8")
+    val borderLightGlass = Color.parseColor("#3394A3B8")
+    val innerSheenStroke = Color.parseColor("#1F94A3B8")
+    val subtleStroke = Color.parseColor("#2E94A3B8")
+    val accentStroke = Color.parseColor("#38C7D2FE")
+    val dockStroke = Color.parseColor("#33818CF8")
+
+    val accentIndigo = Color.parseColor("#4F46E5")
+    val accentIndigoEnd = Color.parseColor("#6366F1")
+    val accentBlue = Color.parseColor("#0284C7")
+    val accentBlueEnd = Color.parseColor("#0EA5E9")
+    val accentEmerald = Color.parseColor("#059669")
+    val accentEmeraldEnd = Color.parseColor("#10B981")
+    val accentPurple = Color.parseColor("#7C3AED")
+    val accentPurpleEnd = Color.parseColor("#8B5CF6")
+    val accentAmber = Color.parseColor("#D97706")
+    val accentAmberEnd = Color.parseColor("#F59E0B")
+    val accentSlate = Color.parseColor("#334155")
+    val accentSlateEnd = Color.parseColor("#475569")
+
+    val statusSuccessText = Color.parseColor("#6EE7B7")
+    val statusSuccessTint = Color.parseColor("#8C064E3B")
+    val statusWarningText = Color.parseColor("#FCD34D")
+    val statusWarningTint = Color.parseColor("#8C451A03")
+    val statusDangerText = Color.parseColor("#FCA5A5")
+    val statusDangerTint = Color.parseColor("#8C450A0A")
+    val statusInfoText = Color.parseColor("#C7D2FE")
+    val statusInfoTint = Color.parseColor("#8C1E1B4B")
+    val statusHolidayTint = Color.parseColor("#8C2E1065")
+    val statusHolidayText = Color.parseColor("#DDD6FE")
+
+    // ==================== CENTRALIZED ACCESSORS ====================
+
+    fun textPrimaryColor(isDark: Boolean): Int =
+        if (isDark) textPrimaryDark else textPrimaryLightGlass
+
+    fun textSecondaryColor(isDark: Boolean): Int =
+        if (isDark) textSecondaryDark else textSecondaryLightGlass
+
+    fun borderColor(isDark: Boolean): Int =
+        if (isDark) borderDark else borderLightGlass
+
+    fun borderHex(isDark: Boolean): String =
+        String.format("#%08X", borderColor(isDark))
+
+    fun accentPairForHex(hex: String): Pair<Int, Int> {
+        return when (hex.trim().uppercase()) {
+            "#4F46E5", "#6366F1" -> accentIndigo to accentIndigoEnd
+            "#0284C7", "#0EA5E9" -> accentBlue to accentBlueEnd
+            "#10B981", "#059669" -> accentEmerald to accentEmeraldEnd
+            "#8B5CF6", "#7C3AED" -> accentPurple to accentPurpleEnd
+            "#F59E0B", "#D97706" -> accentAmber to accentAmberEnd
+            "#334155", "#475569" -> accentSlate to accentSlateEnd
+            else -> {
+                val parsed = runCatching { Color.parseColor(hex) }.getOrDefault(accentIndigo)
+                parsed to parsed
+            }
+        }
     }
 
     // ==================== REAL BLUR HELPERS (ANDROID 12+) ====================
@@ -62,13 +134,7 @@ object GlassUiTheme {
 
     // ==================== LAYER 0: MOVING AMBIENT GLASS BACKDROP ====================
 
-    /**
-     * Multi-layer dark canvas with gently drifting Indigo, Cyan, and Violet light pools
-     * so translucent glass cards show live depth and separation behind them.
-     */
-    fun ambientBackdrop(isDark: Boolean): Drawable {
-        return MovingAuraBackdropDrawable(isDark)
-    }
+    fun ambientBackdrop(isDark: Boolean): Drawable = MovingAuraBackdropDrawable(isDark)
 
     private class MovingAuraBackdropDrawable(private val isDark: Boolean) : Drawable() {
         private val basePaint = Paint()
@@ -104,30 +170,30 @@ object GlassUiTheme {
             }
         }
 
+        private fun withOrbAlpha(baseColor: Int, alpha: Int): Int =
+            Color.argb(alpha, Color.red(baseColor), Color.green(baseColor), Color.blue(baseColor))
+
         override fun draw(canvas: Canvas) {
             val w = bounds.width().toFloat().coerceAtLeast(1f)
             val h = bounds.height().toFloat().coerceAtLeast(1f)
             val minDim = minOf(w, h)
 
-            basePaint.color = Color.parseColor(if (isDark) "#060914" else "#0A1022")
+            basePaint.color = if (isDark) backdropBaseDark else backdropBaseLightGlass
             canvas.drawRect(0f, 0f, w, h, basePaint)
 
-            // 1. Electric Indigo orb (top-left drift)
             val cx1 = w * (0.18f + 0.10f * sin(phase.toDouble()).toFloat())
             val cy1 = h * (0.16f + 0.06f * cos(phase.toDouble()).toFloat())
-            orbPaint.color = Color.argb(if (isDark) 128 else 140, 99, 102, 241)
+            orbPaint.color = withOrbAlpha(orbIndigo, if (isDark) 110 else 120)
             canvas.drawCircle(cx1, cy1, minDim * 0.42f, orbPaint)
 
-            // 2. Luminous Cyan/Aqua orb (mid-right drift)
             val cx2 = w * (0.85f + 0.09f * cos((phase * 0.85f).toDouble()).toFloat())
             val cy2 = h * (0.46f + 0.08f * sin((phase * 0.85f).toDouble()).toFloat())
-            orbPaint.color = Color.argb(if (isDark) 112 else 124, 6, 182, 212)
+            orbPaint.color = withOrbAlpha(orbCyan, if (isDark) 95 else 105)
             canvas.drawCircle(cx2, cy2, minDim * 0.38f, orbPaint)
 
-            // 3. Soft Violet/Magenta orb (lower-center drift)
             val cx3 = w * (0.34f + 0.12f * sin((phase * 0.65f + 1.4f).toDouble()).toFloat())
             val cy3 = h * (0.84f + 0.06f * cos((phase * 0.65f + 1.4f).toDouble()).toFloat())
-            orbPaint.color = Color.argb(if (isDark) 118 else 130, 168, 85, 247)
+            orbPaint.color = withOrbAlpha(orbViolet, if (isDark) 102 else 112)
             canvas.drawCircle(cx3, cy3, minDim * 0.44f, orbPaint)
         }
 
@@ -152,29 +218,25 @@ object GlassUiTheme {
 
     // ==================== LAYER 1: PRIMARY FROSTED GLASS CARD ====================
 
-    /**
-     * Multi-layered glass card with translucent fill, subtle inner glass rim,
-     * and crisp specular outer stroke so card boundaries stand out clearly.
-     */
-    fun glassCard(isDark: Boolean, radiusPx: Float = 26f, tintHex: String? = null): Drawable {
+    fun glassCard(
+        isDark: Boolean,
+        radiusPx: Float = 26f,
+        tintColor: Int? = null
+    ): Drawable {
         return object : Drawable() {
             private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.FILL
-                color = when {
-                    tintHex != null -> Color.parseColor(tintHex)
-                    isDark -> Color.parseColor("#A811182C")
-                    else -> Color.parseColor("#9E151F38")
-                }
+                color = tintColor ?: if (isDark) cardFillDark else cardFillLightGlass
             }
             private val innerRimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.STROKE
                 strokeWidth = 1.5f
-                color = Color.parseColor("#29FFFFFF")
+                color = innerSheenStroke
             }
             private val outerRimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.STROKE
-                strokeWidth = 2f
-                color = Color.parseColor(borderHex(isDark))
+                strokeWidth = 1.5f
+                color = borderColor(isDark)
             }
 
             override fun draw(canvas: Canvas) {
@@ -219,46 +281,57 @@ object GlassUiTheme {
         }
     }
 
+    fun glassCardHex(isDark: Boolean, radiusPx: Float = 26f, tintHex: String): Drawable =
+        glassCard(isDark, radiusPx, runCatching { Color.parseColor(tintHex) }.getOrNull())
+
     // ==================== LAYER 2: LIFTED / RECESSED GLASS SUB-SURFACE ====================
 
-    /**
-     * Distinct secondary glass surface for KPI rows, calendar cells, log bars, and chips.
-     */
     fun glassSubtleSurface(isDark: Boolean, radiusPx: Float = 16f): GradientDrawable {
         return GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = radiusPx
-            setColor(
-                Color.parseColor(
-                    if (isDark) "#7828385C" else "#6E2E4068"
-                )
-            )
-            setStroke(1, Color.parseColor("#42FFFFFF"))
+            setColor(if (isDark) subtleSurfaceDark else subtleSurfaceLightGlass)
+            setStroke(1, subtleStroke)
         }
     }
 
-    // ==================== LAYER 3: BRIGHT GRADIENT PILLS & DOCK ====================
+    // ==================== LAYER 3: TRANSLUCENT GRADIENT PILLS & DOCK ====================
 
     fun glassAccentButton(
-        startHex: String,
-        endHex: String,
-        radiusPx: Float = 18f
+        startColor: Int,
+        endColor: Int,
+        radiusPx: Float = 18f,
+        translucent: Boolean = true
     ): GradientDrawable {
         return GradientDrawable(
             GradientDrawable.Orientation.LEFT_RIGHT,
-            intArrayOf(Color.parseColor(startHex), Color.parseColor(endHex))
+            intArrayOf(startColor, endColor)
         ).apply {
             cornerRadius = radiusPx
-            setStroke(1, Color.parseColor("#66FFFFFF"))
+            if (translucent) {
+                alpha = 205
+            }
+            setStroke(1, accentStroke)
         }
+    }
+
+    fun glassAccentButtonHex(
+        startHex: String,
+        endHex: String,
+        radiusPx: Float = 18f,
+        translucent: Boolean = true
+    ): GradientDrawable {
+        val (sColor, eColor) = accentPairForHex(startHex)
+        val (_, endOverride) = accentPairForHex(endHex)
+        return glassAccentButton(sColor, if (startHex == endHex) eColor else endOverride, radiusPx, translucent)
     }
 
     fun glassNavDock(isDark: Boolean): GradientDrawable {
         return GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = 28f
-            setColor(Color.parseColor(if (isDark) "#CC10172A" else "#C4151F36"))
-            setStroke(2, Color.parseColor("#4DFFFFFF"))
+            setColor(if (isDark) navDockDark else navDockLightGlass)
+            setStroke(1, dockStroke)
         }
     }
 
