@@ -3918,8 +3918,16 @@ class MainActivity : AppCompatActivity() {
 
         lockToggleBtn.text = if (isEditUnlocked) "🔓 Unlocked" else "🔒 Locked"
         lockToggleBtn.background = GlassUiTheme.roundedShape(
-            if (isEditUnlocked) GlassUiTheme.statusTint(isDark, "success") else GlassUiTheme.glassSubtleSurface(isDark).color ?: GlassUiTheme.subtleSurfaceDark,
-            if (isEditUnlocked) GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.SUCCESS).second else GlassUiTheme.borderColor(isDark),
+            if (isEditUnlocked) {
+                GlassUiTheme.statusTint(isDark, "success")
+            } else {
+                GlassUiTheme.statusTint(isDark, "info")
+            },
+            if (isEditUnlocked) {
+                GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.SUCCESS).second
+            } else {
+                GlassUiTheme.borderColor(isDark)
+            },
             GlassUiTheme.cellRadiusPx,
             2
         )
@@ -3991,26 +3999,20 @@ class MainActivity : AppCompatActivity() {
         val extraPlannedDays = maxOf(0, s.projectedAttendedDays - s.requiredDays)
 
         val ringColor = GlassUiTheme.ringAccentColor(isDark, s.remainingDays, plannedCoversTarget, s.bufferDays)
-        val cardTintColor: Int
-        val headlineColor: Int
-        val subColor: Int
-
-        when {
-            s.remainingDays == 0 || plannedCoversTarget -> {
-                cardTintColor = GlassUiTheme.statusTint(isDark, "success")
-                headlineColor = GlassUiTheme.statusSuccessText(isDark)
-                subColor = GlassUiTheme.statusSuccessText(isDark)
-            }
-            s.bufferDays <= 0 -> {
-                cardTintColor = GlassUiTheme.statusTint(isDark, "danger")
-                headlineColor = GlassUiTheme.statusDangerText(isDark)
-                subColor = GlassUiTheme.statusDangerText(isDark)
-            }
-            else -> {
-                cardTintColor = GlassUiTheme.statusTint(isDark, "warning")
-                headlineColor = GlassUiTheme.statusWarningText(isDark)
-                subColor = cTextSecondary()
-            }
+        val cardTintColor: Int = when {
+            s.remainingDays == 0 || plannedCoversTarget -> GlassUiTheme.statusTint(isDark, "success")
+            s.bufferDays <= 0 -> GlassUiTheme.statusTint(isDark, "danger")
+            else -> GlassUiTheme.statusTint(isDark, "warning")
+        }
+        val headlineColor: Int = when {
+            s.remainingDays == 0 || plannedCoversTarget -> GlassUiTheme.statusSuccessText(isDark)
+            s.bufferDays <= 0 -> GlassUiTheme.statusDangerText(isDark)
+            else -> GlassUiTheme.statusWarningText(isDark)
+        }
+        val subColor: Int = when {
+            s.remainingDays == 0 || plannedCoversTarget -> GlassUiTheme.statusSuccessText(isDark)
+            s.bufferDays <= 0 -> GlassUiTheme.statusDangerText(isDark)
+            else -> cTextSecondary()
         }
 
         val currentYm = YearMonth.from(today)
