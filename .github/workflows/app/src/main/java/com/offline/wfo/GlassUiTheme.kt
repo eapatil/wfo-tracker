@@ -16,44 +16,33 @@ import android.widget.TextView
 object GlassUiTheme {
 
     /**
-     * Subtle ambient backdrop for both Light and Dark glass modes.
+     * Layer 0: Dark obsidian base with soft ambient color pools so glass layers have depth behind them.
      */
     fun ambientBackdrop(isDark: Boolean): Drawable {
         return object : Drawable() {
             private val basePaint = Paint()
             private val orbPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                maskFilter = BlurMaskFilter(160f, BlurMaskFilter.Blur.NORMAL)
+                maskFilter = BlurMaskFilter(180f, BlurMaskFilter.Blur.NORMAL)
             }
 
             override fun draw(canvas: Canvas) {
                 val w = bounds.width().toFloat().coerceAtLeast(1f)
                 val h = bounds.height().toFloat().coerceAtLeast(1f)
 
-                basePaint.shader = null
-                basePaint.color = Color.parseColor(if (isDark) "#0B101B" else "#EEF2FF")
+                basePaint.color = Color.parseColor(if (isDark) "#060811" else "#0B1020")
                 canvas.drawRect(0f, 0f, w, h, basePaint)
 
-                if (isDark) {
-                    // Subtle, low-glare slate/indigo/teal washes
-                    orbPaint.color = Color.argb(46, 79, 70, 229)
-                    canvas.drawCircle(w * 0.15f, h * 0.18f, minOf(w, h) * 0.36f, orbPaint)
+                // Indigo / violet glow upper-left
+                orbPaint.color = Color.argb(if (isDark) 95 else 110, 99, 102, 241)
+                canvas.drawCircle(w * 0.14f, h * 0.15f, minOf(w, h) * 0.38f, orbPaint)
 
-                    orbPaint.color = Color.argb(38, 14, 165, 233)
-                    canvas.drawCircle(w * 0.85f, h * 0.50f, minOf(w, h) * 0.34f, orbPaint)
+                // Cyan / teal glow mid-right
+                orbPaint.color = Color.argb(if (isDark) 80 else 95, 14, 165, 233)
+                canvas.drawCircle(w * 0.88f, h * 0.46f, minOf(w, h) * 0.36f, orbPaint)
 
-                    orbPaint.color = Color.argb(34, 139, 92, 246)
-                    canvas.drawCircle(w * 0.25f, h * 0.85f, minOf(w, h) * 0.32f, orbPaint)
-                } else {
-                    // Subtle airy sky/lavender/mint washes for Light Glass
-                    orbPaint.color = Color.argb(72, 165, 180, 252)
-                    canvas.drawCircle(w * 0.15f, h * 0.16f, minOf(w, h) * 0.36f, orbPaint)
-
-                    orbPaint.color = Color.argb(64, 125, 211, 252)
-                    canvas.drawCircle(w * 0.88f, h * 0.48f, minOf(w, h) * 0.35f, orbPaint)
-
-                    orbPaint.color = Color.argb(58, 196, 181, 253)
-                    canvas.drawCircle(w * 0.22f, h * 0.84f, minOf(w, h) * 0.34f, orbPaint)
-                }
+                // Violet / magenta glow lower-center
+                orbPaint.color = Color.argb(if (isDark) 85 else 100, 139, 92, 246)
+                canvas.drawCircle(w * 0.35f, h * 0.86f, minOf(w, h) * 0.40f, orbPaint)
             }
 
             override fun setAlpha(alpha: Int) {
@@ -72,46 +61,60 @@ object GlassUiTheme {
     }
 
     /**
-     * Frosted translucent card adapted separately for Light and Dark readability.
+     * Layer 1: Multi-layered frosted glass card with outer rim, translucent fill,
+     * and an inner top-edge glass sheen to show thickness.
      */
-    fun glassCard(isDark: Boolean, radiusPx: Float = 24f, tintHex: String? = null): Drawable {
+    fun glassCard(isDark: Boolean, radiusPx: Float = 26f, tintHex: String? = null): Drawable {
         return object : Drawable() {
             private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.FILL
                 color = when {
                     tintHex != null -> Color.parseColor(tintHex)
-                    isDark -> Color.parseColor("#A6131C2E")
-                    else -> Color.parseColor("#D9FFFFFF")
+                    isDark -> Color.parseColor("#B312192B")
+                    else -> Color.parseColor("#A6182238")
                 }
             }
-            private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            private val innerSheenPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.STROKE
-                strokeWidth = 1.5f
-                color = Color.parseColor(
-                    if (isDark) "#2EFFFFFF" else "#B8FFFFFF"
-                )
+                strokeWidth = 2f
+                color = Color.parseColor("#24FFFFFF")
+            }
+            private val rimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = 2f
+                color = Color.parseColor(if (isDark) "#47FFFFFF" else "#59FFFFFF")
             }
 
             override fun draw(canvas: Canvas) {
-                val inset = 1.5f
                 val rect = RectF(
-                    bounds.left + inset,
-                    bounds.top + inset,
-                    bounds.right - inset,
-                    bounds.bottom - inset
+                    bounds.left + 2f,
+                    bounds.top + 2f,
+                    bounds.right - 2f,
+                    bounds.bottom - 2f
                 )
                 canvas.drawRoundRect(rect, radiusPx, radiusPx, fillPaint)
-                canvas.drawRoundRect(rect, radiusPx, radiusPx, borderPaint)
+
+                val innerRect = RectF(
+                    rect.left + 4f,
+                    rect.top + 4f,
+                    rect.right - 4f,
+                    rect.bottom - 4f
+                )
+                val innerRadius = (radiusPx - 4f).coerceAtLeast(4f)
+                canvas.drawRoundRect(innerRect, innerRadius, innerRadius, innerSheenPaint)
+                canvas.drawRoundRect(rect, radiusPx, radiusPx, rimPaint)
             }
 
             override fun setAlpha(alpha: Int) {
                 fillPaint.alpha = alpha
-                borderPaint.alpha = alpha
+                innerSheenPaint.alpha = alpha
+                rimPaint.alpha = alpha
             }
 
             override fun setColorFilter(colorFilter: ColorFilter?) {
                 fillPaint.colorFilter = colorFilter
-                borderPaint.colorFilter = colorFilter
+                innerSheenPaint.colorFilter = colorFilter
+                rimPaint.colorFilter = colorFilter
             }
 
             override fun onBoundsChange(bounds: Rect) {
@@ -125,7 +128,8 @@ object GlassUiTheme {
     }
 
     /**
-     * Subtle recessed pill/surface for inner strips, inputs, and unselected chips.
+     * Layer 2: Secondary glass sub-panel (KPI row, log summary, unselected chips)
+     * with a distinct glass tint so it separates clearly from Layer 1 cards.
      */
     fun glassSubtleSurface(isDark: Boolean, radiusPx: Float = 16f): GradientDrawable {
         return GradientDrawable().apply {
@@ -133,18 +137,15 @@ object GlassUiTheme {
             cornerRadius = radiusPx
             setColor(
                 Color.parseColor(
-                    if (isDark) "#800C1220" else "#8CF8FAFC"
+                    if (isDark) "#7325324D" else "#662A3856"
                 )
             )
-            setStroke(
-                1,
-                Color.parseColor(if (isDark) "#24FFFFFF" else "#80CBD5E1")
-            )
+            setStroke(1, Color.parseColor("#33FFFFFF"))
         }
     }
 
     /**
-     * Softly toned pill button with subtle border rim.
+     * Layer 3: Active gradient pill for primary buttons, selected tabs, and active filters.
      */
     fun glassAccentButton(
         startHex: String,
@@ -156,33 +157,26 @@ object GlassUiTheme {
             intArrayOf(Color.parseColor(startHex), Color.parseColor(endHex))
         ).apply {
             cornerRadius = radiusPx
-            setStroke(1, Color.parseColor("#38FFFFFF"))
+            setStroke(1, Color.parseColor("#59FFFFFF"))
         }
     }
 
     /**
-     * Translucent floating bottom navigation dock for Light and Dark modes.
+     * Layer 3 Dock: Floating translucent navigation dock at the bottom.
      */
     fun glassNavDock(isDark: Boolean): GradientDrawable {
         return GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
-            cornerRadius = 26f
-            setColor(
-                Color.parseColor(
-                    if (isDark) "#D9101726" else "#E6FFFFFF"
-                )
-            )
-            setStroke(
-                1,
-                Color.parseColor(if (isDark) "#2EFFFFFF" else "#B8CBD5E1")
-            )
+            cornerRadius = 28f
+            setColor(Color.parseColor(if (isDark) "#CC101728" else "#BF151E33"))
+            setStroke(2, Color.parseColor("#42FFFFFF"))
         }
     }
 
     fun styleGlassSectionHeader(tv: TextView, isDark: Boolean) {
-        tv.textSize = 15.5f
+        tv.textSize = 16f
         tv.letterSpacing = 0.01f
         tv.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
-        tv.setTextColor(Color.parseColor(if (isDark) "#F1F5F9" else "#0F172A"))
+        tv.setTextColor(Color.parseColor("#F8FAFC"))
     }
 }
