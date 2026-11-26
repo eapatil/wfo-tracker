@@ -29,15 +29,12 @@ import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.location.Address
 import android.location.Geocoder
 import android.location.Location
@@ -689,8 +686,8 @@ class MainActivity : AppCompatActivity() {
     private fun showBlockingRestoreOverlay(title: String, detail: String) {
         isRestoringData = true
         stopAllLoopingAnimations()
-        if (::mainScaffold.isInitialized) GlassUiTheme.applyGlassBlur(mainScaffold, 16f)
-        if (::setupScroll.isInitialized) GlassUiTheme.applyGlassBlur(setupScroll, 16f)
+        if (::mainScaffold.isInitialized) GlassUiTheme.applyGlassBlur(mainScaffold)
+        if (::setupScroll.isInitialized) GlassUiTheme.applyGlassBlur(setupScroll)
         if (::restoreBlockingOverlay.isInitialized) {
             restoreOverlayTitleView.text = title
             restoreOverlayDetailView.text = detail
@@ -713,7 +710,7 @@ class MainActivity : AppCompatActivity() {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setBackgroundColor(GlassUiTheme.navDockDark)
+            background = GlassUiTheme.glassNavDock(isDark)
             setPadding(48, 48, 48, 48)
             isClickable = true
             isFocusable = true
@@ -727,7 +724,7 @@ class MainActivity : AppCompatActivity() {
             val card = LinearLayout(this@MainActivity).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                background = GlassUiTheme.glassCard(true, 26f, GlassUiTheme.cardFillDark)
+                background = GlassUiTheme.glassCard(isDark, GlassUiTheme.cardRadiusPx)
                 setPadding(36, 32, 36, 32)
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -786,7 +783,7 @@ class MainActivity : AppCompatActivity() {
 
         val dialog = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
         val container = FrameLayout(this).apply {
-            setBackgroundColor(GlassUiTheme.backdropBaseDark)
+            background = GlassUiTheme.ambientBackdrop(true)
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -811,7 +808,7 @@ class MainActivity : AppCompatActivity() {
             textSize = 13f
             setTypeface(null, Typeface.BOLD)
             setTextColor(GlassUiTheme.textOnAccent)
-            background = GlassUiTheme.glassCard(true, 18f, GlassUiTheme.subtleSurfaceDark)
+            background = GlassUiTheme.glassSubtleSurface(true, GlassUiTheme.bannerRadiusPx)
             setPadding(24, 12, 24, 12)
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -1015,19 +1012,22 @@ class MainActivity : AppCompatActivity() {
 
         when {
             isConnected -> {
+                val okCol = GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.SUCCESS).second
                 lockStatusTitleView.text = if (activeSrc.isNotEmpty()) "Connected: $activeSrc" else "In Office Zone"
                 lockStatusTitleView.setTextColor(GlassUiTheme.statusSuccessText(isDark))
-                lockStatusDotView.background = roundedBox(GlassUiTheme.accentEmeraldEnd, GlassUiTheme.accentEmeraldEnd, 999f, 0)
+                lockStatusDotView.background = GlassUiTheme.roundedShape(okCol, okCol, 999f, 0)
             }
             trackingReady -> {
+                val okCol = GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.SUCCESS).second
                 lockStatusTitleView.text = "Auto-Tracking Running"
                 lockStatusTitleView.setTextColor(GlassUiTheme.statusSuccessText(isDark))
-                lockStatusDotView.background = roundedBox(GlassUiTheme.accentEmeraldEnd, GlassUiTheme.accentEmeraldEnd, 999f, 0)
+                lockStatusDotView.background = GlassUiTheme.roundedShape(okCol, okCol, 999f, 0)
             }
             else -> {
+                val warnCol = GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.WARNING).second
                 lockStatusTitleView.text = "Background Monitoring Paused"
                 lockStatusTitleView.setTextColor(GlassUiTheme.statusWarningText(isDark))
-                lockStatusDotView.background = roundedBox(GlassUiTheme.accentAmberEnd, GlassUiTheme.accentAmberEnd, 999f, 0)
+                lockStatusDotView.background = GlassUiTheme.roundedShape(warnCol, warnCol, 999f, 0)
             }
         }
 
@@ -1380,6 +1380,9 @@ class MainActivity : AppCompatActivity() {
             setPadding(44, 40, 44, 44)
             visibility = View.GONE
 
+            val outerCol = GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.PRIMARY).second
+            val innerCol = GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.PRIMARY).first
+
             val animStage = FrameLayout(this@MainActivity).apply {
                 layoutParams = LinearLayout.LayoutParams(210, 210).apply {
                     gravity = Gravity.CENTER_HORIZONTAL
@@ -1390,7 +1393,7 @@ class MainActivity : AppCompatActivity() {
                 layoutParams = FrameLayout.LayoutParams(178, 178).apply {
                     gravity = Gravity.CENTER
                 }
-                background = roundedBox(GlassUiTheme.statusTint(isDark, "info"), GlassUiTheme.accentIndigoEnd, 999f, 2)
+                background = GlassUiTheme.roundedShape(GlassUiTheme.statusTint(isDark, "info"), outerCol, 999f, 2)
                 alpha = 0.25f
             }
 
@@ -1398,7 +1401,7 @@ class MainActivity : AppCompatActivity() {
                 layoutParams = FrameLayout.LayoutParams(138, 138).apply {
                     gravity = Gravity.CENTER
                 }
-                background = roundedBox(GlassUiTheme.statusTint(isDark, "info"), GlassUiTheme.accentIndigo, 999f, 3)
+                background = GlassUiTheme.roundedShape(GlassUiTheme.statusTint(isDark, "info"), innerCol, 999f, 3)
                 alpha = 0.45f
             }
 
@@ -1443,11 +1446,12 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
             }
+            val okCol = GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.SUCCESS).second
             lockStatusDotView = View(this@MainActivity).apply {
                 layoutParams = LinearLayout.LayoutParams(18, 18).apply {
                     setMargins(0, 0, 12, 0)
                 }
-                background = roundedBox(GlassUiTheme.accentEmeraldEnd, GlassUiTheme.accentEmeraldEnd, 999f, 0)
+                background = GlassUiTheme.roundedShape(okCol, okCol, 999f, 0)
             }
             lockStatusTitleView = TextView(this@MainActivity).apply {
                 text = "Auto-Tracking Running"
@@ -1612,7 +1616,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(cTextPrimary())
             setHintTextColor(cTextSecondary())
             setPadding(24, 20, 24, 20)
-            background = GlassUiTheme.glassSubtleSurface(isDark, 18f)
+            background = GlassUiTheme.glassSubtleSurface(isDark, GlassUiTheme.bannerRadiusPx)
         }
         profileCard.addView(setupNameInput)
         addSpacer(profileCard, 12)
@@ -1655,7 +1659,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(cTextPrimary())
             setHintTextColor(cTextSecondary())
             setPadding(24, 20, 24, 20)
-            background = GlassUiTheme.glassSubtleSurface(isDark, 18f)
+            background = GlassUiTheme.glassSubtleSurface(isDark, GlassUiTheme.bannerRadiusPx)
         }
 
         setupLocationSummaryView = TextView(this).apply {
@@ -1839,7 +1843,7 @@ class MainActivity : AppCompatActivity() {
         val profileHeader = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = GlassUiTheme.glassCard(isDark, 24f)
+            background = GlassUiTheme.glassCard(isDark, GlassUiTheme.cardRadiusPx)
             setPadding(16, 12, 16, 12)
         }
         dashAvatarView = ImageView(this).apply {
@@ -1865,11 +1869,12 @@ class MainActivity : AppCompatActivity() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, 2, 0, 0)
         }
+        val okCol = GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.SUCCESS).second
         heartbeatDotView = View(this).apply {
             layoutParams = LinearLayout.LayoutParams(16, 16).apply {
                 setMargins(0, 0, 8, 0)
             }
-            background = roundedBox(GlassUiTheme.accentEmeraldEnd, GlassUiTheme.accentEmeraldEnd, 999f, 0)
+            background = GlassUiTheme.roundedShape(okCol, okCol, 999f, 0)
         }
         dashServiceStatusView = TextView(this).apply {
             textSize = 12f
@@ -1917,7 +1922,7 @@ class MainActivity : AppCompatActivity() {
         undoBannerRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = GlassUiTheme.glassCard(true, 18f, GlassUiTheme.subtleSurfaceDark)
+            background = GlassUiTheme.glassCard(isDark, GlassUiTheme.bannerRadiusPx, GlassUiTheme.statusTint(isDark, "info"))
             setPadding(20, 12, 16, 12)
             visibility = View.GONE
             layoutParams = LinearLayout.LayoutParams(
@@ -1928,7 +1933,7 @@ class MainActivity : AppCompatActivity() {
         undoBannerText = TextView(this).apply {
             textSize = 12f
             setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
-            setTextColor(GlassUiTheme.textOnAccent)
+            setTextColor(cTextPrimary())
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         val undoActionBtn = TextView(this).apply {
@@ -2116,7 +2121,7 @@ class MainActivity : AppCompatActivity() {
 
         val kpiRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            background = GlassUiTheme.glassSubtleSurface(isDark, 18f)
+            background = GlassUiTheme.glassSubtleSurface(isDark, GlassUiTheme.bannerRadiusPx)
             setPadding(12, 12, 12, 12)
         }
         val (colWorking, numWorking) = makeColorCodedKpiColumn("Working Days")
@@ -2329,7 +2334,7 @@ class MainActivity : AppCompatActivity() {
             setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(cTextPrimary())
             gravity = Gravity.CENTER
-            background = GlassUiTheme.glassSubtleSurface(isDark, 14f)
+            background = GlassUiTheme.glassSubtleSurface(isDark, GlassUiTheme.subtleRadiusPx)
             setPadding(14, 8, 14, 8)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -2735,7 +2740,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(cTextPrimary())
             setHintTextColor(cTextSecondary())
             setPadding(20, 18, 20, 18)
-            background = GlassUiTheme.glassSubtleSurface(isDark, 16f)
+            background = GlassUiTheme.glassSubtleSurface(isDark, GlassUiTheme.subtleRadiusPx)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         val addManualSsidBtn = makeSmallChipButton("+ Add") {
@@ -3069,7 +3074,7 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             background = GlassUiTheme.glassCard(
                 isDark,
-                18f,
+                GlassUiTheme.bannerRadiusPx,
                 GlassUiTheme.statusTint(isDark, if (permsReady && backupHealthy) "success" else "warning")
             )
             setPadding(22, 16, 22, 16)
@@ -3133,7 +3138,7 @@ class MainActivity : AppCompatActivity() {
         val sections = listOf(
             Triple(
                 "1. How Auto-Tracking & Shift Learning Work",
-                GlassUiTheme.accentIndigoEnd,
+                GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.PRIMARY).second,
                 listOf(
                     "Background Monitor: Runs automatically via WifiMonitorService once Location permission is allowed.",
                     "Flexible Matching: Tracks via Office Wi-Fi SSID, GPS Geofence radius, or Both.",
@@ -3143,7 +3148,7 @@ class MainActivity : AppCompatActivity() {
             ),
             Triple(
                 "2. Planned Day + 1-Hour Buffer & Monthly Mandate",
-                GlassUiTheme.accentEmeraldEnd,
+                GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.SUCCESS).second,
                 listOf(
                     "Planned + 1h Buffer ($lateCheckFormatted): Triggers only on weekdays marked Planned Office when not yet logged as Office, waiting 1 full hour past your learned arrival window to allow for traffic or errands.",
                     "Strictly Monthly: Calculated per calendar month with zero quarterly carryover.",
@@ -3152,7 +3157,7 @@ class MainActivity : AppCompatActivity() {
             ),
             Triple(
                 "3. Silent vs. Audible Notifications",
-                GlassUiTheme.accentAmberEnd,
+                GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.WARNING).second,
                 listOf(
                     "Silent Channel: Ongoing foreground tracker status and passive daily nudges stay silent without sound or vibration.",
                     "Audible Action Channel: Sounds and vibrates when attendance is captured, on check-out/disconnect, or when a planned day hasn't been logged past the 1-hour buffer.",
@@ -3162,7 +3167,7 @@ class MainActivity : AppCompatActivity() {
             ),
             Triple(
                 "4. Full Setup, Profile Photo & Attendance CSV Backup",
-                GlassUiTheme.accentBlueEnd,
+                GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.SECONDARY).second,
                 listOf(
                     "Blocking Restore Screen: Displays a \"Restoring data...\" screen that freezes touches and back presses during folder restore or CSV import until completion.",
                     "Automatic Backup Triggers: Saves officepace_attendance_autobackup.csv plus two profile photo copies (officepace_profile_avatar.jpg and officepace_profile_avatar_original.jpg) on changes, app open, and lock/exit.",
@@ -3176,7 +3181,7 @@ class MainActivity : AppCompatActivity() {
         sections.forEachIndexed { idx, (heading, accentColor, bullets) ->
             val cardWrapper = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
-                background = GlassUiTheme.glassSubtleSurface(isDark, 20f)
+                background = GlassUiTheme.glassSubtleSurface(isDark, GlassUiTheme.bannerRadiusPx)
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
@@ -3190,7 +3195,7 @@ class MainActivity : AppCompatActivity() {
                     12,
                     LinearLayout.LayoutParams.MATCH_PARENT
                 )
-                background = roundedBox(accentColor, accentColor, 8f, 0)
+                background = GlassUiTheme.roundedShape(accentColor, accentColor, 8f, 0)
             }
             cardWrapper.addView(accentStripe)
 
@@ -3328,7 +3333,7 @@ class MainActivity : AppCompatActivity() {
 
         upcomingHolLeaveSummaryView.text = "🎉 $holCount Upcoming Holiday(s)   •   🌴 $leaveCount Upcoming Leave(s)"
         upcomingHolLeaveSummaryView.setTextColor(cTextPrimary())
-        upcomingHolLeaveSummaryView.background = GlassUiTheme.glassSubtleSurface(isDark, 14f)
+        upcomingHolLeaveSummaryView.background = GlassUiTheme.glassSubtleSurface(isDark, GlassUiTheme.subtleRadiusPx)
 
         upcomingHolLeaveListView.removeAllViews()
         if (items.isEmpty()) {
@@ -3347,7 +3352,7 @@ class MainActivity : AppCompatActivity() {
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                background = GlassUiTheme.glassSubtleSurface(isDark, 16f)
+                background = GlassUiTheme.glassSubtleSurface(isDark, GlassUiTheme.cellRadiusPx)
                 setPadding(16, 10, 12, 10)
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -3851,7 +3856,7 @@ class MainActivity : AppCompatActivity() {
             settingsExactAlarmStatusView.setTextColor(alarmColor)
             settingsExactAlarmStatusView.background = GlassUiTheme.glassCard(
                 isDark,
-                14f,
+                GlassUiTheme.chipRadiusPx,
                 GlassUiTheme.statusTint(isDark, if (alarmOk) "success" else "warning")
             )
         }
@@ -3898,22 +3903,24 @@ class MainActivity : AppCompatActivity() {
             TrackingMode.BOTH -> store.getTargetSsids().isNotEmpty() || store.hasOfficeLocationConfigured()
         }
         if (trackingReady) {
+            val okCol = GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.SUCCESS).second
             dashServiceStatusView.text = "Auto-Tracking Active"
             dashServiceStatusView.setTextColor(GlassUiTheme.statusSuccessText(isDark))
-            heartbeatDotView.background = roundedBox(GlassUiTheme.accentEmeraldEnd, GlassUiTheme.accentEmeraldEnd, 999f, 0)
+            heartbeatDotView.background = GlassUiTheme.roundedShape(okCol, okCol, 999f, 0)
             startHeartbeatAnimation(true)
         } else {
+            val warnCol = GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.WARNING).second
             dashServiceStatusView.text = "Setup Incomplete (Tap Settings)"
             dashServiceStatusView.setTextColor(GlassUiTheme.statusWarningText(isDark))
-            heartbeatDotView.background = roundedBox(GlassUiTheme.accentAmberEnd, GlassUiTheme.accentAmberEnd, 999f, 0)
+            heartbeatDotView.background = GlassUiTheme.roundedShape(warnCol, warnCol, 999f, 0)
             startHeartbeatAnimation(false)
         }
 
         lockToggleBtn.text = if (isEditUnlocked) "🔓 Unlocked" else "🔒 Locked"
-        lockToggleBtn.background = roundedBox(
-            if (isEditUnlocked) GlassUiTheme.statusTint(isDark, "success") else GlassUiTheme.subtleSurfaceDark,
-            if (isEditUnlocked) GlassUiTheme.accentEmeraldEnd else GlassUiTheme.borderColor(isDark),
-            16f,
+        lockToggleBtn.background = GlassUiTheme.roundedShape(
+            if (isEditUnlocked) GlassUiTheme.statusTint(isDark, "success") else GlassUiTheme.glassSubtleSurface(isDark).color ?: GlassUiTheme.subtleSurfaceDark,
+            if (isEditUnlocked) GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.SUCCESS).second else GlassUiTheme.borderColor(isDark),
+            GlassUiTheme.cellRadiusPx,
             2
         )
         lockToggleBtn.setTextColor(
@@ -3939,32 +3946,32 @@ class MainActivity : AppCompatActivity() {
                 val srcTag = if (activeSource.isNotEmpty()) " ($activeSource)" else ""
                 todayLiveStripView.text = "🟢 $todayStamp • At Office$srcTag"
                 todayLiveStripView.setTextColor(GlassUiTheme.statusSuccessText(isDark))
-                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f, GlassUiTheme.statusTint(isDark, "success"))
+                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, GlassUiTheme.bannerRadiusPx, GlassUiTheme.statusTint(isDark, "success"))
             }
             todayType == DayType.OFFICE -> {
                 todayLiveStripView.text = "✅ $todayStamp • Office Day Logged"
                 todayLiveStripView.setTextColor(GlassUiTheme.statusSuccessText(isDark))
-                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f, GlassUiTheme.statusTint(isDark, "success"))
+                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, GlassUiTheme.bannerRadiusPx, GlassUiTheme.statusTint(isDark, "success"))
             }
             todayType == DayType.PLANNED -> {
                 todayLiveStripView.text = "📅 $todayStamp • Planned Office Day"
                 todayLiveStripView.setTextColor(GlassUiTheme.statusInfoText(isDark))
-                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f, GlassUiTheme.statusTint(isDark, "info"))
+                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, GlassUiTheme.bannerRadiusPx, GlassUiTheme.statusTint(isDark, "info"))
             }
             todayType == DayType.LEAVE -> {
                 todayLiveStripView.text = "🌴 $todayStamp • On Leave"
                 todayLiveStripView.setTextColor(GlassUiTheme.statusWarningText(isDark))
-                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f, GlassUiTheme.statusTint(isDark, "warning"))
+                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, GlassUiTheme.bannerRadiusPx, GlassUiTheme.statusTint(isDark, "warning"))
             }
             todayType == DayType.HOLIDAY -> {
                 todayLiveStripView.text = "🎉 $todayStamp • Holiday"
                 todayLiveStripView.setTextColor(GlassUiTheme.statusHolidayText(isDark))
-                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f, GlassUiTheme.statusTint(isDark, "holiday"))
+                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, GlassUiTheme.bannerRadiusPx, GlassUiTheme.statusTint(isDark, "holiday"))
             }
             else -> {
                 todayLiveStripView.text = "🏠 $todayStamp • WFH ($disconnectedLabel)"
                 todayLiveStripView.setTextColor(cTextSecondary())
-                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f)
+                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, GlassUiTheme.bannerRadiusPx)
             }
         }
 
@@ -3983,32 +3990,23 @@ class MainActivity : AppCompatActivity() {
         val plannedCoversTarget = s.futurePlannedDays > 0 && s.projectedAttendedDays >= s.requiredDays
         val extraPlannedDays = maxOf(0, s.projectedAttendedDays - s.requiredDays)
 
-        val progressColorHex: String
+        val ringColor = GlassUiTheme.ringAccentColor(isDark, s.remainingDays, plannedCoversTarget, s.bufferDays)
         val cardTintColor: Int
         val headlineColor: Int
         val subColor: Int
 
         when {
-            s.remainingDays == 0 -> {
-                progressColorHex = "#10B981"
-                cardTintColor = GlassUiTheme.statusTint(isDark, "success")
-                headlineColor = GlassUiTheme.statusSuccessText(isDark)
-                subColor = GlassUiTheme.statusSuccessText(isDark)
-            }
-            plannedCoversTarget -> {
-                progressColorHex = "#10B981"
+            s.remainingDays == 0 || plannedCoversTarget -> {
                 cardTintColor = GlassUiTheme.statusTint(isDark, "success")
                 headlineColor = GlassUiTheme.statusSuccessText(isDark)
                 subColor = GlassUiTheme.statusSuccessText(isDark)
             }
             s.bufferDays <= 0 -> {
-                progressColorHex = "#EF4444"
                 cardTintColor = GlassUiTheme.statusTint(isDark, "danger")
                 headlineColor = GlassUiTheme.statusDangerText(isDark)
                 subColor = GlassUiTheme.statusDangerText(isDark)
             }
             else -> {
-                progressColorHex = "#4F46E5"
                 cardTintColor = GlassUiTheme.statusTint(isDark, "warning")
                 headlineColor = GlassUiTheme.statusWarningText(isDark)
                 subColor = cTextSecondary()
@@ -4020,7 +4018,7 @@ class MainActivity : AppCompatActivity() {
         val isPastMonth = selectedMonth.isBefore(currentYm)
 
         if (::briefingCardView.isInitialized) {
-            briefingCardView.background = GlassUiTheme.glassCard(isDark, 24f, cardTintColor)
+            briefingCardView.background = GlassUiTheme.glassCard(isDark, GlassUiTheme.cardRadiusPx, cardTintColor)
 
             if (isCurrentMonth) {
                 briefingHeadlineView.text = if (s.remainingDays > 0 && plannedCoversTarget) {
@@ -4095,7 +4093,7 @@ class MainActivity : AppCompatActivity() {
             projected = s.projectedAttendedDays,
             required = s.requiredDays,
             actualPct = s.actualPercent,
-            accentColorHex = progressColorHex,
+            accentColor = ringColor,
             isDark = isDark,
             animate = animateCharts
         )
@@ -4105,7 +4103,7 @@ class MainActivity : AppCompatActivity() {
             heroProjectedView.visibility = View.VISIBLE
             heroProjectedView.background = GlassUiTheme.glassCard(
                 isDark,
-                16f,
+                GlassUiTheme.cellRadiusPx,
                 GlassUiTheme.statusTint(isDark, if (plannedCoversTarget) "success" else "info")
             )
             heroProjectedView.setTextColor(
@@ -4226,7 +4224,7 @@ class MainActivity : AppCompatActivity() {
                 " (Holiday exclusion is OFF in Setup)"
             else -> ""
         }
-        simResultView.background = GlassUiTheme.glassCard(isDark, 16f, GlassUiTheme.statusTint(isDark, "info"))
+        simResultView.background = GlassUiTheme.glassCard(isDark, GlassUiTheme.cellRadiusPx, GlassUiTheme.statusTint(isDark, "info"))
         simResultView.setTextColor(GlassUiTheme.statusInfoText(isDark))
         simResultView.text =
             "Simulated Target: ${simStats.requiredDays} days (${simStats.effectiveWorkingDays} working days) • Still Needed: ${simStats.remainingDays} • Buffer: ${maxOf(0, simStats.bufferDays)}$exclNote"
@@ -4310,7 +4308,7 @@ class MainActivity : AppCompatActivity() {
             val chipRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                background = GlassUiTheme.glassCard(isDark, 18f, GlassUiTheme.subtleSurfaceDark)
+                background = GlassUiTheme.glassSubtleSurface(isDark, GlassUiTheme.bannerRadiusPx)
                 setPadding(22, 14, 18, 14)
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -4321,7 +4319,7 @@ class MainActivity : AppCompatActivity() {
                 text = "📶  $ssid"
                 textSize = 14f
                 setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
-                setTextColor(GlassUiTheme.textSecondaryLightGlass)
+                setTextColor(GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.PRIMARY).second)
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
             val delBtn = TextView(this).apply {
@@ -4349,15 +4347,6 @@ class MainActivity : AppCompatActivity() {
         calendarContainer.removeAllViews()
         val today = LocalDate.now()
         val ym = stats.yearMonth
-
-        fun glassyFill(baseColor: Int, alpha: Int = 148): Int {
-            return Color.argb(
-                alpha,
-                Color.red(baseColor),
-                Color.green(baseColor),
-                Color.blue(baseColor)
-            )
-        }
 
         val headerRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun").forEach { dayName ->
@@ -4409,55 +4398,23 @@ class MainActivity : AppCompatActivity() {
                         )
                     }
 
+                    cellWrapper.background = GlassUiTheme.calendarCellDrawable(isDark, dtype, isToday)
                     when (dtype) {
-                        DayType.OFFICE -> {
+                        DayType.OFFICE, DayType.LEAVE, DayType.HOLIDAY -> {
                             dayNumTv.setTextColor(GlassUiTheme.textOnAccent)
                             dayNumTv.setTypeface(null, Typeface.BOLD)
-                            cellWrapper.background = roundedBox(
-                                glassyFill(GlassUiTheme.accentEmerald, 152),
-                                if (isToday) GlassUiTheme.accentBlueEnd else GlassUiTheme.accentEmeraldEnd,
-                                16f,
-                                if (isToday) 6 else 2
-                            )
                         }
                         DayType.PLANNED -> {
                             dayNumTv.setTextColor(GlassUiTheme.statusInfoText(isDark))
                             dayNumTv.setTypeface(null, Typeface.BOLD)
-                            cellWrapper.background = dashedBox(
-                                GlassUiTheme.statusTint(isDark, "info"),
-                                if (isToday) GlassUiTheme.accentBlueEnd else GlassUiTheme.accentIndigoEnd,
-                                16f,
-                                if (isToday) 6 else 4
-                            )
-                        }
-                        DayType.LEAVE -> {
-                            dayNumTv.setTextColor(GlassUiTheme.textOnAccent)
-                            dayNumTv.setTypeface(null, Typeface.BOLD)
-                            cellWrapper.background = roundedBox(
-                                glassyFill(GlassUiTheme.accentAmber, 152),
-                                if (isToday) GlassUiTheme.accentBlueEnd else GlassUiTheme.accentAmberEnd,
-                                16f,
-                                if (isToday) 6 else 2
-                            )
-                        }
-                        DayType.HOLIDAY -> {
-                            dayNumTv.setTextColor(GlassUiTheme.textOnAccent)
-                            dayNumTv.setTypeface(null, Typeface.BOLD)
-                            cellWrapper.background = roundedBox(
-                                glassyFill(GlassUiTheme.accentPurple, 152),
-                                if (isToday) GlassUiTheme.accentBlueEnd else GlassUiTheme.accentPurpleEnd,
-                                16f,
-                                if (isToday) 6 else 2
-                            )
                         }
                         DayType.NONE -> {
                             if (isWeekend) {
                                 dayNumTv.setTextColor(cTextSecondary())
-                                cellWrapper.alpha = 0.72f
+                                cellWrapper.alpha = GlassUiTheme.weekendDimAlpha
                             } else {
                                 dayNumTv.setTextColor(cTextPrimary())
                             }
-                            cellWrapper.background = GlassUiTheme.glassSubtleSurface(isDark, 16f)
                         }
                     }
 
@@ -4470,11 +4427,11 @@ class MainActivity : AppCompatActivity() {
                                 setMargins(0, 10, 10, 0)
                             }
                             val dotColor = if (dtype == DayType.NONE || dtype == DayType.PLANNED) {
-                                GlassUiTheme.accentIndigoEnd
+                                GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.PRIMARY).second
                             } else {
                                 GlassUiTheme.textOnAccent
                             }
-                            background = roundedBox(dotColor, dotColor, 999f, 0)
+                            background = GlassUiTheme.roundedShape(dotColor, dotColor, 999f, 0)
                         }
                         cellWrapper.addView(noteDot)
                     }
@@ -4486,11 +4443,11 @@ class MainActivity : AppCompatActivity() {
                                 setMargins(0, 0, 0, 9)
                             }
                             val barColor = if (dtype == DayType.NONE || dtype == DayType.PLANNED) {
-                                GlassUiTheme.accentBlueEnd
+                                GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.SECONDARY).second
                             } else {
                                 GlassUiTheme.textOnAccent
                             }
-                            background = roundedBox(barColor, barColor, 999f, 0)
+                            background = GlassUiTheme.roundedShape(barColor, barColor, 999f, 0)
                         }
                         cellWrapper.addView(todayBar)
                     }
@@ -4821,7 +4778,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        paint.color = GlassUiTheme.accentIndigo
+        paint.color = GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.PRIMARY).first
         canvas.drawOval(rectF, paint)
 
         val name = store.getUserName()
@@ -5068,7 +5025,7 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             elevation = 0f
             setPadding(24, 20, 24, 20)
-            background = GlassUiTheme.glassCard(isDark, 26f)
+            background = GlassUiTheme.glassCard(isDark, GlassUiTheme.cardRadiusPx)
         }
     }
 
@@ -5096,7 +5053,13 @@ class MainActivity : AppCompatActivity() {
             isClickable = true
             isFocusable = true
             setPadding(24, 18, 24, 18)
-            background = GlassUiTheme.glassAccentButtonHex(bgHex, bgHex, 20f, translucent = true)
+            background = GlassUiTheme.glassAccentButtonHex(
+                bgHex,
+                bgHex,
+                GlassUiTheme.buttonRadiusPx,
+                translucent = true,
+                isDark = isDark
+            )
             setOnClickListener {
                 animateCellPop(it)
                 onClick()
@@ -5114,7 +5077,7 @@ class MainActivity : AppCompatActivity() {
             isClickable = true
             isFocusable = true
             setPadding(18, 12, 18, 12)
-            background = GlassUiTheme.glassSubtleSurface(isDark, 15f)
+            background = GlassUiTheme.glassSubtleSurface(isDark, GlassUiTheme.chipRadiusPx)
             setOnClickListener { onClick() }
         }
     }
@@ -5135,16 +5098,17 @@ class MainActivity : AppCompatActivity() {
 
     private fun styleNavTab(btn: TextView, selected: Boolean) {
         if (selected) {
+            val (startCol, endCol) = GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.PRIMARY)
             btn.setTextColor(GlassUiTheme.textOnAccent)
             btn.background = GlassUiTheme.glassAccentButton(
-                GlassUiTheme.accentIndigoEnd,
-                GlassUiTheme.accentIndigo,
-                18f,
+                startCol,
+                endCol,
+                GlassUiTheme.buttonRadiusPx,
                 translucent = true
             )
         } else {
             btn.setTextColor(cTextSecondary())
-            btn.background = GlassUiTheme.glassSubtleSurface(isDark, 18f)
+            btn.background = GlassUiTheme.glassSubtleSurface(isDark, GlassUiTheme.buttonRadiusPx)
         }
     }
 
@@ -5165,10 +5129,16 @@ class MainActivity : AppCompatActivity() {
     private fun styleModeChip(chip: TextView, selected: Boolean, activeHex: String) {
         if (selected) {
             chip.setTextColor(GlassUiTheme.textOnAccent)
-            chip.background = GlassUiTheme.glassAccentButtonHex(activeHex, activeHex, 15f, translucent = true)
+            chip.background = GlassUiTheme.glassAccentButtonHex(
+                activeHex,
+                activeHex,
+                GlassUiTheme.chipRadiusPx,
+                translucent = true,
+                isDark = isDark
+            )
         } else {
             chip.setTextColor(cTextSecondary())
-            chip.background = GlassUiTheme.glassSubtleSurface(isDark, 15f)
+            chip.background = GlassUiTheme.glassSubtleSurface(isDark, GlassUiTheme.chipRadiusPx)
         }
     }
 
@@ -5197,32 +5167,6 @@ class MainActivity : AppCompatActivity() {
         return col to numTv
     }
 
-    private fun roundedBox(
-        fillColor: Int,
-        strokeColor: Int,
-        radiusPx: Float,
-        strokeWidthPx: Int = 2
-    ): GradientDrawable {
-        return GradientDrawable().apply {
-            setColor(fillColor)
-            setStroke(strokeWidthPx, strokeColor)
-            cornerRadius = radiusPx
-        }
-    }
-
-    private fun dashedBox(
-        fillColor: Int,
-        strokeColor: Int,
-        radiusPx: Float,
-        strokeWidthPx: Int = 4
-    ): GradientDrawable {
-        return GradientDrawable().apply {
-            setColor(fillColor)
-            setStroke(strokeWidthPx, strokeColor, 12f, 8f)
-            cornerRadius = radiusPx
-        }
-    }
-
     private fun addSpacer(parent: LinearLayout, heightPx: Int) {
         val space = TextView(this).apply { height = heightPx }
         parent.addView(space)
@@ -5239,7 +5183,7 @@ class MainActivity : AppCompatActivity() {
         private var required = 9
         private var targetPct = 0
         private var animFraction = 1f
-        private var accentColor = GlassUiTheme.accentIndigo
+        private var accentColor = GlassUiTheme.accentColors(true, GlassUiTheme.AccentRole.PRIMARY).second
         private var dark = false
         private var ringAnimator: ValueAnimator? = null
 
@@ -5252,7 +5196,7 @@ class MainActivity : AppCompatActivity() {
             style = Paint.Style.STROKE
             strokeWidth = 22f
             strokeCap = Paint.Cap.BUTT
-            pathEffect = DashPathEffect(floatArrayOf(18f, 12f), 0f)
+            pathEffect = GlassUiTheme.createDashEffect()
         }
         private val progressPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
@@ -5277,7 +5221,7 @@ class MainActivity : AppCompatActivity() {
             projected: Int,
             required: Int,
             actualPct: Int,
-            accentColorHex: String,
+            accentColor: Int,
             isDark: Boolean,
             animate: Boolean = true
         ) {
@@ -5285,7 +5229,7 @@ class MainActivity : AppCompatActivity() {
             this.targetProjected = projected
             this.required = required
             this.targetPct = actualPct
-            this.accentColor = GlassUiTheme.accentPairForHex(accentColorHex).second
+            this.accentColor = accentColor
             this.dark = isDark
 
             ringAnimator?.cancel()
@@ -5310,8 +5254,8 @@ class MainActivity : AppCompatActivity() {
             val pad = 28f
             val rect = RectF(pad, pad, width - pad, height - pad)
 
-            trackPaint.color = GlassUiTheme.subtleSurfaceDark
-            projectedPaint.color = GlassUiTheme.accentIndigoEnd
+            trackPaint.color = GlassUiTheme.ringTrackColor(dark)
+            projectedPaint.color = GlassUiTheme.accentColors(dark, GlassUiTheme.AccentRole.PRIMARY).second
             progressPaint.color = accentColor
             mainTextPaint.color = GlassUiTheme.textPrimaryColor(dark)
             subTextPaint.color = GlassUiTheme.textSecondaryColor(dark)
@@ -5332,9 +5276,9 @@ class MainActivity : AppCompatActivity() {
             val cx = width / 2f
             val cy = height / 2f
             goalMarkerPaint.color = if (targetAttended >= required) {
-                GlassUiTheme.accentEmeraldEnd
+                GlassUiTheme.accentColors(dark, GlassUiTheme.AccentRole.SUCCESS).second
             } else {
-                GlassUiTheme.textSecondaryDark
+                GlassUiTheme.textSecondaryColor(dark)
             }
             canvas.drawCircle(cx, pad, 7f, goalMarkerPaint)
 
@@ -5354,7 +5298,7 @@ class MainActivity : AppCompatActivity() {
         private val targetLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeWidth = 3f
-            pathEffect = DashPathEffect(floatArrayOf(12f, 8f), 0f)
+            pathEffect = GlassUiTheme.createDashEffect(floatArrayOf(12f, 8f))
         }
         private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             textAlign = Paint.Align.CENTER
@@ -5413,7 +5357,7 @@ class MainActivity : AppCompatActivity() {
             val targetPct = items.first().targetPercent
 
             val targetY = topMargin + chartHeight * (1f - (targetPct / maxPct.toFloat()))
-            targetLinePaint.color = GlassUiTheme.accentAmberEnd
+            targetLinePaint.color = GlassUiTheme.trendTargetLineColor(dark)
             canvas.drawLine(16f, targetY, width - 16f, targetY, targetLinePaint)
 
             labelPaint.color = GlassUiTheme.textSecondaryColor(dark)
@@ -5427,11 +5371,7 @@ class MainActivity : AppCompatActivity() {
                 val barTop = topMargin + chartHeight * (1f - ratio)
                 val barBottom = topMargin + chartHeight
 
-                barPaint.color = if (pt.actualPercent >= pt.targetPercent) {
-                    GlassUiTheme.accentEmeraldEnd
-                } else {
-                    GlassUiTheme.accentPurpleEnd
-                }
+                barPaint.color = GlassUiTheme.trendBarColor(dark, pt.actualPercent >= pt.targetPercent)
                 val barRect = RectF(cx - barHalfW, barTop.coerceAtMost(barBottom - 6f), cx + barHalfW, barBottom)
                 canvas.drawRoundRect(barRect, 10f, 10f, barPaint)
 
