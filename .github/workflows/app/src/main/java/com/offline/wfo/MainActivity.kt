@@ -1016,17 +1016,17 @@ class MainActivity : AppCompatActivity() {
         when {
             isConnected -> {
                 lockStatusTitleView.text = if (activeSrc.isNotEmpty()) "Connected: $activeSrc" else "In Office Zone"
-                lockStatusTitleView.setTextColor(GlassUiTheme.statusSuccessText)
+                lockStatusTitleView.setTextColor(GlassUiTheme.statusSuccessText(isDark))
                 lockStatusDotView.background = roundedBox(GlassUiTheme.accentEmeraldEnd, GlassUiTheme.accentEmeraldEnd, 999f, 0)
             }
             trackingReady -> {
                 lockStatusTitleView.text = "Auto-Tracking Running"
-                lockStatusTitleView.setTextColor(GlassUiTheme.statusSuccessText)
+                lockStatusTitleView.setTextColor(GlassUiTheme.statusSuccessText(isDark))
                 lockStatusDotView.background = roundedBox(GlassUiTheme.accentEmeraldEnd, GlassUiTheme.accentEmeraldEnd, 999f, 0)
             }
             else -> {
                 lockStatusTitleView.text = "Background Monitoring Paused"
-                lockStatusTitleView.setTextColor(GlassUiTheme.statusWarningText)
+                lockStatusTitleView.setTextColor(GlassUiTheme.statusWarningText(isDark))
                 lockStatusDotView.background = roundedBox(GlassUiTheme.accentAmberEnd, GlassUiTheme.accentAmberEnd, 999f, 0)
             }
         }
@@ -1390,7 +1390,7 @@ class MainActivity : AppCompatActivity() {
                 layoutParams = FrameLayout.LayoutParams(178, 178).apply {
                     gravity = Gravity.CENTER
                 }
-                background = roundedBox(GlassUiTheme.statusInfoTint, GlassUiTheme.accentIndigoEnd, 999f, 2)
+                background = roundedBox(GlassUiTheme.statusTint(isDark, "info"), GlassUiTheme.accentIndigoEnd, 999f, 2)
                 alpha = 0.25f
             }
 
@@ -1398,7 +1398,7 @@ class MainActivity : AppCompatActivity() {
                 layoutParams = FrameLayout.LayoutParams(138, 138).apply {
                     gravity = Gravity.CENTER
                 }
-                background = roundedBox(GlassUiTheme.statusInfoTint, GlassUiTheme.accentIndigo, 999f, 3)
+                background = roundedBox(GlassUiTheme.statusTint(isDark, "info"), GlassUiTheme.accentIndigo, 999f, 3)
                 alpha = 0.45f
             }
 
@@ -1453,7 +1453,7 @@ class MainActivity : AppCompatActivity() {
                 text = "Auto-Tracking Running"
                 textSize = 14f
                 setTypeface(null, Typeface.BOLD)
-                setTextColor(GlassUiTheme.statusSuccessText)
+                setTextColor(GlassUiTheme.statusSuccessText(isDark))
             }
             topStatusLine.addView(lockStatusDotView)
             topStatusLine.addView(lockStatusTitleView)
@@ -1591,7 +1591,7 @@ class MainActivity : AppCompatActivity() {
         val removePhotoBtn = TextView(this).apply {
             text = "Remove Photo"
             textSize = 12f
-            setTextColor(GlassUiTheme.statusDangerText)
+            setTextColor(GlassUiTheme.statusDangerText(isDark))
             setPadding(8, 10, 8, 4)
             setOnClickListener {
                 store.deleteProfilePhoto()
@@ -1935,7 +1935,7 @@ class MainActivity : AppCompatActivity() {
             text = "UNDO"
             textSize = 12f
             setTypeface(null, Typeface.BOLD)
-            setTextColor(GlassUiTheme.textSecondaryLightGlass)
+            setTextColor(GlassUiTheme.statusInfoText(isDark))
             setPadding(16, 6, 12, 6)
             setOnClickListener {
                 if (lastUndoBatch.isNotEmpty()) {
@@ -2102,7 +2102,7 @@ class MainActivity : AppCompatActivity() {
         heroProjectedView = TextView(this).apply {
             textSize = 12.5f
             setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
-            setTextColor(GlassUiTheme.statusInfoText)
+            setTextColor(GlassUiTheme.statusInfoText(isDark))
             gravity = Gravity.CENTER
             setPadding(14, 10, 14, 10)
             layoutParams = LinearLayout.LayoutParams(
@@ -2424,7 +2424,7 @@ class MainActivity : AppCompatActivity() {
         rhythmView = TextView(this).apply {
             textSize = 13f
             setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
-            setTextColor(GlassUiTheme.statusInfoText)
+            setTextColor(GlassUiTheme.statusInfoText(isDark))
         }
         qtdCard.addView(qtdTitleView)
         qtdCard.addView(qtdDetailView)
@@ -2683,7 +2683,7 @@ class MainActivity : AppCompatActivity() {
         priorityOrderPreviewView = TextView(this).apply {
             textSize = 12f
             setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
-            setTextColor(GlassUiTheme.statusInfoText)
+            setTextColor(GlassUiTheme.statusInfoText(isDark))
             setPadding(0, 10, 0, 0)
         }
         priorityCard.addView(priorityOrderPreviewView)
@@ -3070,7 +3070,7 @@ class MainActivity : AppCompatActivity() {
             background = GlassUiTheme.glassCard(
                 isDark,
                 18f,
-                if (permsReady && backupHealthy) GlassUiTheme.statusSuccessTint else GlassUiTheme.statusWarningTint
+                GlassUiTheme.statusTint(isDark, if (permsReady && backupHealthy) "success" else "warning")
             )
             setPadding(22, 16, 22, 16)
             layoutParams = LinearLayout.LayoutParams(
@@ -3087,8 +3087,8 @@ class MainActivity : AppCompatActivity() {
             textSize = 13f
             setTypeface(null, Typeface.BOLD)
             setTextColor(
-                if (permsReady && backupHealthy) GlassUiTheme.statusSuccessText
-                else GlassUiTheme.statusWarningText
+                if (permsReady && backupHealthy) GlassUiTheme.statusSuccessText(isDark)
+                else GlassUiTheme.statusWarningText(isDark)
             )
         }
         val readinessSub = TextView(this).apply {
@@ -3365,7 +3365,7 @@ class MainActivity : AppCompatActivity() {
                 text = "✕"
                 textSize = 14f
                 setTypeface(null, Typeface.BOLD)
-                setTextColor(GlassUiTheme.statusDangerText)
+                setTextColor(GlassUiTheme.statusDangerText(isDark))
                 setPadding(14, 4, 6, 4)
                 setOnClickListener {
                     if (ensureEditUnlocked()) {
@@ -3800,28 +3800,37 @@ class MainActivity : AppCompatActivity() {
         } else {
             "⚠️ Location & Notifications: Action Required"
         }
-        setupPermStatusView.setTextColor(if (locOk && notifOk) GlassUiTheme.statusSuccessText else GlassUiTheme.statusDangerText)
+        setupPermStatusView.setTextColor(
+            if (locOk && notifOk) GlassUiTheme.statusSuccessText(isDark)
+            else GlassUiTheme.statusDangerText(isDark)
+        )
 
         setupBgLocStatusView.text = if (bgLocOk) {
             "✅ Background Location: Allow all the time"
         } else {
             "⚠️ Background Location: Must set to \"Allow all the time\""
         }
-        setupBgLocStatusView.setTextColor(if (bgLocOk) GlassUiTheme.statusSuccessText else GlassUiTheme.statusDangerText)
+        setupBgLocStatusView.setTextColor(
+            if (bgLocOk) GlassUiTheme.statusSuccessText(isDark)
+            else GlassUiTheme.statusDangerText(isDark)
+        )
 
         setupGpsStatusView.text = if (gpsOk) {
             "✅ Phone Location (GPS) Switch: ON"
         } else {
             "⚠️ Phone Location (GPS) Switch: OFF (Android hides Wi-Fi if OFF)"
         }
-        setupGpsStatusView.setTextColor(if (gpsOk) GlassUiTheme.statusSuccessText else GlassUiTheme.statusDangerText)
+        setupGpsStatusView.setTextColor(
+            if (gpsOk) GlassUiTheme.statusSuccessText(isDark)
+            else GlassUiTheme.statusDangerText(isDark)
+        )
 
         val alarmLabel = if (alarmOk) {
             "✅ Exact Alarms: Ready (On-Time Reminders)"
         } else {
             "⚠️ Exact Alarms: Action Required (May Be Delayed)"
         }
-        val alarmColor = if (alarmOk) GlassUiTheme.statusSuccessText else GlassUiTheme.statusWarningText
+        val alarmColor = if (alarmOk) GlassUiTheme.statusSuccessText(isDark) else GlassUiTheme.statusWarningText(isDark)
         setupExactAlarmStatusView.text = alarmLabel
         setupExactAlarmStatusView.setTextColor(alarmColor)
 
@@ -3832,7 +3841,8 @@ class MainActivity : AppCompatActivity() {
                 "🔕 System Notification Permission: Not Allowed (Tap Setup to grant)"
             }
             settingsNotifPermStatusView.setTextColor(
-                if (notifOk) GlassUiTheme.statusSuccessText else GlassUiTheme.statusWarningText
+                if (notifOk) GlassUiTheme.statusSuccessText(isDark)
+                else GlassUiTheme.statusWarningText(isDark)
             )
         }
 
@@ -3842,7 +3852,7 @@ class MainActivity : AppCompatActivity() {
             settingsExactAlarmStatusView.background = GlassUiTheme.glassCard(
                 isDark,
                 14f,
-                if (alarmOk) GlassUiTheme.statusSuccessTint else GlassUiTheme.statusWarningTint
+                GlassUiTheme.statusTint(isDark, if (alarmOk) "success" else "warning")
             )
         }
 
@@ -3851,7 +3861,10 @@ class MainActivity : AppCompatActivity() {
         } else {
             "⚠️ Background Battery: Restricted (Tap below & choose Allow)"
         }
-        setupBatteryStatusView.setTextColor(if (batOk) GlassUiTheme.statusSuccessText else GlassUiTheme.statusDangerText)
+        setupBatteryStatusView.setTextColor(
+            if (batOk) GlassUiTheme.statusSuccessText(isDark)
+            else GlassUiTheme.statusDangerText(isDark)
+        )
 
         setupLiveWifiView.text = if (liveSsid.isEmpty()) {
             "Detected Wi-Fi: None (Connect to office Wi-Fi or type below)"
@@ -3871,8 +3884,8 @@ class MainActivity : AppCompatActivity() {
         autoBackupStatusView.setTextColor(
             when {
                 !health.configured -> cTextSecondary()
-                health.healthy -> GlassUiTheme.statusSuccessText
-                else -> GlassUiTheme.statusDangerText
+                health.healthy -> GlassUiTheme.statusSuccessText(isDark)
+                else -> GlassUiTheme.statusDangerText(isDark)
             }
         )
 
@@ -3886,25 +3899,25 @@ class MainActivity : AppCompatActivity() {
         }
         if (trackingReady) {
             dashServiceStatusView.text = "Auto-Tracking Active"
-            dashServiceStatusView.setTextColor(GlassUiTheme.statusSuccessText)
+            dashServiceStatusView.setTextColor(GlassUiTheme.statusSuccessText(isDark))
             heartbeatDotView.background = roundedBox(GlassUiTheme.accentEmeraldEnd, GlassUiTheme.accentEmeraldEnd, 999f, 0)
             startHeartbeatAnimation(true)
         } else {
             dashServiceStatusView.text = "Setup Incomplete (Tap Settings)"
-            dashServiceStatusView.setTextColor(GlassUiTheme.statusWarningText)
+            dashServiceStatusView.setTextColor(GlassUiTheme.statusWarningText(isDark))
             heartbeatDotView.background = roundedBox(GlassUiTheme.accentAmberEnd, GlassUiTheme.accentAmberEnd, 999f, 0)
             startHeartbeatAnimation(false)
         }
 
         lockToggleBtn.text = if (isEditUnlocked) "🔓 Unlocked" else "🔒 Locked"
         lockToggleBtn.background = roundedBox(
-            if (isEditUnlocked) GlassUiTheme.statusSuccessTint else GlassUiTheme.subtleSurfaceDark,
+            if (isEditUnlocked) GlassUiTheme.statusTint(isDark, "success") else GlassUiTheme.subtleSurfaceDark,
             if (isEditUnlocked) GlassUiTheme.accentEmeraldEnd else GlassUiTheme.borderColor(isDark),
             16f,
             2
         )
         lockToggleBtn.setTextColor(
-            if (isEditUnlocked) GlassUiTheme.statusSuccessText else cTextPrimary()
+            if (isEditUnlocked) GlassUiTheme.statusSuccessText(isDark) else cTextPrimary()
         )
 
         val today = LocalDate.now()
@@ -3925,28 +3938,28 @@ class MainActivity : AppCompatActivity() {
             isOnOfficePresence -> {
                 val srcTag = if (activeSource.isNotEmpty()) " ($activeSource)" else ""
                 todayLiveStripView.text = "🟢 $todayStamp • At Office$srcTag"
-                todayLiveStripView.setTextColor(GlassUiTheme.statusSuccessText)
-                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f, GlassUiTheme.statusSuccessTint)
+                todayLiveStripView.setTextColor(GlassUiTheme.statusSuccessText(isDark))
+                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f, GlassUiTheme.statusTint(isDark, "success"))
             }
             todayType == DayType.OFFICE -> {
                 todayLiveStripView.text = "✅ $todayStamp • Office Day Logged"
-                todayLiveStripView.setTextColor(GlassUiTheme.statusSuccessText)
-                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f, GlassUiTheme.statusSuccessTint)
+                todayLiveStripView.setTextColor(GlassUiTheme.statusSuccessText(isDark))
+                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f, GlassUiTheme.statusTint(isDark, "success"))
             }
             todayType == DayType.PLANNED -> {
                 todayLiveStripView.text = "📅 $todayStamp • Planned Office Day"
-                todayLiveStripView.setTextColor(GlassUiTheme.statusInfoText)
-                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f, GlassUiTheme.statusInfoTint)
+                todayLiveStripView.setTextColor(GlassUiTheme.statusInfoText(isDark))
+                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f, GlassUiTheme.statusTint(isDark, "info"))
             }
             todayType == DayType.LEAVE -> {
                 todayLiveStripView.text = "🌴 $todayStamp • On Leave"
-                todayLiveStripView.setTextColor(GlassUiTheme.statusWarningText)
-                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f, GlassUiTheme.statusWarningTint)
+                todayLiveStripView.setTextColor(GlassUiTheme.statusWarningText(isDark))
+                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f, GlassUiTheme.statusTint(isDark, "warning"))
             }
             todayType == DayType.HOLIDAY -> {
                 todayLiveStripView.text = "🎉 $todayStamp • Holiday"
-                todayLiveStripView.setTextColor(GlassUiTheme.statusHolidayText)
-                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f, GlassUiTheme.statusHolidayTint)
+                todayLiveStripView.setTextColor(GlassUiTheme.statusHolidayText(isDark))
+                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f, GlassUiTheme.statusTint(isDark, "holiday"))
             }
             else -> {
                 todayLiveStripView.text = "🏠 $todayStamp • WFH ($disconnectedLabel)"
@@ -3978,26 +3991,26 @@ class MainActivity : AppCompatActivity() {
         when {
             s.remainingDays == 0 -> {
                 progressColorHex = "#10B981"
-                cardTintColor = GlassUiTheme.statusSuccessTint
-                headlineColor = GlassUiTheme.statusSuccessText
-                subColor = GlassUiTheme.statusSuccessText
+                cardTintColor = GlassUiTheme.statusTint(isDark, "success")
+                headlineColor = GlassUiTheme.statusSuccessText(isDark)
+                subColor = GlassUiTheme.statusSuccessText(isDark)
             }
             plannedCoversTarget -> {
                 progressColorHex = "#10B981"
-                cardTintColor = GlassUiTheme.statusSuccessTint
-                headlineColor = GlassUiTheme.statusSuccessText
-                subColor = GlassUiTheme.statusSuccessText
+                cardTintColor = GlassUiTheme.statusTint(isDark, "success")
+                headlineColor = GlassUiTheme.statusSuccessText(isDark)
+                subColor = GlassUiTheme.statusSuccessText(isDark)
             }
             s.bufferDays <= 0 -> {
                 progressColorHex = "#EF4444"
-                cardTintColor = GlassUiTheme.statusDangerTint
-                headlineColor = GlassUiTheme.statusDangerText
-                subColor = GlassUiTheme.statusDangerText
+                cardTintColor = GlassUiTheme.statusTint(isDark, "danger")
+                headlineColor = GlassUiTheme.statusDangerText(isDark)
+                subColor = GlassUiTheme.statusDangerText(isDark)
             }
             else -> {
                 progressColorHex = "#4F46E5"
-                cardTintColor = GlassUiTheme.subtleSurfaceDark
-                headlineColor = GlassUiTheme.statusWarningText
+                cardTintColor = GlassUiTheme.statusTint(isDark, "warning")
+                headlineColor = GlassUiTheme.statusWarningText(isDark)
                 subColor = cTextSecondary()
             }
         }
@@ -4093,10 +4106,11 @@ class MainActivity : AppCompatActivity() {
             heroProjectedView.background = GlassUiTheme.glassCard(
                 isDark,
                 16f,
-                if (plannedCoversTarget) GlassUiTheme.statusSuccessTint else GlassUiTheme.statusInfoTint
+                GlassUiTheme.statusTint(isDark, if (plannedCoversTarget) "success" else "info")
             )
             heroProjectedView.setTextColor(
-                if (plannedCoversTarget) GlassUiTheme.statusSuccessText else GlassUiTheme.statusInfoText
+                if (plannedCoversTarget) GlassUiTheme.statusSuccessText(isDark)
+                else GlassUiTheme.statusInfoText(isDark)
             )
             val cushionSuffix = if (extraPlannedDays > 0) " (+$extraPlannedDays above target)" else ""
             heroProjectedView.text = if (plannedCoversTarget) {
@@ -4113,16 +4127,17 @@ class MainActivity : AppCompatActivity() {
 
         kpiRemainingNumView.text = "${s.remainingDays}"
         kpiRemainingNumView.setTextColor(
-            if (s.remainingDays == 0) GlassUiTheme.statusSuccessText else GlassUiTheme.statusInfoText
+            if (s.remainingDays == 0) GlassUiTheme.statusSuccessText(isDark)
+            else GlassUiTheme.statusInfoText(isDark)
         )
 
         val safeBuffer = maxOf(0, s.bufferDays)
         kpiBufferNumView.text = "$safeBuffer"
         kpiBufferNumView.setTextColor(
             when {
-                s.remainingDays == 0 || safeBuffer >= 2 -> GlassUiTheme.statusSuccessText
-                safeBuffer == 1 -> GlassUiTheme.statusWarningText
-                else -> GlassUiTheme.statusDangerText
+                s.remainingDays == 0 || safeBuffer >= 2 -> GlassUiTheme.statusSuccessText(isDark)
+                safeBuffer == 1 -> GlassUiTheme.statusWarningText(isDark)
+                else -> GlassUiTheme.statusDangerText(isDark)
             }
         )
 
@@ -4211,8 +4226,8 @@ class MainActivity : AppCompatActivity() {
                 " (Holiday exclusion is OFF in Setup)"
             else -> ""
         }
-        simResultView.background = GlassUiTheme.glassCard(isDark, 16f, GlassUiTheme.statusInfoTint)
-        simResultView.setTextColor(GlassUiTheme.statusInfoText)
+        simResultView.background = GlassUiTheme.glassCard(isDark, 16f, GlassUiTheme.statusTint(isDark, "info"))
+        simResultView.setTextColor(GlassUiTheme.statusInfoText(isDark))
         simResultView.text =
             "Simulated Target: ${simStats.requiredDays} days (${simStats.effectiveWorkingDays} working days) • Still Needed: ${simStats.remainingDays} • Buffer: ${maxOf(0, simStats.bufferDays)}$exclNote"
 
@@ -4313,7 +4328,7 @@ class MainActivity : AppCompatActivity() {
                 text = "✕"
                 textSize = 15f
                 setTypeface(null, Typeface.BOLD)
-                setTextColor(GlassUiTheme.statusDangerText)
+                setTextColor(GlassUiTheme.statusDangerText(isDark))
                 setPadding(16, 4, 8, 4)
                 setOnClickListener {
                     if (ensureEditUnlocked()) {
@@ -4330,107 +4345,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun renderCalendarGrid(stats: MonthStats) {
-        calendarContainer.removeAllViews()
-        val today = LocalDate.now()
-        val ym = stats.yearMonth
-
-        val headerRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun").forEach { dayName ->
-            val tv = TextView(this).apply {
-                text = dayName
-                textSize = 12f
-                setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
-                setTextColor(cTextSecondary())
-                gravity = Gravity.CENTER
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                setPadding(0, 4, 0, 8)
-            }
-            headerRow.addView(tv)
-        }
-        calendarContainer.addView(headerRow)
-
-        val firstDayOffset = ym.atDay(1).dayOfWeek.value - 1
-        val daysInMonth = ym.lengthOfMonth()
-        var currentDay = 1
-
-        while (currentDay <= daysInMonth) {
-            val weekRow = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                setPadding(0, 3, 0, 3)
-            }
-            for (col in 0..6) {
-                val cellWrapper = FrameLayout(this).apply {
-                    layoutParams = LinearLayout.LayoutParams(0, 88, 1f).apply {
-                        setMargins(4, 0, 4, 0)
-                    }
-                }
-                if ((currentDay == 1 && col < firstDayOffset) || currentDay > daysInMonth) {
-                    // Empty placeholder cell
-                } else {
-                    val date = ym.atDay(currentDay)
-                    val dateStr = date.toString()
-                    val dtype = stats.dayTypeMap[dateStr] ?: DayType.NONE
-                    val isWeekend = date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY
-                    val isToday = date == today
-                    val hasNote = store.getDayNote(dateStr).isNotEmpty()
-
-                    val dayNumTv = TextView(this).apply {
-                        text = currentDay.toString()
-                        gravity = Gravity.CENTER
-                        textSize = 13f
-                        layoutParams = FrameLayout.LayoutParams(
-                            FrameLayout.LayoutParams.MATCH_PARENT,
-                            FrameLayout.LayoutParams.MATCH_PARENT
-                        )
-                    }
-
-                    when (dtype) {
-                        DayType.OFFICE -> {
-                            dayNumTv.setTextColor(GlassUiTheme.textOnAccent)
-                            dayNumTv.setTypeface(null, Typeface.BOLD)
-                            cellWrapper.background = roundedBox(
-                                GlassUiTheme.accentEmerald,
-                                if (isToday) GlassUiTheme.accentBlueEnd else GlassUiTheme.accentEmeraldEnd,
-                                16f,
-                                if (isToday) 6 else 2
-                            )
-                        }
-                        DayType.PLANNED -> {
-                            dayNumTv.setTextColor(GlassUiTheme.statusInfoText)
-                            dayNumTv.setTypeface(null, Typeface.BOLD)
-                            cellWrapper.background = dashedBox(
-                                GlassUiTheme.statusInfoTint,
-                                if (isToday) GlassUiTheme.accentBlueEnd else GlassUiTheme.accentIndigoEnd,
-                                16f,
-                                if (isToday) 6 else 4
-                            )
-                        }
-                        DayType.LEAVE -> {
-                            dayNumTv.setTextColor(GlassUiTheme.textOnAccent)
-                            dayNumTv.setTypeface(null, Typeface.BOLD)
-                            cellWrapper.background = roundedBox(
-                                GlassUiTheme.accentAmber,
-                                if (isToday) GlassUiTheme.accentBlueEnd else GlassUiTheme.accentAmberEnd,
-                                16f,
-                                if (isToday) 6 else 2
-                            )
-                        }
-                        DayType.HOLIDAY -> {
-                            dayNumTv.setTextColor(GlassUiTheme.textOnAccent)
-                            dayNumTv.setTypeface(null, Typeface.BOLD)
-                            cellWrapper.background = roundedBox(
-                                GlassUiTheme.accentPurple,
-                                if (isToday) GlassUiTheme.accentBlueEnd else GlassUiTheme.accentPurpleEnd,
-                                16f,
-                                if (isToday) 6 else 2
-                            )
-                        }
-                        DayType.NONE -> {
-                            if (isWeekend) {
-                                dayNumTv.setTextColor(cTextSecondary())
-                                cellWrapper.alpha = 0.72f
-                            } else {
     private fun renderCalendarGrid(stats: MonthStats) {
         calendarContainer.removeAllViews()
         val today = LocalDate.now()
@@ -4616,7 +4530,6 @@ class MainActivity : AppCompatActivity() {
             calendarContainer.addView(weekRow)
         }
     }
-
 
     private fun showDayInspectorDialog(date: LocalDate) {
         val info = store.getDayInspectorInfo(date)
