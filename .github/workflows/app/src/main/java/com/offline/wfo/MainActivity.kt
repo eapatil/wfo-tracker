@@ -1,6 +1,5 @@
 package com.offline.wfo
 
-
 import android.Manifest
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
@@ -1847,7 +1846,11 @@ class MainActivity : AppCompatActivity() {
             setTypeface(null, Typeface.BOLD)
             setTextColor(Color.parseColor(if (isDark) "#A5B4FC" else "#4F46E5"))
             gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 10)
+            setPadding(14, 8, 14, 8)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(0, 2, 0, 10) }
         }
         heroCardContainer.addView(circularRingView)
         heroCardContainer.addView(heroSubView)
@@ -1882,15 +1885,16 @@ class MainActivity : AppCompatActivity() {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         clearPlanBtn = makeSmallChipButton("Clear Plan") {
-            if (!ensureEditUnlocked()) return@makeSmallChipButton
-            val removed = store.clearPlannedDaysForMonth(selectedMonth)
-            syncBackgroundAndWidget()
-            refreshAllViews(animateCharts = true)
-            if (removed.isNotEmpty()) {
-                showUndoBanner("Cleared ${removed.size} planned day(s)", removed)
-                showStatusPopup(true, "Cleared ${removed.size} planned day(s) & synced CSV")
-            } else {
-                showStatusPopup(false, "No planned days to clear in ${selectedMonth.month.getDisplayName(TextStyle.SHORT, Locale.getDefault())}")
+            if (ensureEditUnlocked()) {
+                val removed = store.clearPlannedDaysForMonth(selectedMonth)
+                syncBackgroundAndWidget()
+                refreshAllViews(animateCharts = true)
+                if (removed.isNotEmpty()) {
+                    showUndoBanner("Cleared ${removed.size} planned day(s)", removed)
+                    showStatusPopup(true, "Cleared ${removed.size} planned day(s) & synced CSV")
+                } else {
+                    showStatusPopup(false, "No planned days to clear in ${selectedMonth.month.getDisplayName(TextStyle.SHORT, Locale.getDefault())}")
+                }
             }
         }
         autoPlanBtn = makeSmallChipButton("✨ Auto-Plan") {
@@ -1915,28 +1919,32 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 0, 0, 10)
         }
         modeOfficeBtn = makeModeChip("🏢 Office") {
-            if (!ensureEditUnlocked()) return@makeModeChip
-            activeTapMode = DayType.OFFICE
-            animateCellPop(modeOfficeBtn)
-            refreshAllViews(animateCharts = false)
+            if (ensureEditUnlocked()) {
+                activeTapMode = DayType.OFFICE
+                animateCellPop(modeOfficeBtn)
+                refreshAllViews(animateCharts = false)
+            }
         }
         modePlannedBtn = makeModeChip("📅 Plan") {
-            if (!ensureEditUnlocked()) return@makeModeChip
-            activeTapMode = DayType.PLANNED
-            animateCellPop(modePlannedBtn)
-            refreshAllViews(animateCharts = false)
+            if (ensureEditUnlocked()) {
+                activeTapMode = DayType.PLANNED
+                animateCellPop(modePlannedBtn)
+                refreshAllViews(animateCharts = false)
+            }
         }
         modeLeaveBtn = makeModeChip("🌴 Leave") {
-            if (!ensureEditUnlocked()) return@makeModeChip
-            activeTapMode = DayType.LEAVE
-            animateCellPop(modeLeaveBtn)
-            refreshAllViews(animateCharts = false)
+            if (ensureEditUnlocked()) {
+                activeTapMode = DayType.LEAVE
+                animateCellPop(modeLeaveBtn)
+                refreshAllViews(animateCharts = false)
+            }
         }
         modeHolidayBtn = makeModeChip("🎉 Holiday") {
-            if (!ensureEditUnlocked()) return@makeModeChip
-            activeTapMode = DayType.HOLIDAY
-            animateCellPop(modeHolidayBtn)
-            refreshAllViews(animateCharts = false)
+            if (ensureEditUnlocked()) {
+                activeTapMode = DayType.HOLIDAY
+                animateCellPop(modeHolidayBtn)
+                refreshAllViews(animateCharts = false)
+            }
         }
 
         modeRow.addView(modeOfficeBtn)
@@ -2326,25 +2334,28 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 12, 0, 8)
         }
         modeWifiOnlyBtn = makeModeChip("📶 Wi-Fi") {
-            if (!ensureEditUnlocked()) return@makeModeChip
-            store.setTrackingMode(TrackingMode.WIFI_ONLY)
-            syncBackgroundAndWidget()
-            refreshAllViews(animateCharts = false)
-            showStatusPopup(true, "Tracking mode set to Wi-Fi Only")
+            if (ensureEditUnlocked()) {
+                store.setTrackingMode(TrackingMode.WIFI_ONLY)
+                syncBackgroundAndWidget()
+                refreshAllViews(animateCharts = false)
+                showStatusPopup(true, "Tracking mode set to Wi-Fi Only")
+            }
         }
         modeLocOnlyBtn = makeModeChip("📍 Location") {
-            if (!ensureEditUnlocked()) return@makeModeChip
-            store.setTrackingMode(TrackingMode.LOCATION_ONLY)
-            syncBackgroundAndWidget()
-            refreshAllViews(animateCharts = false)
-            showStatusPopup(true, "Tracking mode set to Location Only")
+            if (ensureEditUnlocked()) {
+                store.setTrackingMode(TrackingMode.LOCATION_ONLY)
+                syncBackgroundAndWidget()
+                refreshAllViews(animateCharts = false)
+                showStatusPopup(true, "Tracking mode set to Location Only")
+            }
         }
         modeBothBtn = makeModeChip("📶+📍 Both") {
-            if (!ensureEditUnlocked()) return@makeModeChip
-            store.setTrackingMode(TrackingMode.BOTH)
-            syncBackgroundAndWidget()
-            refreshAllViews(animateCharts = false)
-            showStatusPopup(true, "Tracking mode set to Wi-Fi + Location")
+            if (ensureEditUnlocked()) {
+                store.setTrackingMode(TrackingMode.BOTH)
+                syncBackgroundAndWidget()
+                refreshAllViews(animateCharts = false)
+                showStatusPopup(true, "Tracking mode set to Wi-Fi + Location")
+            }
         }
         modeSelectorRow.addView(modeWifiOnlyBtn)
         addHorizontalGap(modeSelectorRow, 6)
@@ -2379,8 +2390,9 @@ class MainActivity : AppCompatActivity() {
         locationSectionCard.addView(officeDistanceView)
 
         val selectLocBtn = makePillButton("🗺️ Select Location (Search / GPS / Maps)", "#0284C7", "#FFFFFF") {
-            if (!ensureEditUnlocked()) return@makePillButton
-            showSelectLocationDialog()
+            if (ensureEditUnlocked()) {
+                showSelectLocationDialog()
+            }
         }
         locationSectionCard.addView(selectLocBtn)
 
@@ -2436,18 +2448,19 @@ class MainActivity : AppCompatActivity() {
         addSpacer(wifiSectionCard, 10)
 
         val addCurrentWifiBtn = makePillButton("➕ Add Connected Wi-Fi", "#E0E7FF", "#3730A3") {
-            if (!ensureEditUnlocked()) return@makePillButton
-            val liveSsid = getConnectedWifiSsid()
-            if (liveSsid.isEmpty()) {
-                showStatusPopup(false, "Connect to office Wi-Fi & turn ON Location first")
-            } else {
-                val added = store.addTargetSsid(liveSsid)
-                syncBackgroundAndWidget()
-                refreshAllViews(animateCharts = false)
-                if (added) {
-                    showStatusPopup(true, "Added '$liveSsid' to office Wi-Fi list")
+            if (ensureEditUnlocked()) {
+                val liveSsid = getConnectedWifiSsid()
+                if (liveSsid.isEmpty()) {
+                    showStatusPopup(false, "Connect to office Wi-Fi & turn ON Location first")
                 } else {
-                    showStatusPopup(false, "'$liveSsid' is already in your Wi-Fi list")
+                    val added = store.addTargetSsid(liveSsid)
+                    syncBackgroundAndWidget()
+                    refreshAllViews(animateCharts = false)
+                    if (added) {
+                        showStatusPopup(true, "Added '$liveSsid' to office Wi-Fi list")
+                    } else {
+                        showStatusPopup(false, "'$liveSsid' is already in your Wi-Fi list")
+                    }
                 }
             }
         }
@@ -2468,17 +2481,18 @@ class MainActivity : AppCompatActivity() {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         val addManualSsidBtn = makeSmallChipButton("+ Add") {
-            if (!ensureEditUnlocked()) return@makeSmallChipButton
-            val typed = ssidInput.text.toString().trim()
-            if (typed.isEmpty()) {
-                showStatusPopup(false, "Enter a Wi-Fi SSID before adding")
-                return@makeSmallChipButton
+            if (ensureEditUnlocked()) {
+                val typed = ssidInput.text.toString().trim()
+                if (typed.isEmpty()) {
+                    showStatusPopup(false, "Enter a Wi-Fi SSID before adding")
+                } else {
+                    typed.split(",").forEach { store.addTargetSsid(it) }
+                    ssidInput.setText("")
+                    syncBackgroundAndWidget()
+                    refreshAllViews(animateCharts = false)
+                    showStatusPopup(true, "Saved Wi-Fi SSID")
+                }
             }
-            typed.split(",").forEach { store.addTargetSsid(it) }
-            ssidInput.setText("")
-            syncBackgroundAndWidget()
-            refreshAllViews(animateCharts = false)
-            showStatusPopup(true, "Saved Wi-Fi SSID")
         }
         manualWifiRow.addView(ssidInput)
         addHorizontalGap(manualWifiRow, 10)
@@ -2625,7 +2639,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 10, 0, 0)
         }
 
-                val clearUpcomingBtn = makeSmallChipButton("Clear Upcoming") {
+        val clearUpcomingBtn = makeSmallChipButton("Clear Upcoming") {
             if (ensureEditUnlocked()) {
                 val removedBatch = store.clearUpcomingHolidaysAndLeaves()
                 if (removedBatch.isNotEmpty()) {
@@ -2660,7 +2674,6 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
         }
         holidayBodyView.addView(upcomingHolLeaveListView)
-        
         addSpacer(holidayBodyView, 10)
 
         val holHint = TextView(this).apply {
@@ -2670,8 +2683,9 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 2, 0, 10)
         }
         val importHolBtn = makePillButton("🎉 Import Holidays (.ics / CSV)", "#8B5CF6", "#FFFFFF") {
-            if (!ensureEditUnlocked()) return@makePillButton
-            launchHolidayImport()
+            if (ensureEditUnlocked()) {
+                launchHolidayImport()
+            }
         }
         holidayBodyView.addView(holHint)
         holidayBodyView.addView(importHolBtn)
@@ -2700,8 +2714,9 @@ class MainActivity : AppCompatActivity() {
         addSpacer(backupCard, 10)
 
         val autoFolderBtn = makePillButton("🔄 Configure Auto-Backup Folder (Reuses Existing File)", "#0284C7", "#FFFFFF") {
-            if (!ensureEditUnlocked()) return@makePillButton
-            launchBackupFolderPicker()
+            if (ensureEditUnlocked()) {
+                launchBackupFolderPicker()
+            }
         }
         backupCard.addView(autoFolderBtn)
         addSpacer(backupCard, 10)
@@ -2714,7 +2729,7 @@ class MainActivity : AppCompatActivity() {
         }
         exportBtn.setOnClickListener { launchCsvExport() }
 
-           val importBtn = makePillButton("📂 Restore CSV", "#CBD5E1", "#0F172A").apply {
+        val importBtn = makePillButton("📂 Restore CSV", "#CBD5E1", "#0F172A").apply {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         importBtn.setOnClickListener {
@@ -3021,15 +3036,16 @@ class MainActivity : AppCompatActivity() {
             val rankIndex = ordered.indexOf(dow)
             val label = if (rankIndex >= 0) "${rankIndex + 1} • $shortLabel" else shortLabel
             val chip = makeModeChip(label) {
-                if (!ensureEditUnlocked()) return@makeModeChip
-                store.cycleWeekdayPriority(dow)
-                refreshAllViews(animateCharts = false)
-                val updatedOrder = store.getPreferredWeekdaysPriority()
-                val newIdx = updatedOrder.indexOf(dow)
-                if (newIdx >= 0) {
-                    showStatusPopup(true, "$shortLabel set to priority #${newIdx + 1}")
-                } else {
-                    showStatusPopup(true, "$shortLabel removed from priority list")
+                if (ensureEditUnlocked()) {
+                    store.cycleWeekdayPriority(dow)
+                    refreshAllViews(animateCharts = false)
+                    val updatedOrder = store.getPreferredWeekdaysPriority()
+                    val newIdx = updatedOrder.indexOf(dow)
+                    if (newIdx >= 0) {
+                        showStatusPopup(true, "$shortLabel set to priority #${newIdx + 1}")
+                    } else {
+                        showStatusPopup(true, "$shortLabel removed from priority list")
+                    }
                 }
             }
             styleModeChip(chip, rankIndex >= 0, "#4F46E5")
@@ -3093,14 +3109,17 @@ class MainActivity : AppCompatActivity() {
                 setTextColor(Color.parseColor("#EF4444"))
                 setPadding(14, 4, 6, 4)
                 setOnClickListener {
-                    if (!ensureEditUnlocked()) return@setOnClickListener
-                    val parsedDate = runCatching { LocalDate.parse(entry.dateStr) }.getOrNull() ?: return@setOnClickListener
-                    val prevType = store.getDayType(parsedDate)
-                    store.setExplicitDayType(parsedDate, DayType.NONE)
-                    syncBackgroundAndWidget()
-                    refreshAllViews(animateCharts = true)
-                    showUndoBanner("Removed ${entry.dateStr}", mapOf(parsedDate to prevType))
-                    showStatusPopup(true, "Removed ${entry.dateStr}")
+                    if (ensureEditUnlocked()) {
+                        val parsedDate = runCatching { LocalDate.parse(entry.dateStr) }.getOrNull()
+                        if (parsedDate != null) {
+                            val prevType = store.getDayType(parsedDate)
+                            store.setExplicitDayType(parsedDate, DayType.NONE)
+                            syncBackgroundAndWidget()
+                            refreshAllViews(animateCharts = true)
+                            showUndoBanner("Removed ${entry.dateStr}", mapOf(parsedDate to prevType))
+                            showStatusPopup(true, "Removed ${entry.dateStr}")
+                        }
+                    }
                 }
             }
             row.addView(labelTv)
@@ -3140,11 +3159,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun applyRadiusSelection(meters: Int) {
-        if (!ensureEditUnlocked()) return
-        store.setGeofenceRadiusMeters(meters)
-        syncBackgroundAndWidget()
-        refreshAllViews(animateCharts = false)
-        showStatusPopup(true, "Geofence radius updated to ${meters}m")
+        if (ensureEditUnlocked()) {
+            store.setGeofenceRadiusMeters(meters)
+            syncBackgroundAndWidget()
+            refreshAllViews(animateCharts = false)
+            showStatusPopup(true, "Geofence radius updated to ${meters}m")
+        }
     }
 
     @Suppress("DEPRECATION")
@@ -3188,56 +3208,56 @@ class MainActivity : AppCompatActivity() {
             val query = nameInput.text.toString().trim()
             if (query.isEmpty()) {
                 showStatusPopup(false, "Enter a place or office name to search")
-                return@makePillButton
-            }
-            searchResultsBox.removeAllViews()
-            val matches = runCatching {
-                val geocoder = Geocoder(this, Locale.getDefault())
-                geocoder.getFromLocationName(query, 5).orEmpty()
-            }.getOrElse { emptyList() }
-
-            if (matches.isEmpty()) {
-                showStatusPopup(false, "No matching location found for '$query'")
             } else {
-                matches.forEachIndexed { i, addr: Address ->
-                    val titleText = addr.featureName
-                        ?.takeIf { it.isNotBlank() && !it.all { ch -> ch.isDigit() } }
-                        ?: addr.locality
-                        ?: query
-                    val lineAddr = (0..addr.maxAddressLineIndex)
-                        .mapNotNull { idx -> addr.getAddressLine(idx) }
-                        .joinToString(", ")
-                        .ifEmpty { String.format(Locale.US, "%.5f, %.5f", addr.latitude, addr.longitude) }
+                searchResultsBox.removeAllViews()
+                val matches = runCatching {
+                    val geocoder = Geocoder(this, Locale.getDefault())
+                    geocoder.getFromLocationName(query, 5).orEmpty()
+                }.getOrElse { emptyList() }
 
-                    val resultBtn = makeSmallChipButton("📌 $lineAddr") {
-                        val chosenRadius = store.getGeofenceRadiusMeters()
-                        store.setOfficeLocation(titleText, addr.latitude, addr.longitude, chosenRadius)
-                        nameInput.setText(titleText)
-                        coordOrLinkInput.setText(
-                            String.format(Locale.US, "%.6f, %.6f", addr.latitude, addr.longitude)
-                        )
-                        syncBackgroundAndWidget()
-                        refreshAllViews(animateCharts = false)
-                        showStatusPopup(true, "Saved '$titleText' (${chosenRadius}m)")
-                    }.apply {
-                        gravity = Gravity.START
-                        setLineSpacing(4f, 1.0f)
-                        alpha = 0f
-                        translationY = 14f
-                        layoutParams = LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT
-                        ).apply { setMargins(0, 0, 0, 8) }
-                        animate()
-                            .alpha(1f)
-                            .translationY(0f)
-                            .setStartDelay((i * 55).toLong())
-                            .setDuration(220L)
-                            .start()
+                if (matches.isEmpty()) {
+                    showStatusPopup(false, "No matching location found for '$query'")
+                } else {
+                    matches.forEachIndexed { i, addr: Address ->
+                        val titleText = addr.featureName
+                            ?.takeIf { it.isNotBlank() && !it.all { ch -> ch.isDigit() } }
+                            ?: addr.locality
+                            ?: query
+                        val lineAddr = (0..addr.maxAddressLineIndex)
+                            .mapNotNull { idx -> addr.getAddressLine(idx) }
+                            .joinToString(", ")
+                            .ifEmpty { String.format(Locale.US, "%.5f, %.5f", addr.latitude, addr.longitude) }
+
+                        val resultBtn = makeSmallChipButton("📌 $lineAddr") {
+                            val chosenRadius = store.getGeofenceRadiusMeters()
+                            store.setOfficeLocation(titleText, addr.latitude, addr.longitude, chosenRadius)
+                            nameInput.setText(titleText)
+                            coordOrLinkInput.setText(
+                                String.format(Locale.US, "%.6f, %.6f", addr.latitude, addr.longitude)
+                            )
+                            syncBackgroundAndWidget()
+                            refreshAllViews(animateCharts = false)
+                            showStatusPopup(true, "Saved '$titleText' (${chosenRadius}m)")
+                        }.apply {
+                            gravity = Gravity.START
+                            setLineSpacing(4f, 1.0f)
+                            alpha = 0f
+                            translationY = 14f
+                            layoutParams = LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT,
+                                LinearLayout.LayoutParams.WRAP_CONTENT
+                            ).apply { setMargins(0, 0, 0, 8) }
+                            animate()
+                                .alpha(1f)
+                                .translationY(0f)
+                                .setStartDelay((i * 55).toLong())
+                                .setDuration(220L)
+                                .start()
+                        }
+                        searchResultsBox.addView(resultBtn)
                     }
-                    searchResultsBox.addView(resultBtn)
+                    showStatusPopup(true, "Found ${matches.size} match(es) — tap one to save")
                 }
-                showStatusPopup(true, "Found ${matches.size} match(es) — tap one to save")
             }
         }
         container.addView(searchByNameBtn)
@@ -3267,20 +3287,20 @@ class MainActivity : AppCompatActivity() {
 
             if (coords == null) {
                 showStatusPopup(false, "Tap a search result above, use GPS, or enter 'lat, lng'")
-                return@makePillButton
-            }
-            val (lat, lng) = coords
-            val enteredName = nameInput.text.toString().trim()
-            val finalName = if (enteredName.isNotEmpty()) {
-                enteredName
             } else {
-                resolvePlaceNameFromCoordinates(lat, lng)
+                val (lat, lng) = coords
+                val enteredName = nameInput.text.toString().trim()
+                val finalName = if (enteredName.isNotEmpty()) {
+                    enteredName
+                } else {
+                    resolvePlaceNameFromCoordinates(lat, lng)
+                }
+                store.setOfficeLocation(finalName, lat, lng, store.getGeofenceRadiusMeters())
+                coordOrLinkInput.setText(String.format(Locale.US, "%.6f, %.6f", lat, lng))
+                syncBackgroundAndWidget()
+                refreshAllViews(animateCharts = false)
+                showStatusPopup(true, "Saved location '$finalName'")
             }
-            store.setOfficeLocation(finalName, lat, lng, store.getGeofenceRadiusMeters())
-            coordOrLinkInput.setText(String.format(Locale.US, "%.6f, %.6f", lat, lng))
-            syncBackgroundAndWidget()
-            refreshAllViews(animateCharts = false)
-            showStatusPopup(true, "Saved location '$finalName'")
         }
         container.addView(saveManualBtn)
         addSpacer(container, 8)
@@ -3431,6 +3451,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun triggerManualCheckNow() {
         checkNowBtn.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        val today = LocalDate.now()
         val loc = getBestLastKnownLocation()
         if (loc != null) {
             store.setLastKnownLocation(loc.latitude, loc.longitude)
@@ -3442,9 +3463,12 @@ class MainActivity : AppCompatActivity() {
         if ((mode == TrackingMode.WIFI_ONLY || mode == TrackingMode.BOTH) && liveSsid.isNotEmpty()) {
             val targets = store.getTargetSsids()
             if (targets.any { it.equals(liveSsid, ignoreCase = true) }) {
-                val isNew = store.recordOfficePresence(liveSsid)
+                val wasPlanned = store.wasPlannedBeforeOffice(today)
+                val isNew = store.recordOfficePresence(liveSsid, today)
                 logged = true
-                if (isNew && store.isConnectAlertEnabled() && store.claimOnceFlag("notif_checkin_${LocalDate.now()}")) {
+                if (isNew && !wasPlanned) {
+                    notifyUnplannedOfficeAppreciation(today)
+                } else if (isNew && store.isConnectAlertEnabled() && store.claimOnceFlag("notif_checkin_$today")) {
                     sendAlertNotification(this, "✅ Office Day Logged ($liveSsid)", "Connected to office Wi-Fi.")
                 }
                 postAnimatedStatusNotification("✅ Office Presence Active", "Matched Wi-Fi: $liveSsid", activePresence = true)
@@ -3455,9 +3479,12 @@ class MainActivity : AppCompatActivity() {
             val dist = store.distanceToOfficeMeters(loc.latitude, loc.longitude)
             if (dist != null && dist <= store.getGeofenceRadiusMeters()) {
                 val label = store.getOfficeLocationName().ifEmpty { "Office Geofence" }
-                val isNew = store.recordOfficePresence(label)
+                val wasPlanned = store.wasPlannedBeforeOffice(today)
+                val isNew = store.recordOfficePresence(label, today)
                 logged = true
-                if (isNew && store.isConnectAlertEnabled() && store.claimOnceFlag("notif_checkin_${LocalDate.now()}")) {
+                if (isNew && !wasPlanned) {
+                    notifyUnplannedOfficeAppreciation(today)
+                } else if (isNew && store.isConnectAlertEnabled() && store.claimOnceFlag("notif_checkin_$today")) {
                     sendAlertNotification(this, "✅ Office Day Logged ($label)", "Within ${store.getGeofenceRadiusMeters()}m office zone.")
                 }
                 postAnimatedStatusNotification("✅ Office Presence Active", "Inside ${store.getGeofenceRadiusMeters()}m zone ($label)", activePresence = true)
@@ -3618,7 +3645,6 @@ class MainActivity : AppCompatActivity() {
             if (isEditUnlocked) (if (isDark) Color.parseColor("#A7F3D0") else Color.parseColor("#065F46")) else cTextPrimary()
         )
 
-        // Top Live Banner with Current Day & Date (EEE, dd MMM)
         val today = LocalDate.now()
         val todayType = store.getDayType(today)
         val isOnOfficePresence = store.wasConnectedToOfficeWifi()
@@ -3704,6 +3730,9 @@ class MainActivity : AppCompatActivity() {
             clearPlanBtn.visibility = if (s.plannedTotalCount > 0) View.VISIBLE else View.GONE
         }
 
+        val plannedCoversTarget = s.futurePlannedDays > 0 && s.projectedAttendedDays >= s.requiredDays
+        val extraPlannedDays = maxOf(0, s.projectedAttendedDays - s.requiredDays)
+
         val progressColorHex: String
         val cardFillHex: String
         val cardStrokeHex: String
@@ -3712,6 +3741,13 @@ class MainActivity : AppCompatActivity() {
 
         when {
             s.remainingDays == 0 -> {
+                progressColorHex = "#10B981"
+                cardFillHex = if (isDark) "#064E3B" else "#ECFDF5"
+                cardStrokeHex = "#10B981"
+                headlineColor = if (isDark) Color.parseColor("#A7F3D0") else Color.parseColor("#065F46")
+                subColor = if (isDark) Color.parseColor("#D1FAE5") else Color.parseColor("#047857")
+            }
+            plannedCoversTarget -> {
                 progressColorHex = "#10B981"
                 cardFillHex = if (isDark) "#064E3B" else "#ECFDF5"
                 cardStrokeHex = "#10B981"
@@ -3742,11 +3778,19 @@ class MainActivity : AppCompatActivity() {
             briefingCardView.background = roundedBox(cardFillHex, cardStrokeHex, 18f, 1)
 
             if (isCurrentMonth) {
-                briefingHeadlineView.text = r.safeToWfhVerdict
+                briefingHeadlineView.text = if (s.remainingDays > 0 && plannedCoversTarget) {
+                    "🎯 Target Covered via Planned (${s.projectedAttendedDays}/${s.requiredDays} days • ${s.projectedPercent}% proj.)"
+                } else {
+                    r.safeToWfhVerdict
+                }
                 briefingHeadlineView.setTextColor(headlineColor)
 
                 val monthlySummary = when {
                     s.remainingDays == 0 -> "${s.targetPercent}% monthly mandate met (${s.attendedDays}/${s.requiredDays} days)"
+                    plannedCoversTarget -> {
+                        val extraTag = if (extraPlannedDays > 0) " (+$extraPlannedDays over target)" else ""
+                        "Covered with +${s.futurePlannedDays} planned$extraTag • ${maxOf(0, s.bufferDays)} WFH buffer left"
+                    }
                     s.bufferDays < 0 -> "Shortfall: ${s.remainingDays} day(s) needed across ${s.availableWeekdaysLeft} left"
                     s.bufferDays == 0 -> "Zero buffer: all ${s.availableWeekdaysLeft} working day(s) needed"
                     else -> "On track • ${s.bufferDays} WFH buffer day(s) left"
@@ -3789,6 +3833,8 @@ class MainActivity : AppCompatActivity() {
                     val plannedSuffix = if (s.futurePlannedDays > 0) " • ${s.futurePlannedDays} planned" else ""
                     if (s.remainingDays == 0) {
                         briefingHeadlineView.text = "✅ ${s.monthLabel} — Target Met$plannedSuffix"
+                    } else if (plannedCoversTarget) {
+                        briefingHeadlineView.text = "🎯 ${s.monthLabel} — Target covered via planned (${s.projectedAttendedDays}/${s.requiredDays} • ${s.projectedPercent}%)$plannedSuffix"
                     } else if (s.bufferDays < 0) {
                         briefingHeadlineView.text = "⚠️ ${s.monthLabel} — Shortfall risk: ${s.remainingDays} day(s) needed across ${s.availableWeekdaysLeft} left$plannedSuffix"
                     } else {
@@ -3812,8 +3858,26 @@ class MainActivity : AppCompatActivity() {
 
         if (s.futurePlannedDays > 0) {
             heroProjectedView.visibility = View.VISIBLE
-            heroProjectedView.text =
+            heroProjectedView.background = roundedBox(
+                if (plannedCoversTarget) (if (isDark) "#064E3B" else "#ECFDF5")
+                else (if (isDark) "#1E1B4B" else "#EEF2FF"),
+                if (plannedCoversTarget) "#10B981" else "#6366F1",
+                12f,
+                1
+            )
+            heroProjectedView.setTextColor(
+                if (plannedCoversTarget) {
+                    if (isDark) Color.parseColor("#A7F3D0") else Color.parseColor("#065F46")
+                } else {
+                    if (isDark) Color.parseColor("#A5B4FC") else Color.parseColor("#3730A3")
+                }
+            )
+            val cushionSuffix = if (extraPlannedDays > 0) " (+$extraPlannedDays above target)" else ""
+            heroProjectedView.text = if (plannedCoversTarget) {
+                "🎯 Target covered with +${s.futurePlannedDays} planned → ${s.projectedAttendedDays}/${s.requiredDays} days (${s.projectedPercent}% vs ${s.targetPercent}%)$cushionSuffix"
+            } else {
                 "📅 +${s.futurePlannedDays} planned → Projected: ${s.projectedAttendedDays}/${s.requiredDays} days (${s.projectedPercent}%)"
+            }
         } else {
             heroProjectedView.visibility = View.GONE
         }
@@ -4037,11 +4101,12 @@ class MainActivity : AppCompatActivity() {
                 setTextColor(Color.parseColor("#EF4444"))
                 setPadding(16, 4, 8, 4)
                 setOnClickListener {
-                    if (!ensureEditUnlocked()) return@setOnClickListener
-                    store.removeTargetSsid(ssid)
-                    syncBackgroundAndWidget()
-                    refreshAllViews(animateCharts = false)
-                    showStatusPopup(true, "Removed '$ssid'")
+                    if (ensureEditUnlocked()) {
+                        store.removeTargetSsid(ssid)
+                        syncBackgroundAndWidget()
+                        refreshAllViews(animateCharts = false)
+                        showStatusPopup(true, "Removed '$ssid'")
+                    }
                 }
             }
             chipRow.addView(nameTv)
@@ -4177,23 +4242,23 @@ class MainActivity : AppCompatActivity() {
                     cellWrapper.setOnClickListener { view ->
                         if (!isEditUnlocked) {
                             showDayInspectorDialog(date)
-                            return@setOnClickListener
-                        }
-                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                        animateCellPop(view)
-                        val prevType = dtype
-                        val resulting = store.applyManualDayType(date, activeTapMode)
-                        syncBackgroundAndWidget()
-                        refreshAllViews(animateCharts = false)
-                        if (activeTapMode == DayType.OFFICE && resulting == DayType.OFFICE && prevType != DayType.OFFICE) {
-                            handleUnplannedOfficeLogged(date)
                         } else {
-                            val msg = if (resulting == DayType.NONE) {
-                                "Cleared $dateStr"
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            animateCellPop(view)
+                            val prevType = dtype
+                            val resulting = store.applyManualDayType(date, activeTapMode)
+                            syncBackgroundAndWidget()
+                            refreshAllViews(animateCharts = false)
+                            if (activeTapMode == DayType.OFFICE && resulting == DayType.OFFICE && prevType != DayType.OFFICE) {
+                                handleUnplannedOfficeLogged(date)
                             } else {
-                                "Marked $dateStr as ${resulting.name}"
+                                val msg = if (resulting == DayType.NONE) {
+                                    "Cleared $dateStr"
+                                } else {
+                                    "Marked $dateStr as ${resulting.name}"
+                                }
+                                showStatusPopup(true, msg)
                             }
-                            showStatusPopup(true, msg)
                         }
                     }
 
@@ -4389,21 +4454,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun handleUnplannedOfficeLogged(date: LocalDate) {
-        val updatedStats = store.getMonthStats(YearMonth.from(date))
-        val msg = if (updatedStats.remainingDays == 0) {
-            "Great job! Extra office day on $date logged — ${updatedStats.targetPercent}% monthly mandate met with extra cushion."
+    private fun notifyUnplannedOfficeAppreciation(date: LocalDate) {
+        val stats = store.getMonthStats(YearMonth.from(date))
+        val msg = if (stats.remainingDays == 0) {
+            "Extra office day on $date banked! ${stats.targetPercent}% monthly mandate met with extra cushion."
         } else {
-            "Nice extra office day on $date! Kept existing plans intact • ${updatedStats.remainingDays} still needed • ${maxOf(0, updatedStats.bufferDays)} WFH buffer left."
+            "Extra office day on $date appreciated! ${stats.remainingDays} still needed • ${maxOf(0, stats.bufferDays)} WFH buffer left (plans untouched)."
+        }
+        if (store.claimUnplannedAppreciationOnce(date)) {
+            postAnimatedStatusNotification("🌟 Extra Office Day Banked", msg, activePresence = true)
         }
         showStatusPopup(true, msg)
+    }
+
+    private fun handleUnplannedOfficeLogged(date: LocalDate) {
+        notifyUnplannedOfficeAppreciation(date)
     }
 
     private fun showMissedPlannedDayFlow(missedDate: LocalDate) {
         if (!ensureEditUnlocked()) return
         val formattedDate = missedDate.format(DateTimeFormatter.ofPattern("EEE, dd MMM"))
 
-        // Step 1: Ask whether the missed planned day was Leave or Holiday (or keep unmarked)
         AlertDialog.Builder(this)
             .setTitle("Missed Planned Day ($formattedDate)")
             .setMessage("Step 1 of 2: Was $formattedDate a Leave or Holiday?")
@@ -4700,9 +4771,7 @@ class MainActivity : AppCompatActivity() {
     private fun requestBackgroundLocation() {
         if (!hasLocationPermission()) {
             requestForegroundAndNotifPermissions()
-            return
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !hasBackgroundLocationPermission()) {
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !hasBackgroundLocationPermission()) {
             ActivityCompat.requestPermissions(
                 this, arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION), 11
             )
@@ -5125,7 +5194,7 @@ class MainActivity : AppCompatActivity() {
                 val barBottom = topMargin + chartHeight
 
                 barPaint.color = Color.parseColor(
-                    if (pt.actualPercent >= pt.targetPercent) "#10B981" else "#4F46E5"
+                    if (pt.actualPercent >= pt.targetPercent) "#10B981" else "#8B5CF6"
                 )
                 val barRect = RectF(cx - barHalfW, barTop.coerceAtMost(barBottom - 6f), cx + barHalfW, barBottom)
                 canvas.drawRoundRect(barRect, 10f, 10f, barPaint)
