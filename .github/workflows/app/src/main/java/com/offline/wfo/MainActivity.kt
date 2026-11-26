@@ -4236,6 +4236,448 @@ class MainActivity : AppCompatActivity() {
             ym = selectedMonth,
             extraSimulatedLeaves = simLeaves,
             extraSimulatedHolidays = simHolidays
+    private fun refreshAllViews(animateCharts: Boolean = false) {
+        updateLockScreenStatusCard()
+
+        if (::setupFullLockSwitch.isInitialized && !setupFullLockSwitch.isPressed) {
+            setupFullLockSwitch.isChecked = store.isFullAppLockEnabled()
+        }
+
+        val locOk = hasLocationPermission()
+        val notifOk = hasNotificationPermission()
+        val bgLocOk = hasBackgroundLocationPermission()
+        val gpsOk = isSystemLocationEnabled()
+        val alarmOk = canScheduleExactAlarms()
+        val batOk = isBatteryUnrestricted()
+        val liveSsid = getConnectedWifiSsid()
+        val targetPct = store.getTargetPercent()
+        val mode = store.getTrackingMode()
+        val themeChoice = getThemeChoice()
+
+        if (::themeSystemBtn.isInitialized) styleModeChip(themeSystemBtn, themeChoice == ThemeChoice.SYSTEM, "#4F46E5")
+        if (::themeLightBtn.isInitialized) styleModeChip(themeLightBtn, themeChoice == ThemeChoice.LIGHT, "#0284C7")
+        if (::themeDarkBtn.isInitialized) styleModeChip(themeDarkBtn, themeChoice == ThemeChoice.DARK, "#334155")
+
+        if (::activeThemeStatusView.isInitialized) {
+            val modeName = when (themeChoice) {
+                ThemeChoice.SYSTEM -> "System"
+                ThemeChoice.LIGHT -> "Light"
+                ThemeChoice.DARK -> "Dark"
+            }
+            val activeSurface = if (isDark) "Dark" else "Light"
+            activeThemeStatusView.text = "Selected: $modeName • Active: $activeSurface (glassmorphism UI)"
+        }
+
+        val avatarBmp = loadCircularAvatarBitmap()
+        setupAvatarView.setImageBitmap(avatarBmp)
+        dashAvatarView.setImageBitmap(avatarBmp)
+
+        setupPermStatusView.text = if (locOk && notifOk) {
+            "✅ Location & Notifications: Allowed"
+        } else {
+            "⚠️ Location & Notifications: Action Required"
+        }
+        setupPermStatusView.setTextColor(Color.parseColor(if (locOk && notifOk) "#10B981" else "#EF4444"))
+
+        setupBgLocStatusView.text = if (bgLocOk) {
+            "✅ Background Location: Allow all the time"
+        } else {
+            "⚠️ Background Location: Must set to \"Allow all the time\""
+        }
+        setupBgLocStatusView.setTextColor(Color.parseColor(if (bgLocOk) "#10B981" else "#EF4444"))
+
+        setupGpsStatusView.text = if (gpsOk) {
+            "✅ Phone Location (GPS) Switch: ON"
+        } else {
+            "⚠️ Phone Location (GPS) Switch: OFF (Android hides Wi-Fi if OFF)"
+        }
+        setupGpsStatusView.setTextColor(Color.parseColor(if (gpsOk) "#10B981" else "#EF4444"))
+
+        val alarmLabel = if (alarmOk) {
+            "✅ Exact Alarms: Ready (On-Time Reminders)"
+        } else {
+            "⚠️ Exact Alarms: Action Required (May Be Delayed)"
+        }
+        val alarmColor = Color.parseColor(if (alarmOk) "#10B981" else "#F59E0B")
+        setupExactAlarmStatusView.text = alarmLabel
+        setupExactAlarmStatusView.setTextColor(alarmColor)
+
+        if (::settingsNotifPermStatusView.isInitialized) {
+            settingsNotifPermStatusView.text = if (notifOk) {
+                "🔔 System Notification Permission: Allowed"
+            } else {
+                "🔕 System Notification Permission: Not Allowed (Tap Setup to grant)"
+            }
+            settingsNotifPermStatusView.setTextColor(
+                Color.parseColor(if (notifOk) "#10B981" else "#F59E0B")
+            )
+        }
+
+        if (::settingsExactAlarmStatusView.isInitialized) {
+            settingsExactAlarmStatusView.text = alarmLabel
+            settingsExactAlarmStatusView.setTextColor(alarmColor)
+            settingsExactAlarmStatusView.background = GlassUiTheme.glassCard(
+                isDark,
+                14f,
+                if (alarmOk) "#8C064E3B" else "#8C451A03"
+            )
+        }
+
+        setupBatteryStatusView.text = if (batOk) {
+            "✅ Background Battery: Unrestricted"
+        } else {
+            "⚠️ Background Battery: Restricted (Tap below & choose Allow)"
+        }
+        setupBatteryStatusView.setTextColor(Color.parseColor(if (batOk) "#10B981" else "#EF4444"))
+
+        setupLiveWifiView.text = if (liveSsid.isEmpty()) {
+            "Detected Wi-Fi: None (Connect to office Wi-Fi or type below)"
+        } else {
+            "Detected Wi-Fi: $liveSsid"
+        }
+        setupLocationSummaryView.text = if (store.hasOfficeLocationConfigured()) {
+            "Office Zone: ${store.getOfficeLocationName()} (${store.getGeofenceRadiusMeters()}m radius)"
+        } else {
+            "Office Zone: Not configured yet (${store.getGeofenceRadiusMeters()}m default radius)"
+        }
+        setupTargetPctView.text = "Mandate Target: $targetPct%"
+
+        val health = store.getBackupHealthInfo()
+        setupBackupFolderStatusView.text = health.statusText
+        autoBackupStatusView.text = health.statusText
+        autoBackupStatusView.setTextColor(
+            when {
+                !health.configured -> cTextSecondary()
+                health.healthy -> Color.parseColor("#10B981")
+                else -> Color.parseColor("#EF4444")
+            }
+        )
+
+        val uName = store.getUserName()
+        dashGreetingView.text = if (uName.isNotEmpty()) "Hi, $uName" else "Hi there"
+
+        val trackingReady = locOk && gpsOk && when (mode) {
+            TrackingMode.WIFI_ONLY -> store.getTargetSsids().isNotEmpty()
+            TrackingMode.LOCATION_ONLY -> store.hasOfficeLocationConfigured()
+            TrackingMode.BOTH -> store.getTargetSsids().isNotEmpty() || store.hasOfficeLocationConfigured()
+        }
+        if (trackingReady) {
+            dashServiceStatusView.text = "Auto-Tracking Active"
+            dashServiceStatusView.setTextColor(Color.parseColor("#10B981"))
+            heartbeatDotView.background = roundedBox("#10B981", "#10B981", 999f, 0)
+            startHeartbeatAnimation(true)
+        } else {
+            dashServiceStatusView.text = "Setup Incomplete (Tap Settings)"
+            dashServiceStatusView.setTextColor(Color.parseColor("#F59E0B"))
+            heartbeatDotView.background = roundedBox("#F59E0B", "#F59E0B", 999f, 0)
+            startHeartbeatAnimation(false)
+        }
+
+        lockToggleBtn.text = if (isEditUnlocked) "🔓 Unlocked" else "🔒 Locked"
+        lockToggleBtn.background = roundedBox(
+            if (isEditUnlocked) "#064E3B" else "#660F172A",
+            if (isEditUnlocked) "#10B981" else cBorder(),
+            16f,
+            2
+        )
+        lockToggleBtn.setTextColor(
+            if (isEditUnlocked) Color.parseColor("#A7F3D0") else cTextPrimary()
+        )
+
+        val today = LocalDate.now()
+        val todayType = store.getDayType(today)
+        val isOnOfficePresence = store.wasConnectedToOfficeWifi()
+        val activeSource = store.getActiveOfficeSsid()
+        val todayStamp = today.format(DateTimeFormatter.ofPattern("EEE, dd MMM", Locale.getDefault()))
+
+        val disconnectedLabel = when (mode) {
+            TrackingMode.LOCATION_ONLY -> "Not at office location"
+            TrackingMode.WIFI_ONLY -> "Not connected to office Wi-Fi"
+            TrackingMode.BOTH -> "Not at office"
+        }
+
+        startLiveStripPulse(isOnOfficePresence)
+
+        when {
+            isOnOfficePresence -> {
+                val srcTag = if (activeSource.isNotEmpty()) " ($activeSource)" else ""
+                todayLiveStripView.text = "🟢 $todayStamp • At Office$srcTag"
+                todayLiveStripView.setTextColor(Color.parseColor("#A7F3D0"))
+                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f, "#8C064E3B")
+            }
+            todayType == DayType.OFFICE -> {
+                todayLiveStripView.text = "✅ $todayStamp • Office Day Logged"
+                todayLiveStripView.setTextColor(Color.parseColor("#A7F3D0"))
+                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f, "#8C064E3B")
+            }
+            todayType == DayType.PLANNED -> {
+                todayLiveStripView.text = "📅 $todayStamp • Planned Office Day"
+                todayLiveStripView.setTextColor(Color.parseColor("#C7D2FE"))
+                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f, "#8C1E1B4B")
+            }
+            todayType == DayType.LEAVE -> {
+                todayLiveStripView.text = "🌴 $todayStamp • On Leave"
+                todayLiveStripView.setTextColor(Color.parseColor("#FDE68A"))
+                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f, "#8C451A03")
+            }
+            todayType == DayType.HOLIDAY -> {
+                todayLiveStripView.text = "🎉 $todayStamp • Holiday"
+                todayLiveStripView.setTextColor(Color.parseColor("#DDD6FE"))
+                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f, "#8C2E1065")
+            }
+            else -> {
+                todayLiveStripView.text = "🏠 $todayStamp • WFH ($disconnectedLabel)"
+                todayLiveStripView.setTextColor(cTextSecondary())
+                todayLiveStripView.background = GlassUiTheme.glassCard(isDark, 18f)
+            }
+        }
+
+        todayJumpBtn.visibility = if (selectedMonth != YearMonth.now()) View.VISIBLE else View.GONE
+
+        val s = store.getMonthStats(selectedMonth)
+        val w = store.getWeeklyPaceStats()
+        val r = store.getRhythmStats()
+
+        monthTitleView.text = s.monthLabel
+
+        if (::clearPlanBtn.isInitialized) {
+            clearPlanBtn.visibility = if (s.plannedTotalCount > 0) View.VISIBLE else View.GONE
+        }
+
+        val plannedCoversTarget = s.futurePlannedDays > 0 && s.projectedAttendedDays >= s.requiredDays
+        val extraPlannedDays = maxOf(0, s.projectedAttendedDays - s.requiredDays)
+
+        val progressColorHex: String
+        val cardFillHex: String
+        val headlineColor: Int
+        val subColor: Int
+
+        when {
+            s.remainingDays == 0 -> {
+                progressColorHex = "#10B981"
+                cardFillHex = "#8C064E3B"
+                headlineColor = Color.parseColor("#A7F3D0")
+                subColor = Color.parseColor("#D1FAE5")
+            }
+            plannedCoversTarget -> {
+                progressColorHex = "#10B981"
+                cardFillHex = "#8C064E3B"
+                headlineColor = Color.parseColor("#A7F3D0")
+                subColor = Color.parseColor("#D1FAE5")
+            }
+            s.bufferDays <= 0 -> {
+                progressColorHex = "#EF4444"
+                cardFillHex = "#8C450A0A"
+                headlineColor = Color.parseColor("#FECACA")
+                subColor = Color.parseColor("#FEE2E2")
+            }
+            else -> {
+                progressColorHex = "#4F46E5"
+                cardFillHex = "#8C1E293B"
+                headlineColor = Color.parseColor("#FDE68A")
+                subColor = Color.parseColor("#E2E8F0")
+            }
+        }
+
+        val currentYm = YearMonth.from(today)
+        val isCurrentMonth = selectedMonth == currentYm
+        val isPastMonth = selectedMonth.isBefore(currentYm)
+
+        if (::briefingCardView.isInitialized) {
+            briefingCardView.background = GlassUiTheme.glassCard(isDark, 24f, cardFillHex)
+
+            if (isCurrentMonth) {
+                briefingHeadlineView.text = if (s.remainingDays > 0 && plannedCoversTarget) {
+                    "🎯 Target Covered via Planned (${s.projectedAttendedDays}/${s.requiredDays} days • ${s.projectedPercent}% proj.)"
+                } else {
+                    r.safeToWfhVerdict
+                }
+                briefingHeadlineView.setTextColor(headlineColor)
+
+                val monthlySummary = when {
+                    s.remainingDays == 0 -> "${s.targetPercent}% monthly mandate met (${s.attendedDays}/${s.requiredDays} days)"
+                    plannedCoversTarget -> {
+                        val extraTag = if (extraPlannedDays > 0) " (+$extraPlannedDays over target)" else ""
+                        "Covered with +${s.futurePlannedDays} planned$extraTag • ${maxOf(0, s.bufferDays)} WFH buffer left"
+                    }
+                    s.bufferDays < 0 -> "Shortfall: ${s.remainingDays} day(s) needed across ${s.availableWeekdaysLeft} left"
+                    s.bufferDays == 0 -> "Zero buffer: all ${s.availableWeekdaysLeft} working day(s) needed"
+                    else -> "On track • ${s.bufferDays} WFH buffer day(s) left"
+                }
+                briefingSubView.visibility = View.VISIBLE
+                briefingSubView.text = "$monthlySummary • Window ${r.learnedArrivalWindowLabel}"
+                briefingSubView.setTextColor(subColor)
+
+                briefingWeeklyView.visibility = View.VISIBLE
+                briefingWeeklyView.text = if (w.remainingThisWeek == 0) {
+                    "📆 This Week: ${w.attendedThisWeek}/${w.weeklyQuota} days done (pace met)"
+                } else {
+                    "📆 This Week: ${w.attendedThisWeek}/${w.weeklyQuota} days done • Need ${w.remainingThisWeek} more (${w.weekdaysLeftThisWeek} left)"
+                }
+                briefingWeeklyView.setTextColor(cTextPrimary())
+
+                val daysLeftInMonth = selectedMonth.atEndOfMonth().dayOfMonth - today.dayOfMonth
+                if (s.remainingDays > 0 && daysLeftInMonth in 0..7 && s.recoverySuggestedDates.isNotEmpty()) {
+                    val dateList = s.recoverySuggestedDates.joinToString(", ") {
+                        it.format(DateTimeFormatter.ofPattern("dd MMM (EEE)"))
+                    }
+                    briefingRecoveryView.visibility = View.VISIBLE
+                    briefingRecoveryView.setTextColor(subColor)
+                    briefingRecoveryView.text = "📌 Suggested dates: $dateList (${String.format(Locale.US, "%.2f", s.requiredDailyRunRate)}/wkday)"
+                } else {
+                    briefingRecoveryView.visibility = View.GONE
+                }
+            } else {
+                briefingSubView.visibility = View.GONE
+                briefingWeeklyView.visibility = View.GONE
+                briefingRecoveryView.visibility = View.GONE
+
+                if (isPastMonth) {
+                    if (s.remainingDays == 0) {
+                        briefingHeadlineView.text = "✅ ${s.monthLabel} — Target Met (${s.attendedDays}/${s.requiredDays} days • ${s.actualPercent}%)"
+                    } else {
+                        briefingHeadlineView.text = "⚠️ ${s.monthLabel} — Shortfall of ${s.remainingDays} day(s) (${s.attendedDays}/${s.requiredDays} days)"
+                    }
+                } else {
+                    val plannedSuffix = if (s.futurePlannedDays > 0) " • ${s.futurePlannedDays} planned" else ""
+                    if (s.remainingDays == 0) {
+                        briefingHeadlineView.text = "✅ ${s.monthLabel} — Target Met$plannedSuffix"
+                    } else if (plannedCoversTarget) {
+                        briefingHeadlineView.text = "🎯 ${s.monthLabel} — Target covered via planned (${s.projectedAttendedDays}/${s.requiredDays} • ${s.projectedPercent}%)$plannedSuffix"
+                    } else if (s.bufferDays < 0) {
+                        briefingHeadlineView.text = "⚠️ ${s.monthLabel} — Shortfall risk: ${s.remainingDays} day(s) needed across ${s.availableWeekdaysLeft} left$plannedSuffix"
+                    } else {
+                        briefingHeadlineView.text = "📅 ${s.monthLabel} — On track • ${s.remainingDays} needed • ${s.bufferDays} WFH buffer$plannedSuffix"
+                    }
+                }
+                briefingHeadlineView.setTextColor(headlineColor)
+            }
+        }
+
+        circularRingView.setData(
+            attended = s.attendedDays,
+            projected = s.projectedAttendedDays,
+            required = s.requiredDays,
+            actualPct = s.actualPercent,
+            accentColorHex = progressColorHex,
+            isDark = isDark,
+            animate = animateCharts
+        )
+        heroSubView.text = "${s.actualPercent}% of ${s.effectiveWorkingDays} working days (${s.targetPercent}% mandate)"
+
+        if (s.futurePlannedDays > 0) {
+            heroProjectedView.visibility = View.VISIBLE
+            heroProjectedView.background = GlassUiTheme.glassCard(
+                isDark,
+                16f,
+                if (plannedCoversTarget) "#8C064E3B" else "#8C1E1B4B"
+            )
+            heroProjectedView.setTextColor(
+                if (plannedCoversTarget) Color.parseColor("#A7F3D0") else Color.parseColor("#C7D2FE")
+            )
+            val cushionSuffix = if (extraPlannedDays > 0) " (+$extraPlannedDays above target)" else ""
+            heroProjectedView.text = if (plannedCoversTarget) {
+                "🎯 Target covered with +${s.futurePlannedDays} planned → ${s.projectedAttendedDays}/${s.requiredDays} days (${s.projectedPercent}% vs ${s.targetPercent}%)$cushionSuffix"
+            } else {
+                "📅 +${s.futurePlannedDays} planned → Projected: ${s.projectedAttendedDays}/${s.requiredDays} days (${s.projectedPercent}%)"
+            }
+        } else {
+            heroProjectedView.visibility = View.GONE
+        }
+
+        kpiWorkingNumView.text = "${s.effectiveWorkingDays}"
+        kpiWorkingNumView.setTextColor(cTextPrimary())
+
+        kpiRemainingNumView.text = "${s.remainingDays}"
+        kpiRemainingNumView.setTextColor(
+            if (s.remainingDays == 0) Color.parseColor("#10B981") else Color.parseColor("#C7D2FE")
+        )
+
+        val safeBuffer = maxOf(0, s.bufferDays)
+        kpiBufferNumView.text = "$safeBuffer"
+        kpiBufferNumView.setTextColor(
+            when {
+                s.remainingDays == 0 || safeBuffer >= 2 -> Color.parseColor("#10B981")
+                safeBuffer == 1 -> Color.parseColor("#FDE68A")
+                else -> Color.parseColor("#FECACA")
+            }
+        )
+
+        styleModeChip(modeOfficeBtn, activeTapMode == DayType.OFFICE, "#10B981")
+        styleModeChip(modePlannedBtn, activeTapMode == DayType.PLANNED, "#4F46E5")
+        styleModeChip(modeLeaveBtn, activeTapMode == DayType.LEAVE, "#F59E0B")
+        styleModeChip(modeHolidayBtn, activeTapMode == DayType.HOLIDAY, "#8B5CF6")
+
+        renderCalendarGrid(s)
+
+        val arrow = if (isMonthlyLogExpanded) "▲" else "▼"
+        logHeaderToggleView.text = "Monthly Log & Timestamps (${s.dayLogs.size} entries • ${s.attendedDays} Office)   $arrow"
+        logExpandBodyView.visibility = if (isMonthlyLogExpanded) View.VISIBLE else View.GONE
+
+        if (::logSummaryBarView.isInitialized) {
+            logSummaryBarView.text =
+                "🏢 ${s.attendedDays} Office  •  📅 ${s.plannedTotalCount} Planned  •  🌴 ${s.leaveDays} Leave  •  🎉 ${s.holidayDays} Holiday"
+        }
+
+        styleModeChip(filterAllBtn, activeLogFilter == LogFilter.ALL, "#334155")
+        styleModeChip(filterOfficeBtn, activeLogFilter == LogFilter.OFFICE, "#10B981")
+        styleModeChip(filterPlannedBtn, activeLogFilter == LogFilter.PLANNED, "#4F46E5")
+        styleModeChip(filterLeaveHolBtn, activeLogFilter == LogFilter.LEAVE_HOLIDAY, "#F59E0B")
+
+        val filteredLogs = s.dayLogs.filter { log ->
+            when (activeLogFilter) {
+                LogFilter.ALL -> true
+                LogFilter.OFFICE -> log.type == DayType.OFFICE
+                LogFilter.PLANNED -> log.type == DayType.PLANNED
+                LogFilter.LEAVE_HOLIDAY -> log.type == DayType.LEAVE || log.type == DayType.HOLIDAY
+            }
+        }
+        if (filteredLogs.isEmpty()) {
+            auditLogView.gravity = Gravity.CENTER
+            auditLogView.setTextColor(cTextSecondary())
+            auditLogView.text = "📭 No matching entries in ${s.monthLabel}.\nTap ✨ Auto-Plan above or unlock 🔒 to log days."
+        } else {
+            auditLogView.gravity = Gravity.START
+            auditLogView.setTextColor(cTextPrimary())
+            auditLogView.text = filteredLogs.joinToString("\n") { log ->
+                val icon = when (log.type) {
+                    DayType.OFFICE -> "🏢"
+                    DayType.PLANNED -> "📅"
+                    DayType.LEAVE -> "🌴"
+                    DayType.HOLIDAY -> "🎉"
+                    DayType.NONE -> "•"
+                }
+                "$icon ${log.dateStr} (${log.dayOfWeekShort}) — ${log.detail}"
+            }
+        }
+
+        val q = store.getQuarterStats(selectedMonth)
+        val trends = store.getMultiMonthTrend(selectedMonth, 6)
+        if (::trendLegendView.isInitialized) {
+            trendLegendView.text = "🟢 Met ≥$targetPct%   •   🟣 Below $targetPct%   •   🟠 Target Line ($targetPct%)"
+        }
+        trendChartView.setData(trends, isDark, animate = animateCharts)
+
+        if (::runRateFollowThroughView.isInitialized) {
+            runRateFollowThroughView.text =
+                "⚡ Run-Rate: ${String.format(Locale.US, "%.2f", s.requiredDailyRunRate)}/wkday • 🎯 Follow-Through: ${s.planFollowThroughPercent}% • ⏱️ Avg: ${String.format(Locale.US, "%.1f", s.avgOfficeHours)}h"
+        }
+        if (::bufferTrajectoryView.isInitialized) {
+            bufferTrajectoryView.text = "📈 ${s.bufferTrajectoryLabel}   •   ${q.driftSummary}"
+        }
+
+        qtdTitleView.text = "${q.quarterLabel} Rollup"
+        qtdDetailView.text =
+            "Attended ${q.attendedDays} / ${q.requiredDays} required days (${q.actualPercent}% of ${q.effectiveWorkingDays} working days)"
+        qtdLeaveHolView.text = "🌴 Quarterly Leaves: ${q.leaveDays}   •   🎉 Quarterly Holidays: ${q.holidayDays}"
+        rhythmView.text = "🔥 ${r.weeklyStreak}-week streak   •   📍 Top days: ${r.topDaysLabel}"
+
+        simLeaveCountView.text = "Simulated Extra Leaves: +$simLeaves"
+        simHolidayCountView.text = "Simulated Extra Holidays: +$simHolidays"
+        val simStats = store.getMonthStats(
+            ym = selectedMonth,
+            extraSimulatedLeaves = simLeaves,
+            extraSimulatedHolidays = simHolidays
         )
         val exclNote = when {
             !store.isExcludeLeavesEnabled() && !store.isExcludeHolidaysEnabled() ->
@@ -4246,12 +4688,8 @@ class MainActivity : AppCompatActivity() {
                 " (Holiday exclusion is OFF in Setup)"
             else -> ""
         }
-        simResultView.background = GlassUiTheme.glassCard(
-            isDark,
-            16f,
-            if (isDark) "#8C0F172A" else "#B8EEF2FF"
-        )
-        simResultView.setTextColor(if (isDark) Color.parseColor("#C7D2FE") else Color.parseColor("#3730A3"))
+        simResultView.background = GlassUiTheme.glassCard(isDark, 16f, "#8C1E1B4B")
+        simResultView.setTextColor(Color.parseColor("#C7D2FE"))
         simResultView.text =
             "Simulated Target: ${simStats.requiredDays} days (${simStats.effectiveWorkingDays} working days) • Still Needed: ${simStats.remainingDays} • Buffer: ${maxOf(0, simStats.bufferDays)}$exclNote"
 
@@ -4315,6 +4753,7 @@ class MainActivity : AppCompatActivity() {
         }
         renderWifiChips()
     }
+
 
     private fun renderWifiChips() {
         wifiChipsContainer.removeAllViews()
