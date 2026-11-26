@@ -29,12 +29,12 @@ object GlassUiTheme {
 
     // ==================== LIGHT & DARK GLASS TOKENS ====================
 
-    // Light Theme: Frosted Soft White Panel
-    val lightCanvasStart = Color.parseColor("#EEF2FF")
-    val lightCanvasEnd = Color.parseColor("#E2E8F0")
-    val lightGlassSurface = Color.parseColor("#CCFFFFFF")
-    val lightGlassBorder = Color.parseColor("#B3CBD5E1")
-    val lightGlassHighlight = Color.parseColor("#F2FFFFFF")
+    // Light Theme: Frosted Soft White Glass
+    val lightCanvasStart = Color.parseColor("#E8EEF8")
+    val lightCanvasEnd = Color.parseColor("#DCE5F4")
+    val lightGlassSurface = Color.parseColor("#8CFFFFFF")      // ~55% frosted white glass
+    val lightGlassBorder = Color.parseColor("#99CBD5E1")
+    val lightGlassHighlight = Color.parseColor("#E6FFFFFF")
     val lightTextPrimary = Color.parseColor("#0F172A")
     val lightTextSecondary = Color.parseColor("#334155")
     val textSecondaryLightGlass = Color.parseColor("#1E293B")
@@ -43,11 +43,11 @@ object GlassUiTheme {
     val darkCanvasStart = Color.parseColor("#090D16")
     val darkCanvasEnd = Color.parseColor("#05070F")
     val backdropBaseDark = Color.parseColor("#060914")
-    val darkGlassSurface = Color.parseColor("#730F172A")
-    val cardFillDark = Color.parseColor("#B310172A")
-    val navDockDark = Color.parseColor("#CC0D1322")
-    val darkGlassBorder = Color.parseColor("#24FFFFFF")
-    val darkGlassHighlight = Color.parseColor("#4294A3B8")
+    val darkGlassSurface = Color.parseColor("#540F172A")       // ~33% smoked slate glass
+    val cardFillDark = Color.parseColor("#6610172A")           // ~40% frosted slate card
+    val navDockDark = Color.parseColor("#800D1322")            // ~50% translucent glass dock
+    val darkGlassBorder = Color.parseColor("#26FFFFFF")
+    val darkGlassHighlight = Color.parseColor("#4D94A3B8")
     val darkTextPrimary = Color.parseColor("#FFFFFF")
     val darkTextSecondary = Color.parseColor("#CBD5E1")
     val textSecondaryDark = Color.parseColor("#CBD5E1")
@@ -57,8 +57,8 @@ object GlassUiTheme {
     val orbCyan = Color.parseColor("#06B6D4")
     val orbViolet = Color.parseColor("#8B5CF6")
 
-    val subtleSurfaceDark = Color.parseColor("#661E293B")
-    val subtleSurfaceLightGlass = Color.parseColor("#99FFFFFF")
+    val subtleSurfaceDark = Color.parseColor("#421E293B")      // ~26% inner glass sub-layer
+    val subtleSurfaceLightGlass = Color.parseColor("#66FFFFFF") // ~40% inner frosted sub-layer
 
     val textOnAccent = Color.parseColor("#FFFFFF")
 
@@ -75,14 +75,14 @@ object GlassUiTheme {
     val accentSlate = Color.parseColor("#334155")
     val accentSlateEnd = Color.parseColor("#475569")
 
-    // Status Tint Tokens
-    val statusSuccessTint = Color.parseColor("#66064E3B")
-    val statusWarningTint = Color.parseColor("#66451A03")
-    val statusDangerTint = Color.parseColor("#66450A0A")
-    val statusInfoTint = Color.parseColor("#661E1B4B")
-    val statusHolidayTint = Color.parseColor("#662E1065")
+    // Glassy Status Tint Tokens
+    val statusSuccessTint = Color.parseColor("#4D064E3B")
+    val statusWarningTint = Color.parseColor("#4D451A03")
+    val statusDangerTint = Color.parseColor("#4D450A0A")
+    val statusInfoTint = Color.parseColor("#4D1E1B4B")
+    val statusHolidayTint = Color.parseColor("#4D2E1065")
 
-    // Status Text Tokens (default dark-glass bright colors + isDark overloads)
+    // High-Contrast Status Text Tokens
     val statusSuccessText: Int = Color.parseColor("#34D399")
     val statusWarningText: Int = Color.parseColor("#FBBF24")
     val statusDangerText: Int = Color.parseColor("#F87171")
@@ -106,11 +106,11 @@ object GlassUiTheme {
 
     fun statusTint(isDark: Boolean, kind: String): Int {
         return when (kind) {
-            "success" -> if (isDark) statusSuccessTint else Color.parseColor("#D9D1FAE5")
-            "warning" -> if (isDark) statusWarningTint else Color.parseColor("#D9FEF3C7")
-            "danger" -> if (isDark) statusDangerTint else Color.parseColor("#D9FEE2E2")
-            "holiday" -> if (isDark) statusHolidayTint else Color.parseColor("#D9EDE9FE")
-            else -> if (isDark) statusInfoTint else Color.parseColor("#D9E0E7FF")
+            "success" -> if (isDark) statusSuccessTint else Color.parseColor("#A6D1FAE5")
+            "warning" -> if (isDark) statusWarningTint else Color.parseColor("#A6FEF3C7")
+            "danger" -> if (isDark) statusDangerTint else Color.parseColor("#A6FEE2E2")
+            "holiday" -> if (isDark) statusHolidayTint else Color.parseColor("#A6EDE9FE")
+            else -> if (isDark) statusInfoTint else Color.parseColor("#A6E0E7FF")
         }
     }
 
@@ -216,7 +216,7 @@ object GlassUiTheme {
             basePaint.shader = LinearGradient(0f, 0f, w, h, startCol, endCol, Shader.TileMode.CLAMP)
             canvas.drawRect(0f, 0f, w, h, basePaint)
 
-            val orbAlphaBase = if (isDark) 86 else 68
+            val orbAlphaBase = if (isDark) 96 else 78
             val cx1 = w * (0.18f + 0.10f * sin(phase.toDouble()).toFloat())
             val cy1 = h * (0.16f + 0.06f * cos(phase.toDouble()).toFloat())
             orbPaint.color = withAlpha(orbIndigo, orbAlphaBase)
@@ -224,12 +224,12 @@ object GlassUiTheme {
 
             val cx2 = w * (0.85f + 0.09f * cos((phase * 0.85f).toDouble()).toFloat())
             val cy2 = h * (0.48f + 0.08f * sin((phase * 0.85f).toDouble()).toFloat())
-            orbPaint.color = withAlpha(orbCyan, (orbAlphaBase * 0.85f).roundToInt())
+            orbPaint.color = withAlpha(orbCyan, (orbAlphaBase * 0.88f).roundToInt())
             canvas.drawCircle(cx2, cy2, minDim * 0.38f, orbPaint)
 
             val cx3 = w * (0.34f + 0.12f * sin((phase * 0.65f + 1.4f).toDouble()).toFloat())
             val cy3 = h * (0.85f + 0.06f * cos((phase * 0.65f + 1.4f).toDouble()).toFloat())
-            orbPaint.color = withAlpha(orbViolet, (orbAlphaBase * 0.90f).roundToInt())
+            orbPaint.color = withAlpha(orbViolet, (orbAlphaBase * 0.92f).roundToInt())
             canvas.drawCircle(cx3, cy3, minDim * 0.44f, orbPaint)
         }
 
@@ -262,7 +262,7 @@ object GlassUiTheme {
         return object : Drawable() {
             private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.FILL
-                color = Color.parseColor(if (isDark) "#33000000" else "#1A0F172A")
+                color = Color.parseColor(if (isDark) "#2E000000" else "#140F172A")
                 maskFilter = BlurMaskFilter(18f, BlurMaskFilter.Blur.NORMAL)
             }
             private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -343,7 +343,7 @@ object GlassUiTheme {
         }
     }
 
-    // ==================== LAYER 3: TRANSLUCENT ACCENT PILLS & DOCK ====================
+    // ==================== LAYER 3: SEE-THROUGH FROSTED ACCENT PILLS & DOCK ====================
 
     fun glassAccentButton(
         startColor: Int,
@@ -351,14 +351,21 @@ object GlassUiTheme {
         radiusPx: Float = 18f,
         translucent: Boolean = true
     ): GradientDrawable {
+        val sGlass = if (translucent) {
+            Color.argb(132, Color.red(startColor), Color.green(startColor), Color.blue(startColor))
+        } else {
+            startColor
+        }
+        val eGlass = if (translucent) {
+            Color.argb(132, Color.red(endColor), Color.green(endColor), Color.blue(endColor))
+        } else {
+            endColor
+        }
         return GradientDrawable(
             GradientDrawable.Orientation.LEFT_RIGHT,
-            intArrayOf(startColor, endColor)
+            intArrayOf(sGlass, eGlass)
         ).apply {
             cornerRadius = radiusPx
-            if (translucent) {
-                alpha = 184
-            }
             setStroke(1, lightGlassHighlight)
         }
     }
