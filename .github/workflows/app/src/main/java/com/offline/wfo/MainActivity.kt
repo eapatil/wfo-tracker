@@ -5050,8 +5050,9 @@ class MainActivity : AppCompatActivity() {
     private fun cCardHex(): String = if (isDark) "#8C17223B" else "#B8FFFFFF"
     private fun cInputBg(): String = if (isDark) "#660F172A" else "#80FFFFFF"
     private fun cBorder(): String = if (isDark) "#3894A3B8" else "#CCFFFFFF"
-    private fun cTextPrimary(): Int = Color.parseColor(if (isDark) "#F8FAFC" else "#0F172A")
-    private fun cTextSecondary(): Int = Color.parseColor(if (isDark) "#CBD5E1" else "#475569")
+    private fun cTextPrimary(): Int = Color.parseColor("#F8FAFC")
+    private fun cTextSecondary(): Int = Color.parseColor("#CBD5E1")
+
 
     private fun makePersonalFooterView(): TextView {
         return TextView(this).apply {
