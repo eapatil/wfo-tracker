@@ -5,6 +5,7 @@ import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorFilter
+import android.graphics.DashPathEffect
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.PixelFormat
@@ -27,39 +28,78 @@ import kotlin.math.sin
 
 object GlassUiTheme {
 
-    // ==================== LIGHT & DARK GLASS TOKENS ====================
+    enum class AccentRole {
+        PRIMARY,
+        SECONDARY,
+        SUCCESS,
+        WARNING,
+        DANGER,
+        SPECIAL,
+        NEUTRAL
+    }
 
-    // Light Theme: Frosted Soft White Glass
-    val lightCanvasStart = Color.parseColor("#E8EEF8")
-    val lightCanvasEnd = Color.parseColor("#DCE5F4")
-    val lightGlassSurface = Color.parseColor("#8CFFFFFF")      // ~55% frosted white glass
-    val lightGlassBorder = Color.parseColor("#99CBD5E1")
-    val lightGlassHighlight = Color.parseColor("#E6FFFFFF")
-    val lightTextPrimary = Color.parseColor("#0F172A")
-    val lightTextSecondary = Color.parseColor("#334155")
-    val textSecondaryLightGlass = Color.parseColor("#1E293B")
+    enum class StatusKind {
+        SUCCESS,
+        WARNING,
+        DANGER,
+        INFO,
+        HOLIDAY
+    }
 
-    // Dark Theme: Smoked Deep Velvet Glass
-    val darkCanvasStart = Color.parseColor("#090D16")
-    val darkCanvasEnd = Color.parseColor("#05070F")
-    val backdropBaseDark = Color.parseColor("#060914")
-    val darkGlassSurface = Color.parseColor("#540F172A")       // ~33% smoked slate glass
-    val cardFillDark = Color.parseColor("#6610172A")           // ~40% frosted slate card
-    val navDockDark = Color.parseColor("#800D1322")            // ~50% translucent glass dock
-    val darkGlassBorder = Color.parseColor("#26FFFFFF")
-    val darkGlassHighlight = Color.parseColor("#4D94A3B8")
-    val darkTextPrimary = Color.parseColor("#FFFFFF")
-    val darkTextSecondary = Color.parseColor("#CBD5E1")
-    val textSecondaryDark = Color.parseColor("#CBD5E1")
+    // ==================== DEPTH, RADIUS, ALPHA & BLUR TOKENS ====================
 
-    // Shared Accents & Sub-Surfaces
-    val orbIndigo = Color.parseColor("#6366F1")
-    val orbCyan = Color.parseColor("#06B6D4")
-    val orbViolet = Color.parseColor("#8B5CF6")
+    const val cardRadiusPx = 24f
+    const val bannerRadiusPx = 18f
+    const val subtleRadiusPx = 16f
+    const val buttonRadiusPx = 18f
+    const val chipRadiusPx = 15f
+    const val cellRadiusPx = 16f
+    const val navDockRadiusPx = 26f
+    const val restoreBlurRadiusPx = 16f
+    const val weekendDimAlpha = 0.66f
 
-    val subtleSurfaceDark = Color.parseColor("#421E293B")      // ~26% inner glass sub-layer
-    val subtleSurfaceLightGlass = Color.parseColor("#66FFFFFF") // ~40% inner frosted sub-layer
+    // ==================== LIGHT THEME: FROSTED GLACIER & IRIS MIST ====================
 
+    private val lightCanvasStart = Color.parseColor("#EBF0F8")
+    private val lightCanvasEnd = Color.parseColor("#DFE7F5")
+    private val lightGlassSurface = Color.parseColor("#B8FFFFFF")
+    private val lightGlassBorder = Color.parseColor("#8FA3B8CC")
+    private val lightGlassHighlight = Color.parseColor("#F5FFFFFF")
+    private val lightSubtleSurface = Color.parseColor("#8CF8FAFC")
+    private val lightNavDock = Color.parseColor("#D6FFFFFF")
+    private val lightTextPrimary = Color.parseColor("#0B1220")
+    private val lightTextSecondary = Color.parseColor("#3B4963")
+    private val lightShadow = Color.parseColor("#141E293B")
+
+    private val lightOrbOne = Color.parseColor("#6366F1")   // Iris Blue
+    private val lightOrbTwo = Color.parseColor("#14B8A6")   // Mint Teal
+    private val lightOrbThree = Color.parseColor("#8B5CF6") // Soft Violet
+
+    // ==================== DARK THEME: NOCTURNE AURORA & SMOKED SLATE ====================
+
+    private val darkCanvasStart = Color.parseColor("#080C14")
+    private val darkCanvasEnd = Color.parseColor("#04060B")
+    private val darkGlassSurface = Color.parseColor("#7A0E1626")
+    private val darkGlassBorder = Color.parseColor("#1FFFFFFF")
+    private val darkGlassHighlight = Color.parseColor("#4794A3B8")
+    private val darkSubtleSurface = Color.parseColor("#5C172236")
+    private val darkNavDock = Color.parseColor("#B80A0F1C")
+    private val darkTextPrimary = Color.parseColor("#F8FAFC")
+    private val darkTextSecondary = Color.parseColor("#9FB0C7")
+    private val darkShadow = Color.parseColor("#38000000")
+
+    private val darkOrbOne = Color.parseColor("#4338CA")    // Royal Indigo
+    private val darkOrbTwo = Color.parseColor("#0891B2")    // Deep Cyan-Teal
+    private val darkOrbThree = Color.parseColor("#6D28D9")  // Velvet Violet
+
+    // Shared / Compatibility Aliases
+    val backdropBaseDark = darkCanvasStart
+    val cardFillDark = darkGlassSurface
+    val navDockDark = darkNavDock
+    val subtleSurfaceDark = darkSubtleSurface
+    val subtleSurfaceLightGlass = lightSubtleSurface
+    val textSecondaryDark = darkTextSecondary
+    val textSecondaryLightGlass = lightTextSecondary
     val textOnAccent = Color.parseColor("#FFFFFF")
 
     val accentIndigo = Color.parseColor("#4F46E5")
@@ -75,46 +115,19 @@ object GlassUiTheme {
     val accentSlate = Color.parseColor("#334155")
     val accentSlateEnd = Color.parseColor("#475569")
 
-    // Glassy Status Tint Tokens
-    val statusSuccessTint = Color.parseColor("#4D064E3B")
-    val statusWarningTint = Color.parseColor("#4D451A03")
-    val statusDangerTint = Color.parseColor("#4D450A0A")
-    val statusInfoTint = Color.parseColor("#4D1E1B4B")
-    val statusHolidayTint = Color.parseColor("#4D2E1065")
+    val statusSuccessTint = Color.parseColor("#59064E3B")
+    val statusWarningTint = Color.parseColor("#59451A03")
+    val statusDangerTint = Color.parseColor("#59450A0A")
+    val statusInfoTint = Color.parseColor("#591E1B4B")
+    val statusHolidayTint = Color.parseColor("#592E1065")
 
-    // High-Contrast Status Text Tokens
     val statusSuccessText: Int = Color.parseColor("#34D399")
     val statusWarningText: Int = Color.parseColor("#FBBF24")
     val statusDangerText: Int = Color.parseColor("#F87171")
     val statusInfoText: Int = Color.parseColor("#A5B4FC")
     val statusHolidayText: Int = Color.parseColor("#C4B5FD")
 
-    fun statusSuccessText(isDark: Boolean): Int =
-        Color.parseColor(if (isDark) "#34D399" else "#064E3B")
-
-    fun statusWarningText(isDark: Boolean): Int =
-        Color.parseColor(if (isDark) "#FBBF24" else "#78350F")
-
-    fun statusDangerText(isDark: Boolean): Int =
-        Color.parseColor(if (isDark) "#F87171" else "#7F1D1D")
-
-    fun statusInfoText(isDark: Boolean): Int =
-        Color.parseColor(if (isDark) "#A5B4FC" else "#1E1B4B")
-
-    fun statusHolidayText(isDark: Boolean): Int =
-        Color.parseColor(if (isDark) "#C4B5FD" else "#4C1D95")
-
-    fun statusTint(isDark: Boolean, kind: String): Int {
-        return when (kind) {
-            "success" -> if (isDark) statusSuccessTint else Color.parseColor("#A6D1FAE5")
-            "warning" -> if (isDark) statusWarningTint else Color.parseColor("#A6FEF3C7")
-            "danger" -> if (isDark) statusDangerTint else Color.parseColor("#A6FEE2E2")
-            "holiday" -> if (isDark) statusHolidayTint else Color.parseColor("#A6EDE9FE")
-            else -> if (isDark) statusInfoTint else Color.parseColor("#A6E0E7FF")
-        }
-    }
-
-    // ==================== CENTRALIZED ACCESSORS ====================
+    // ==================== THEME COLOR RESOLVERS ====================
 
     fun textPrimaryColor(isDark: Boolean): Int =
         if (isDark) darkTextPrimary else lightTextPrimary
@@ -128,24 +141,138 @@ object GlassUiTheme {
     fun borderHex(isDark: Boolean): String =
         String.format("#%08X", borderColor(isDark))
 
-    fun accentPairForHex(hex: String): Pair<Int, Int> {
-        return when (hex.trim().uppercase(Locale.US)) {
-            "#4F46E5", "#6366F1" -> accentIndigo to accentIndigoEnd
-            "#0284C7", "#0EA5E9" -> accentBlue to accentBlueEnd
-            "#10B981", "#059669" -> accentEmerald to accentEmeraldEnd
-            "#8B5CF6", "#7C3AED" -> accentPurple to accentPurpleEnd
-            "#F59E0B", "#D97706" -> accentAmber to accentAmberEnd
-            "#334155", "#475569" -> accentSlate to accentSlateEnd
-            else -> {
-                val parsed = runCatching { Color.parseColor(hex) }.getOrDefault(accentIndigo)
-                parsed to parsed
+    fun accentColors(isDark: Boolean, role: AccentRole): Pair<Int, Int> {
+        return if (isDark) {
+            when (role) {
+                AccentRole.PRIMARY -> Color.parseColor("#4338CA") to Color.parseColor("#6366F1")
+                AccentRole.SECONDARY -> Color.parseColor("#0E7490") to Color.parseColor("#22D3EE")
+                AccentRole.SUCCESS -> Color.parseColor("#047857") to Color.parseColor("#34D399")
+                AccentRole.WARNING -> Color.parseColor("#B45309") to Color.parseColor("#FBBF24")
+                AccentRole.DANGER -> Color.parseColor("#B91C1C") to Color.parseColor("#F87171")
+                AccentRole.SPECIAL -> Color.parseColor("#6D28D9") to Color.parseColor("#A78BFA")
+                AccentRole.NEUTRAL -> Color.parseColor("#334155") to Color.parseColor("#64748B")
+            }
+        } else {
+            when (role) {
+                AccentRole.PRIMARY -> Color.parseColor("#3730A3") to Color.parseColor("#4F46E5")
+                AccentRole.SECONDARY -> Color.parseColor("#0F766E") to Color.parseColor("#0D9488")
+                AccentRole.SUCCESS -> Color.parseColor("#065F46") to Color.parseColor("#059669")
+                AccentRole.WARNING -> Color.parseColor("#92400E") to Color.parseColor("#D97706")
+                AccentRole.DANGER -> Color.parseColor("#991B1B") to Color.parseColor("#DC2626")
+                AccentRole.SPECIAL -> Color.parseColor("#5B21B6") to Color.parseColor("#7C3AED")
+                AccentRole.NEUTRAL -> Color.parseColor("#334155") to Color.parseColor("#475569")
             }
         }
     }
 
+    fun accentRoleForHex(hex: String): AccentRole {
+        return when (hex.trim().uppercase(Locale.US)) {
+            "#4F46E5", "#6366F1", "#4338CA", "#3730A3" -> AccentRole.PRIMARY
+            "#0284C7", "#0EA5E9", "#0369A1", "#0E7490", "#22D3EE", "#0F766E", "#0D9488" -> AccentRole.SECONDARY
+            "#10B981", "#059669", "#047857", "#34D399", "#065F46" -> AccentRole.SUCCESS
+            "#F59E0B", "#D97706", "#B45309", "#FBBF24", "#92400E" -> AccentRole.WARNING
+            "#EF4444", "#DC2626", "#B91C1C", "#F87171", "#991B1B" -> AccentRole.DANGER
+            "#8B5CF6", "#7C3AED", "#6D28D9", "#A78BFA", "#5B21B6" -> AccentRole.SPECIAL
+            else -> AccentRole.NEUTRAL
+        }
+    }
+
+    fun accentPairForHex(hex: String, isDark: Boolean = true): Pair<Int, Int> {
+        val role = accentRoleForHex(hex)
+        val mapped = accentColors(isDark, role)
+        if (role != AccentRole.NEUTRAL || hex.trim().uppercase(Locale.US) in listOf("#334155", "#475569", "#64748B")) {
+            return mapped
+        }
+        val parsed = runCatching { Color.parseColor(hex) }.getOrDefault(mapped.first)
+        return parsed to parsed
+    }
+
+    fun statusTextColor(isDark: Boolean, kind: StatusKind): Int {
+        return if (isDark) {
+            when (kind) {
+                StatusKind.SUCCESS -> Color.parseColor("#6EE7B7")
+                StatusKind.WARNING -> Color.parseColor("#FCD34D")
+                StatusKind.DANGER -> Color.parseColor("#FCA5A5")
+                StatusKind.INFO -> Color.parseColor("#C7D2FE")
+                StatusKind.HOLIDAY -> Color.parseColor("#DDD6FE")
+            }
+        } else {
+            when (kind) {
+                StatusKind.SUCCESS -> Color.parseColor("#064E3B")
+                StatusKind.WARNING -> Color.parseColor("#78350F")
+                StatusKind.DANGER -> Color.parseColor("#7F1D1D")
+                StatusKind.INFO -> Color.parseColor("#1E1B4B")
+                StatusKind.HOLIDAY -> Color.parseColor("#4C1D95")
+            }
+        }
+    }
+
+    fun statusTintColor(isDark: Boolean, kind: StatusKind): Int {
+        return if (isDark) {
+            when (kind) {
+                StatusKind.SUCCESS -> Color.parseColor("#54065F46")
+                StatusKind.WARNING -> Color.parseColor("#5478350F")
+                StatusKind.DANGER -> Color.parseColor("#547F1D1D")
+                StatusKind.INFO -> Color.parseColor("#54312E81")
+                StatusKind.HOLIDAY -> Color.parseColor("#544C1D95")
+            }
+        } else {
+            when (kind) {
+                StatusKind.SUCCESS -> Color.parseColor("#D1FAE5")
+                StatusKind.WARNING -> Color.parseColor("#FEF3C7")
+                StatusKind.DANGER -> Color.parseColor("#FEE2E2")
+                StatusKind.INFO -> Color.parseColor("#E0E7FF")
+                StatusKind.HOLIDAY -> Color.parseColor("#EDE9FE")
+            }
+        }
+    }
+
+    fun statusSuccessText(isDark: Boolean): Int = statusTextColor(isDark, StatusKind.SUCCESS)
+    fun statusWarningText(isDark: Boolean): Int = statusTextColor(isDark, StatusKind.WARNING)
+    fun statusDangerText(isDark: Boolean): Int = statusTextColor(isDark, StatusKind.DANGER)
+    fun statusInfoText(isDark: Boolean): Int = statusTextColor(isDark, StatusKind.INFO)
+    fun statusHolidayText(isDark: Boolean): Int = statusTextColor(isDark, StatusKind.HOLIDAY)
+
+    fun statusTint(isDark: Boolean, kind: String): Int {
+        val mapped = when (kind.lowercase(Locale.US)) {
+            "success" -> StatusKind.SUCCESS
+            "warning" -> StatusKind.WARNING
+            "danger" -> StatusKind.DANGER
+            "holiday" -> StatusKind.HOLIDAY
+            else -> StatusKind.INFO
+        }
+        return statusTintColor(isDark, mapped)
+    }
+
+    fun ringAccentColor(
+        isDark: Boolean,
+        remainingDays: Int,
+        plannedCoversTarget: Boolean,
+        bufferDays: Int
+    ): Int {
+        return when {
+            remainingDays == 0 || plannedCoversTarget -> accentColors(isDark, AccentRole.SUCCESS).second
+            bufferDays <= 0 -> accentColors(isDark, AccentRole.DANGER).second
+            else -> accentColors(isDark, AccentRole.PRIMARY).second
+        }
+    }
+
+    fun ringTrackColor(isDark: Boolean): Int =
+        if (isDark) Color.parseColor("#3823324D") else Color.parseColor("#80CBD5E1")
+
+    fun trendTargetLineColor(isDark: Boolean): Int =
+        accentColors(isDark, AccentRole.WARNING).second
+
+    fun trendBarColor(isDark: Boolean, metTarget: Boolean): Int =
+        if (metTarget) {
+            accentColors(isDark, AccentRole.SUCCESS).second
+        } else {
+            accentColors(isDark, AccentRole.SPECIAL).second
+        }
+
     // ==================== BLUR HELPERS (ANDROID 12+) ====================
 
-    fun applyGlassBlur(view: View, radiusPx: Float = 18f) {
+    fun applyGlassBlur(view: View, radiusPx: Float = restoreBlurRadiusPx) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             runCatching {
                 view.setRenderEffect(
@@ -165,7 +292,7 @@ object GlassUiTheme {
         }
     }
 
-    // ==================== LAYER 0: CANVAS + MOVING AMBIENT GLOWS ====================
+    // ==================== LAYER 0: AMBIENT GLASS BACKDROP ====================
 
     fun ambientBackdrop(isDark: Boolean): Drawable = CanvasBackdropDrawable(isDark)
 
@@ -186,7 +313,7 @@ object GlassUiTheme {
             if (animator != null) return
             val selfRef = WeakReference(this)
             animator = ValueAnimator.ofFloat(0f, (Math.PI * 2.0).toFloat()).apply {
-                duration = 15000L
+                duration = 16000L
                 repeatCount = ValueAnimator.INFINITE
                 repeatMode = ValueAnimator.RESTART
                 interpolator = LinearInterpolator()
@@ -216,20 +343,24 @@ object GlassUiTheme {
             basePaint.shader = LinearGradient(0f, 0f, w, h, startCol, endCol, Shader.TileMode.CLAMP)
             canvas.drawRect(0f, 0f, w, h, basePaint)
 
-            val orbAlphaBase = if (isDark) 96 else 78
+            val orbAlphaBase = if (isDark) 84 else 58
+            val o1 = if (isDark) darkOrbOne else lightOrbOne
+            val o2 = if (isDark) darkOrbTwo else lightOrbTwo
+            val o3 = if (isDark) darkOrbThree else lightOrbThree
+
             val cx1 = w * (0.18f + 0.10f * sin(phase.toDouble()).toFloat())
             val cy1 = h * (0.16f + 0.06f * cos(phase.toDouble()).toFloat())
-            orbPaint.color = withAlpha(orbIndigo, orbAlphaBase)
+            orbPaint.color = withAlpha(o1, orbAlphaBase)
             canvas.drawCircle(cx1, cy1, minDim * 0.42f, orbPaint)
 
             val cx2 = w * (0.85f + 0.09f * cos((phase * 0.85f).toDouble()).toFloat())
             val cy2 = h * (0.48f + 0.08f * sin((phase * 0.85f).toDouble()).toFloat())
-            orbPaint.color = withAlpha(orbCyan, (orbAlphaBase * 0.88f).roundToInt())
+            orbPaint.color = withAlpha(o2, (orbAlphaBase * 0.85f).roundToInt())
             canvas.drawCircle(cx2, cy2, minDim * 0.38f, orbPaint)
 
             val cx3 = w * (0.34f + 0.12f * sin((phase * 0.65f + 1.4f).toDouble()).toFloat())
             val cy3 = h * (0.85f + 0.06f * cos((phase * 0.65f + 1.4f).toDouble()).toFloat())
-            orbPaint.color = withAlpha(orbViolet, (orbAlphaBase * 0.92f).roundToInt())
+            orbPaint.color = withAlpha(o3, (orbAlphaBase * 0.88f).roundToInt())
             canvas.drawCircle(cx3, cy3, minDim * 0.44f, orbPaint)
         }
 
@@ -256,13 +387,13 @@ object GlassUiTheme {
 
     fun glassCard(
         isDark: Boolean,
-        radiusPx: Float = 24f,
+        radiusPx: Float = cardRadiusPx,
         tintColor: Int? = null
     ): Drawable {
         return object : Drawable() {
             private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 style = Paint.Style.FILL
-                color = Color.parseColor(if (isDark) "#2E000000" else "#140F172A")
+                color = if (isDark) darkShadow else lightShadow
                 maskFilter = BlurMaskFilter(18f, BlurMaskFilter.Blur.NORMAL)
             }
             private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -326,16 +457,16 @@ object GlassUiTheme {
         }
     }
 
-    fun glassCardHex(isDark: Boolean, radiusPx: Float = 24f, tintHex: String): Drawable =
+    fun glassCardHex(isDark: Boolean, radiusPx: Float = cardRadiusPx, tintHex: String): Drawable =
         glassCard(isDark, radiusPx, runCatching { Color.parseColor(tintHex) }.getOrNull())
 
     // ==================== LAYER 2: SUBTLE INNER GLASS SURFACE ====================
 
-    fun glassSubtleSurface(isDark: Boolean, radiusPx: Float = 16f): GradientDrawable {
+    fun glassSubtleSurface(isDark: Boolean, radiusPx: Float = subtleRadiusPx): GradientDrawable {
         return GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = radiusPx
-            setColor(if (isDark) subtleSurfaceDark else subtleSurfaceLightGlass)
+            setColor(if (isDark) darkSubtleSurface else lightSubtleSurface)
             setStroke(
                 1,
                 if (isDark) darkGlassHighlight else lightGlassBorder
@@ -343,24 +474,17 @@ object GlassUiTheme {
         }
     }
 
-    // ==================== LAYER 3: SEE-THROUGH FROSTED ACCENT PILLS & DOCK ====================
+    // ==================== LAYER 3: TRANSLUCENT ACCENT PILLS & DOCK ====================
 
     fun glassAccentButton(
         startColor: Int,
         endColor: Int,
-        radiusPx: Float = 18f,
+        radiusPx: Float = buttonRadiusPx,
         translucent: Boolean = true
     ): GradientDrawable {
-        val sGlass = if (translucent) {
-            Color.argb(132, Color.red(startColor), Color.green(startColor), Color.blue(startColor))
-        } else {
-            startColor
-        }
-        val eGlass = if (translucent) {
-            Color.argb(132, Color.red(endColor), Color.green(endColor), Color.blue(endColor))
-        } else {
-            endColor
-        }
+        val alphaVal = if (translucent) 142 else 255
+        val sGlass = Color.argb(alphaVal, Color.red(startColor), Color.green(startColor), Color.blue(startColor))
+        val eGlass = Color.argb(alphaVal, Color.red(endColor), Color.green(endColor), Color.blue(endColor))
         return GradientDrawable(
             GradientDrawable.Orientation.LEFT_RIGHT,
             intArrayOf(sGlass, eGlass)
@@ -373,11 +497,12 @@ object GlassUiTheme {
     fun glassAccentButtonHex(
         startHex: String,
         endHex: String,
-        radiusPx: Float = 18f,
-        translucent: Boolean = true
+        radiusPx: Float = buttonRadiusPx,
+        translucent: Boolean = true,
+        isDark: Boolean = true
     ): GradientDrawable {
-        val (sColor, eColor) = accentPairForHex(startHex)
-        val (_, endOverride) = accentPairForHex(endHex)
+        val (sColor, eColor) = accentPairForHex(startHex, isDark)
+        val (_, endOverride) = accentPairForHex(endHex, isDark)
         return glassAccentButton(
             sColor,
             if (startHex.equals(endHex, ignoreCase = true)) eColor else endOverride,
@@ -389,9 +514,9 @@ object GlassUiTheme {
     fun glassNavDock(isDark: Boolean): GradientDrawable {
         return GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
-            cornerRadius = 26f
-            setColor(if (isDark) navDockDark else lightGlassSurface)
-            setStroke(1, if (isDark) darkGlassHighlight else lightGlassHighlight)
+            cornerRadius = navDockRadiusPx
+            setColor(if (isDark) darkNavDock else lightNavDock)
+            setStroke(1, if (isDark) darkGlassHighlight else lightGlassBorder)
         }
     }
 
@@ -401,4 +526,68 @@ object GlassUiTheme {
         tv.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
         tv.setTextColor(textPrimaryColor(isDark))
     }
+
+    // ==================== CALENDAR & SHAPE HELPERS ====================
+
+    fun calendarCellDrawable(
+        isDark: Boolean,
+        type: DayType,
+        isToday: Boolean
+    ): Drawable {
+        val todayRing = accentColors(isDark, AccentRole.SECONDARY).second
+        val strokeW = if (isToday) 6 else if (type == DayType.PLANNED) 4 else 2
+
+        return when (type) {
+            DayType.OFFICE -> {
+                val (_, accent) = accentColors(isDark, AccentRole.SUCCESS)
+                val fill = Color.argb(156, Color.red(accent), Color.green(accent), Color.blue(accent))
+                roundedShape(fill, if (isToday) todayRing else accent, cellRadiusPx, strokeW)
+            }
+            DayType.PLANNED -> {
+                val (_, accent) = accentColors(isDark, AccentRole.PRIMARY)
+                val fill = statusTintColor(isDark, StatusKind.INFO)
+                dashedShape(fill, if (isToday) todayRing else accent, cellRadiusPx, strokeW)
+            }
+            DayType.LEAVE -> {
+                val (_, accent) = accentColors(isDark, AccentRole.WARNING)
+                val fill = Color.argb(156, Color.red(accent), Color.green(accent), Color.blue(accent))
+                roundedShape(fill, if (isToday) todayRing else accent, cellRadiusPx, strokeW)
+            }
+            DayType.HOLIDAY -> {
+                val (_, accent) = accentColors(isDark, AccentRole.SPECIAL)
+                val fill = Color.argb(156, Color.red(accent), Color.green(accent), Color.blue(accent))
+                roundedShape(fill, if (isToday) todayRing else accent, cellRadiusPx, strokeW)
+            }
+            DayType.NONE -> glassSubtleSurface(isDark, cellRadiusPx)
+        }
+    }
+
+    fun roundedShape(
+        fillColor: Int,
+        strokeColor: Int,
+        radiusPx: Float,
+        strokeWidthPx: Int = 2
+    ): GradientDrawable {
+        return GradientDrawable().apply {
+            setColor(fillColor)
+            setStroke(strokeWidthPx, strokeColor)
+            cornerRadius = radiusPx
+        }
+    }
+
+    fun dashedShape(
+        fillColor: Int,
+        strokeColor: Int,
+        radiusPx: Float,
+        strokeWidthPx: Int = 4
+    ): GradientDrawable {
+        return GradientDrawable().apply {
+            setColor(fillColor)
+            setStroke(strokeWidthPx, strokeColor, 12f, 8f)
+            cornerRadius = radiusPx
+        }
+    }
+
+    fun createDashEffect(intervals: FloatArray = floatArrayOf(18f, 12f)): DashPathEffect =
+        DashPathEffect(intervals, 0f)
 }
