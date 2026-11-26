@@ -54,7 +54,6 @@ class WfoWidgetProvider : AppWidgetProvider() {
             val mode = store.getTrackingMode()
             val radius = store.getGeofenceRadiusMeters()
             val hasLoc = store.hasOfficeLocationConfigured()
-            val locName = store.getOfficeLocationName().ifEmpty { "Office Zone" }
 
             val distMeters: Float? = if (hasLoc && store.hasLastKnownLocation()) {
                 store.distanceToOfficeMeters(store.getLastKnownLat(), store.getLastKnownLng())
