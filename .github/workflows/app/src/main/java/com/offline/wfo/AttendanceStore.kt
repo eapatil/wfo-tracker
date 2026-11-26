@@ -2,11 +2,14 @@ package com.offline.wfo
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.location.Location
 import android.net.Uri
 import android.provider.DocumentsContract
 import java.io.BufferedReader
 import java.io.File
+import java.io.FileOutputStream
 import java.io.InputStreamReader
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -155,6 +158,8 @@ class AttendanceStore(private val context: Context) {
 
         private const val AUTO_BACKUP_FILENAME = "officepace_attendance_autobackup.csv"
         private const val LEGACY_AUTO_BACKUP_FILENAME = "wfo_attendance_autobackup.csv"
+        private const val BACKUP_AVATAR_THUMB_FILENAME = "officepace_profile_avatar.jpg"
+        private const val BACKUP_AVATAR_ORIG_FILENAME = "officepace_profile_avatar_original.jpg"
     }
 
     init {
@@ -344,9 +349,91 @@ class AttendanceStore(private val context: Context) {
 
     fun getProfilePhotoFile(): File = File(context.filesDir, "user_profile_avatar.jpg")
 
+    fun getProfileOriginalPhotoFile(): File = File(context.filesDir, "user_profile_avatar_original.jpg")
+
+    fun getFullScreenProfilePhotoFile(): File {
+        val orig = getProfileOriginalPhotoFile()
+        if (orig.exists() && orig.length() > 0L) return orig
+        return getProfilePhotoFile()
+    }
+
+    fun saveProfilePhotoPair(sourceUri: Uri): Boolean {
+        val saved = runCatching {
+            val rawBmp = context.contentResolver.openInputStream(sourceUri)?.use { stream ->
+                BitmapFactory.decodeStream(stream)
+            } ?: return@runCatching false
+
+            val maxSide = 2048
+            val origScaled = if (maxOf(rawBmp.width, rawBmp.height) > maxSide) {
+                val scale = maxSide.toFloat() / maxOf(rawBmp.width, rawBmp.height).toFloat()
+                val targetW = maxOf(1, (rawBmp.width * scale).roundToInt())
+                val targetH = maxOf(1, (rawBmp.height * scale).roundToInt())
+                Bitmap.createScaledBitmap(rawBmp, targetW, targetH, true)
+            } else {
+                rawBmp
+            }
+
+            FileOutputStream(getProfileOriginalPhotoFile()).use { out ->
+                origScaled.compress(Bitmap.CompressFormat.JPEG, 90, out)
+                out.flush()
+            }
+
+            val size = minOf(rawBmp.width, rawBmp.height)
+            val xOffset = (rawBmp.width - size) / 2
+            val yOffset = (rawBmp.height - size) / 2
+            val square = Bitmap.createBitmap(rawBmp, xOffset, yOffset, size, size)
+            val thumb = Bitmap.createScaledBitmap(square, 256, 256, true)
+
+            FileOutputStream(getProfilePhotoFile()).use { out ->
+                thumb.compress(Bitmap.CompressFormat.JPEG, 85, out)
+                out.flush()
+            }
+            true
+        }.getOrDefault(false)
+
+        if (saved) {
+            triggerSilentAutoBackup()
+        }
+        return saved
+    }
+
     fun deleteProfilePhoto() {
-        val f = getProfilePhotoFile()
-        if (f.exists()) f.delete()
+        val thumb = getProfilePhotoFile()
+        if (thumb.exists()) thumb.delete()
+        val orig = getProfileOriginalPhotoFile()
+        if (orig.exists()) orig.delete()
+        if (getAutoBackupTreeUri().isNotBlank()) {
+            Thread {
+                runCatching { deleteBackupProfilePhotos() }
+            }.start()
+        }
+    }
+
+    private fun ensureLocalPhotoPairConsistency() {
+        val thumb = getProfilePhotoFile()
+        val orig = getProfileOriginalPhotoFile()
+        if (orig.exists() && orig.length() > 0L && (!thumb.exists() || thumb.length() == 0L)) {
+            runCatching {
+                val bmp = BitmapFactory.decodeFile(orig.absolutePath) ?: return@runCatching
+                val size = minOf(bmp.width, bmp.height)
+                val xOffset = (bmp.width - size) / 2
+                val yOffset = (bmp.height - size) / 2
+                val square = Bitmap.createBitmap(bmp, xOffset, yOffset, size, size)
+                val scaled = Bitmap.createScaledBitmap(square, 256, 256, true)
+                FileOutputStream(thumb).use { out ->
+                    scaled.compress(Bitmap.CompressFormat.JPEG, 85, out)
+                    out.flush()
+                }
+            }
+        } else if (thumb.exists() && thumb.length() > 0L && (!orig.exists() || orig.length() == 0L)) {
+            runCatching {
+                val bytes = thumb.readBytes()
+                FileOutputStream(orig).use { out ->
+                    out.write(bytes)
+                    out.flush()
+                }
+            }
+        }
     }
 
     // ==================== TRACKING MODE, WI-FI & GEOFENCE ====================
@@ -1713,6 +1800,39 @@ class AttendanceStore(private val context: Context) {
 
     fun getAutoBackupTreeUri(): String = prefs.getString(KEY_BACKUP_TREE_URI, "") ?: ""
 
+    private fun findFileUriInTree(treeUri: Uri, targetDisplayName: String): Uri? {
+        val treeDocId = runCatching { DocumentsContract.getTreeDocumentId(treeUri) }.getOrNull() ?: return null
+        val childrenUri = runCatching {
+            DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, treeDocId)
+        }.getOrNull() ?: return null
+
+        return runCatching {
+            context.contentResolver.query(
+                childrenUri,
+                arrayOf(
+                    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME
+                ),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                val nameCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                while (cursor.moveToNext()) {
+                    val name = if (nameCol >= 0) cursor.getString(nameCol)?.trim() else null
+                    val docId = if (idCol >= 0) cursor.getString(idCol) else null
+                    if (!name.isNullOrBlank() && !docId.isNullOrBlank() &&
+                        name.equals(targetDisplayName, ignoreCase = true)
+                    ) {
+                        return@use DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
+                    }
+                }
+                null
+            }
+        }.getOrNull()
+    }
+
     private fun findExistingBackupUriInTree(treeUri: Uri): Uri? {
         val treeDocId = runCatching { DocumentsContract.getTreeDocumentId(treeUri) }.getOrNull() ?: return null
         val childrenUri = runCatching {
@@ -1769,12 +1889,113 @@ class AttendanceStore(private val context: Context) {
         }.getOrNull()
     }
 
+    private fun writeBytesToFolderFile(treeUri: Uri, fileName: String, mimeType: String, bytes: ByteArray): Boolean {
+        return runCatching {
+            val existing = findFileUriInTree(treeUri, fileName)
+            val targetUri = if (existing != null) {
+                existing
+            } else {
+                val treeDocId = DocumentsContract.getTreeDocumentId(treeUri)
+                val dirUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocId)
+                DocumentsContract.createDocument(context.contentResolver, dirUri, mimeType, fileName)
+                    ?: return@runCatching false
+            }
+
+            val wrote = runCatching {
+                context.contentResolver.openOutputStream(targetUri, "wt")?.use { out ->
+                    out.write(bytes)
+                    out.flush()
+                } != null
+            }.getOrDefault(false)
+
+            if (!wrote) {
+                context.contentResolver.openOutputStream(targetUri, "w")?.use { out ->
+                    out.write(bytes)
+                    out.flush()
+                } ?: return@runCatching false
+            }
+            true
+        }.getOrDefault(false)
+    }
+
+    private fun syncProfilePhotosToFolder(treeUri: Uri) {
+        ensureLocalPhotoPairConsistency()
+        val thumbFile = getProfilePhotoFile()
+        val origFile = getProfileOriginalPhotoFile()
+        if (thumbFile.exists() && thumbFile.length() > 0L) {
+            writeBytesToFolderFile(treeUri, BACKUP_AVATAR_THUMB_FILENAME, "image/jpeg", thumbFile.readBytes())
+        }
+        if (origFile.exists() && origFile.length() > 0L) {
+            writeBytesToFolderFile(treeUri, BACKUP_AVATAR_ORIG_FILENAME, "image/jpeg", origFile.readBytes())
+        }
+    }
+
+    private fun restoreProfilePhotosFromFolder(treeUri: Uri): Boolean {
+        var restoredAny = false
+        val backupThumb = findFileUriInTree(treeUri, BACKUP_AVATAR_THUMB_FILENAME)
+        val backupOrig = findFileUriInTree(treeUri, BACKUP_AVATAR_ORIG_FILENAME)
+
+        if (backupThumb != null) {
+            val bytes = runCatching {
+                context.contentResolver.openInputStream(backupThumb)?.use { it.readBytes() }
+            }.getOrNull()
+            if (bytes != null && bytes.isNotEmpty()) {
+                runCatching {
+                    FileOutputStream(getProfilePhotoFile()).use { out ->
+                        out.write(bytes)
+                        out.flush()
+                    }
+                    restoredAny = true
+                }
+            }
+        }
+
+        if (backupOrig != null) {
+            val bytes = runCatching {
+                context.contentResolver.openInputStream(backupOrig)?.use { it.readBytes() }
+            }.getOrNull()
+            if (bytes != null && bytes.isNotEmpty()) {
+                runCatching {
+                    FileOutputStream(getProfileOriginalPhotoFile()).use { out ->
+                        out.write(bytes)
+                        out.flush()
+                    }
+                    restoredAny = true
+                }
+            }
+        }
+
+        if (restoredAny) {
+            ensureLocalPhotoPairConsistency()
+        }
+        return restoredAny
+    }
+
+    private fun deleteBackupProfilePhotos() {
+        val uriStr = getAutoBackupTreeUri()
+        if (uriStr.isBlank()) return
+        runCatching {
+            val treeUri = Uri.parse(uriStr)
+            listOf(BACKUP_AVATAR_THUMB_FILENAME, BACKUP_AVATAR_ORIG_FILENAME).forEach { fileName ->
+                findFileUriInTree(treeUri, fileName)?.let { fileUri ->
+                    DocumentsContract.deleteDocument(context.contentResolver, fileUri)
+                }
+            }
+        }
+    }
+
     fun restoreExistingBackupFromFolder(treeUri: Uri): Int {
-        val existingUri = findExistingBackupUriInTree(treeUri) ?: return 0
-        val text = context.contentResolver.openInputStream(existingUri)?.use { stream ->
-            BufferedReader(InputStreamReader(stream)).readText()
-        } ?: return 0
-        return importCsvText(text, autoBackupAfter = false)
+        val restoredPhotos = restoreProfilePhotosFromFolder(treeUri)
+        val existingUri = findExistingBackupUriInTree(treeUri)
+        val importedRows = if (existingUri != null) {
+            val text = context.contentResolver.openInputStream(existingUri)?.use { stream ->
+                BufferedReader(InputStreamReader(stream)).readText()
+            } ?: ""
+            if (text.isNotBlank()) importCsvText(text, autoBackupAfter = false) else 0
+        } else {
+            0
+        }
+        return if (importedRows > 0) importedRows else if (restoredPhotos) 1 else 0
     }
 
     fun backupNowAsync() {
@@ -1789,35 +2010,12 @@ class AttendanceStore(private val context: Context) {
         if (uriStr.isBlank()) return false
         val ok = runCatching {
             val treeUri = Uri.parse(uriStr)
-            val existingUri = findExistingBackupUriInTree(treeUri)
-            val targetUri = if (existingUri != null) {
-                existingUri
-            } else {
-                val treeDocId = DocumentsContract.getTreeDocumentId(treeUri)
-                val dirUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, treeDocId)
-                DocumentsContract.createDocument(
-                    context.contentResolver,
-                    dirUri,
-                    "text/csv",
-                    AUTO_BACKUP_FILENAME
-                ) ?: return@runCatching false
-            }
-
             val payload = exportAllCsv().toByteArray(Charsets.UTF_8)
-            val wrote = runCatching {
-                context.contentResolver.openOutputStream(targetUri, "wt")?.use { out ->
-                    out.write(payload)
-                    out.flush()
-                } != null
-            }.getOrDefault(false)
-
-            if (!wrote) {
-                context.contentResolver.openOutputStream(targetUri, "w")?.use { out ->
-                    out.write(payload)
-                    out.flush()
-                } ?: return@runCatching false
+            val csvOk = writeBytesToFolderFile(treeUri, AUTO_BACKUP_FILENAME, "text/csv", payload)
+            if (csvOk) {
+                syncProfilePhotosToFolder(treeUri)
             }
-            true
+            csvOk
         }.getOrDefault(false)
 
         val nowStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd MMM HH:mm"))
