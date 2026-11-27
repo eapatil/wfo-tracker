@@ -19,6 +19,7 @@ import android.view.View
 import android.widget.RemoteViews
 import androidx.core.content.ContextCompat
 import java.time.DayOfWeek
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
@@ -159,6 +160,36 @@ class WfoWidgetProvider : AppWidgetProvider() {
         return best?.let { it.latitude to it.longitude }
     }
 
+    private fun resolveArrivalElapsedBase(
+        context: Context,
+        store: AttendanceStore,
+        today: LocalDate,
+        nowTime: LocalTime
+    ): Long {
+        val statusPrefs = context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
+        val inspector = runCatching { store.getDayInspectorInfo(today) }.getOrNull()
+        val timeMatch = inspector?.timeWindowLabel?.let { label ->
+            Regex("""\b([01]?\d|2[0-3]):([0-5]\d)\b""").find(label)
+        }
+        if (timeMatch != null) {
+            val hour = timeMatch.groupValues[1].toInt()
+            val minute = timeMatch.groupValues[2].toInt()
+            val arrivalTime = LocalTime.of(hour, minute)
+            val elapsedMs = Duration.between(arrivalTime, nowTime)
+                .coerceAtLeast(Duration.ZERO)
+                .toMillis()
+            val baseElapsed = SystemClock.elapsedRealtime() - elapsedMs
+            statusPrefs.edit().putLong(KEY_ARRIVAL_START_EPOCH_MS, baseElapsed).apply()
+            return baseElapsed
+        }
+
+        val existingBase = statusPrefs.getLong(KEY_ARRIVAL_START_EPOCH_MS, 0L)
+        if (existingBase > 0L) return existingBase
+        val nowElapsed = SystemClock.elapsedRealtime()
+        statusPrefs.edit().putLong(KEY_ARRIVAL_START_EPOCH_MS, nowElapsed).apply()
+        return nowElapsed
+    }
+
     private fun resolveLiveGeofenceMetersText(context: Context, store: AttendanceStore): String {
         val mode = store.getTrackingMode()
         if (mode != TrackingMode.LOCATION_ONLY && mode != TrackingMode.BOTH) return ""
@@ -269,14 +300,7 @@ class WfoWidgetProvider : AppWidgetProvider() {
             if (isConnected) {
                 statusLabel = if (isCompact) "At Office" else "✓ At Office"
                 statusKind = GlassUiTheme.StatusKind.SUCCESS
-                val existingBase = statusPrefs.getLong(KEY_ARRIVAL_START_EPOCH_MS, 0L)
-                val baseElapsed = if (existingBase > 0L) {
-                    existingBase
-                } else {
-                    val nowElapsed = SystemClock.elapsedRealtime()
-                    statusPrefs.edit().putLong(KEY_ARRIVAL_START_EPOCH_MS, nowElapsed).apply()
-                    nowElapsed
-                }
+                val baseElapsed = resolveArrivalElapsedBase(context, store, today, nowTime)
                 views.setViewVisibility(R.id.widget_office_chrono, View.VISIBLE)
                 views.setChronometer(R.id.widget_office_chrono, baseElapsed, null, true)
                 views.setTextColor(R.id.widget_office_chrono, GlassUiTheme.widgetStatusPillTextColor(isDark, statusKind))
