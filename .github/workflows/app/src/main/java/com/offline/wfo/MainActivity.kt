@@ -112,6 +112,7 @@ class MainActivity : AppCompatActivity() {
         private const val STATE_LOG_EXPANDED = "state_log_expanded"
         private const val STATE_NOTIF_EXPANDED = "state_notif_expanded"
         private const val STATE_HOL_EXPANDED = "state_hol_expanded"
+        private const val STATE_BACKUP_EXPANDED = "state_backup_expanded"
     }
 
     private enum class ActiveTab { HOME, ANALYTICS, SETTINGS }
@@ -135,6 +136,7 @@ class MainActivity : AppCompatActivity() {
     private var isMonthlyLogExpanded: Boolean = false
     private var isNotificationsSectionExpanded: Boolean = false
     private var isUpcomingHolidaysSectionExpanded: Boolean = false
+    private var isBackupSectionExpanded: Boolean = false
     private var simLeaves: Int = 0
     private var simHolidays: Int = 0
     private var lastUndoBatch: Map<LocalDate, DayType> = emptyMap()
@@ -303,6 +305,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var holidayBodyView: LinearLayout
     private lateinit var upcomingHolLeaveSummaryView: TextView
     private lateinit var upcomingHolLeaveListView: LinearLayout
+    private lateinit var backupSummaryTv: TextView
+    private lateinit var backupArrowTv: TextView
+    private lateinit var backupBodyView: LinearLayout
     private lateinit var autoBackupStatusView: TextView
 
     private val updateReceiver = object : BroadcastReceiver() {
@@ -352,6 +357,7 @@ class MainActivity : AppCompatActivity() {
         outState.putBoolean(STATE_LOG_EXPANDED, isMonthlyLogExpanded)
         outState.putBoolean(STATE_NOTIF_EXPANDED, isNotificationsSectionExpanded)
         outState.putBoolean(STATE_HOL_EXPANDED, isUpcomingHolidaysSectionExpanded)
+        outState.putBoolean(STATE_BACKUP_EXPANDED, isBackupSectionExpanded)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -381,6 +387,7 @@ class MainActivity : AppCompatActivity() {
             isMonthlyLogExpanded = savedInstanceState.getBoolean(STATE_LOG_EXPANDED, false)
             isNotificationsSectionExpanded = savedInstanceState.getBoolean(STATE_NOTIF_EXPANDED, false)
             isUpcomingHolidaysSectionExpanded = savedInstanceState.getBoolean(STATE_HOL_EXPANDED, false)
+            isBackupSectionExpanded = savedInstanceState.getBoolean(STATE_BACKUP_EXPANDED, false)
         }
 
         isDark = resolveIsDarkMode()
@@ -3033,12 +3040,48 @@ class MainActivity : AppCompatActivity() {
         addSpacer(root, 14)
 
         val backupCard = makeCardContainer()
-        backupCard.addView(makeSectionTitle("Backup, Widget & Data Portability"))
+        val backupHeaderRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isClickable = true
+            isFocusable = true
+            setPadding(0, 2, 0, 2)
+        }
+        val backupTitleCol = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val backupTitleTv = makeSectionTitle("Backup, Widget & Data Portability")
+        backupSummaryTv = TextView(this).apply {
+            textSize = 13f
+            setTextColor(cTextSecondary())
+            setPadding(0, 2, 0, 0)
+        }
+        backupTitleCol.addView(backupTitleTv)
+        backupTitleCol.addView(backupSummaryTv)
+
+        backupArrowTv = TextView(this).apply {
+            text = "▼"
+            textSize = 15f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(cTextSecondary())
+            setPadding(12, 4, 4, 4)
+        }
+        backupHeaderRow.addView(backupTitleCol)
+        backupHeaderRow.addView(backupArrowTv)
+        backupCard.addView(backupHeaderRow)
+
+        backupBodyView = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+            setPadding(0, 10, 0, 0)
+        }
+
         autoBackupStatusView = TextView(this).apply {
             textSize = 13f
-            setPadding(0, 6, 0, 12)
+            setPadding(0, 2, 0, 12)
         }
-        backupCard.addView(autoBackupStatusView)
+        backupBodyView.addView(autoBackupStatusView)
 
         val backupTopRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -3058,8 +3101,8 @@ class MainActivity : AppCompatActivity() {
         backupTopRow.addView(pinWidgetBtn)
         addHorizontalGap(backupTopRow, 10)
         backupTopRow.addView(autoFolderBtn)
-        backupCard.addView(backupTopRow)
-        addSpacer(backupCard, 10)
+        backupBodyView.addView(backupTopRow)
+        addSpacer(backupBodyView, 10)
 
         val backupRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -3079,7 +3122,15 @@ class MainActivity : AppCompatActivity() {
         backupRow.addView(exportBtn)
         addHorizontalGap(backupRow, 10)
         backupRow.addView(importBtn)
-        backupCard.addView(backupRow)
+        backupBodyView.addView(backupRow)
+
+        backupCard.addView(backupBodyView)
+
+        backupHeaderRow.setOnClickListener {
+            isBackupSectionExpanded = !backupBodyView.isShown
+            syncCollapsibleSections()
+            if (backupBodyView.isShown) animateTabReveal(backupBodyView)
+        }
         root.addView(backupCard)
         addSpacer(root, 14)
 
@@ -3158,6 +3209,22 @@ class MainActivity : AppCompatActivity() {
             holidayBodyView.visibility = if (isUpcomingHolidaysSectionExpanded) View.VISIBLE else View.GONE
             holidayArrowTv.text = if (isUpcomingHolidaysSectionExpanded) "▲" else "▼"
             holidaySummaryTv.text = "$holCount holiday(s) • $leaveCount leave(s)"
+        }
+
+        if (::backupBodyView.isInitialized && ::backupSummaryTv.isInitialized && ::backupArrowTv.isInitialized) {
+            val health = store.getBackupHealthInfo()
+            val needsBackupAttention = health.configured && !health.healthy
+            val shouldExpandBackup = isBackupSectionExpanded || needsBackupAttention
+            backupBodyView.visibility = if (shouldExpandBackup) View.VISIBLE else View.GONE
+            backupArrowTv.text = if (shouldExpandBackup) "▲" else "▼"
+            backupSummaryTv.text = when {
+                !health.configured -> "Folder not linked • Tap to configure backup & widget"
+                health.healthy -> health.statusText.removePrefix("Auto-backup active ")
+                else -> "⚠️ ${health.statusText}"
+            }
+            backupSummaryTv.setTextColor(
+                if (needsBackupAttention) GlassUiTheme.statusWarningText(isDark) else cTextSecondary()
+            )
         }
     }
 
@@ -5310,7 +5377,7 @@ class MainActivity : AppCompatActivity() {
         return raw.removePrefix("\"").removeSuffix("\"")
             .replace("\u00E2\u2014\u201A", "-")
             .replace("\u00E2\u2014\u20AC", "-")
-            .replace("â\u0094\u2080", "-")
+            .replace("â\u0094\u0080", "-")
             .replace("\u2013", "-")
             .replace("\u2014", "-")
             .replace("\u2212", "-")
