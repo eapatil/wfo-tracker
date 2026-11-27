@@ -360,7 +360,7 @@ class MainActivity : AppCompatActivity() {
         outState.putBoolean(STATE_BACKUP_EXPANDED, isBackupSectionExpanded)
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
+        override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = AttendanceStore(this)
 
@@ -388,6 +388,13 @@ class MainActivity : AppCompatActivity() {
             isNotificationsSectionExpanded = savedInstanceState.getBoolean(STATE_NOTIF_EXPANDED, false)
             isUpcomingHolidaysSectionExpanded = savedInstanceState.getBoolean(STATE_HOL_EXPANDED, false)
             isBackupSectionExpanded = savedInstanceState.getBoolean(STATE_BACKUP_EXPANDED, false)
+        }
+
+        val inspectTargetDate = intent?.getStringExtra(WfoWidgetProvider.EXTRA_INSPECT_DATE)?.let { dateStr ->
+            runCatching { LocalDate.parse(dateStr) }.getOrNull()?.also { targetDate ->
+                selectedMonth = YearMonth.from(targetDate)
+                activeTab = ActiveTab.HOME
+            }
         }
 
         isDark = resolveIsDarkMode()
@@ -426,6 +433,9 @@ class MainActivity : AppCompatActivity() {
                 promptDeviceCredential(REQ_UNLOCK_APP, "Unlock OfficePace")
             } else {
                 showDashboardMode(playEntrance = savedInstanceState == null)
+                inspectTargetDate?.let { d ->
+                    window.decorView.post { showDayInspectorDialog(d) }
+                }
             }
         }
         refreshAllViews(animateCharts = savedInstanceState == null)
