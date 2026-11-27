@@ -153,6 +153,26 @@ class WfoWidgetProvider : AppWidgetProvider() {
         return raw.removePrefix("\"").removeSuffix("\"")
     }
 
+    private fun resolvePercentageProgressColor(
+        isDark: Boolean,
+        actualPercent: Int,
+        targetPercent: Int,
+        remainingDays: Int,
+        bufferDays: Int
+    ): Int {
+        val safeTarget = maxOf(1, targetPercent)
+        return when {
+            remainingDays == 0 || actualPercent >= safeTarget ->
+                GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.SUCCESS).second
+            bufferDays < 0 || actualPercent < (safeTarget * 0.5f).roundToInt() ->
+                GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.DANGER).second
+            actualPercent < (safeTarget * 0.8f).roundToInt() ->
+                GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.WARNING).second
+            else ->
+                GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.PRIMARY).second
+        }
+    }
+
     private fun updateSingleWidget(
         context: Context,
         appWidgetManager: AppWidgetManager,
@@ -175,6 +195,7 @@ class WfoWidgetProvider : AppWidgetProvider() {
             val minWidthDp = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 260) ?: 260
             val minHeightDp = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 140) ?: 140
             val isCompact = minWidthDp < 245 || minHeightDp < 115
+            val showExtraBottomLine = !isCompact && minHeightDp >= 145
 
             val views = RemoteViews(context.packageName, R.layout.wfo_widget)
 
@@ -270,17 +291,23 @@ class WfoWidgetProvider : AppWidgetProvider() {
             views.setTextColor(R.id.widget_hero_ratio, textPrimary)
 
             val plannedCoversGap = stats.futurePlannedDays > 0 && stats.projectedAttendedDays >= stats.requiredDays
-            val showProjectedBadge = !isCompact && minWidthDp >= 300 && stats.futurePlannedDays > 0
-            if (showProjectedBadge) {
+            val extraPlannedDays = maxOf(0, stats.projectedAttendedDays - stats.requiredDays)
+            val remainingAfterPlanned = maxOf(0, stats.requiredDays - stats.projectedAttendedDays)
+
+            val showPlannedGapBadge = !isCompact && minWidthDp >= 300 && stats.futurePlannedDays > 0
+            if (showPlannedGapBadge) {
                 views.setViewVisibility(R.id.widget_projected_badge, View.VISIBLE)
-                views.setTextViewText(
-                    R.id.widget_projected_badge,
-                    "→ ${stats.projectedAttendedDays}/${stats.requiredDays} proj."
-                )
+                val gapText = when {
+                    stats.remainingDays == 0 -> "+${stats.futurePlannedDays} extra"
+                    plannedCoversGap && extraPlannedDays > 0 -> "→ +${stats.futurePlannedDays} plan (+$extraPlannedDays)"
+                    plannedCoversGap -> "→ +${stats.futurePlannedDays} plan (covers)"
+                    else -> "→ +${stats.futurePlannedDays} plan ($remainingAfterPlanned gap)"
+                }
+                views.setTextViewText(R.id.widget_projected_badge, gapText)
                 views.setTextColor(
                     R.id.widget_projected_badge,
-                    if (plannedCoversGap) GlassUiTheme.statusSuccessText(isDark)
-                    else GlassUiTheme.statusInfoText(isDark)
+                    if (plannedCoversGap || stats.remainingDays == 0) GlassUiTheme.statusSuccessText(isDark)
+                    else GlassUiTheme.statusWarningText(isDark)
                 )
             } else {
                 views.setViewVisibility(R.id.widget_projected_badge, View.GONE)
@@ -324,9 +351,22 @@ class WfoWidgetProvider : AppWidgetProvider() {
 
             val denom = maxOf(1, stats.requiredDays)
             val loggedPct = ((stats.attendedDays.toFloat() / denom) * 100f).roundToInt().coerceIn(0, 100)
-            val projectedPct = ((stats.projectedAttendedDays.toFloat() / denom) * 100f).roundToInt().coerceIn(loggedPct, 100)
             views.setProgressBar(R.id.widget_progress_bar, 100, loggedPct, false)
-            views.setInt(R.id.widget_progress_bar, "setSecondaryProgress", projectedPct)
+            val barTint = resolvePercentageProgressColor(
+                isDark = isDark,
+                actualPercent = stats.actualPercent,
+                targetPercent = stats.targetPercent,
+                remainingDays = stats.remainingDays,
+                bufferDays = stats.bufferDays
+            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                views.setInt(R.id.widget_progress_bar, "setProgressTintList", null)
+            }
+            views.setColorStateListAttr(
+                R.id.widget_progress_bar,
+                "setProgressTintList",
+                android.content.res.ColorStateList.valueOf(barTint)
+            )
 
             val monday = today.with(DayOfWeek.MONDAY)
             val daySlots = listOf(
@@ -393,6 +433,37 @@ class WfoWidgetProvider : AppWidgetProvider() {
                 views.setTextColor(R.id.widget_week_summary, textSecondary)
             } else {
                 views.setViewVisibility(R.id.widget_week_summary, View.GONE)
+            }
+
+            if (showExtraBottomLine) {
+                val windowLabel = rhythm.learnedArrivalWindowLabel
+                val cushionOrBufferCue = when {
+                    stats.futurePlannedDays > 0 && plannedCoversGap && extraPlannedDays > 0 ->
+                        "🎯 +$extraPlannedDays planned cushion over target"
+                    stats.futurePlannedDays > 0 && plannedCoversGap ->
+                        "🎯 +${stats.futurePlannedDays} planned covers target"
+                    stats.futurePlannedDays > 0 ->
+                        "📅 +${stats.futurePlannedDays} planned ($remainingAfterPlanned day gap)"
+                    stats.remainingDays == 0 ->
+                        "✅ Mandate met"
+                    stats.bufferDays <= 0 ->
+                        "🚨 0 WFH buffer left"
+                    else ->
+                        "${maxOf(0, stats.bufferDays)} WFH buffer left"
+                }
+                views.setViewVisibility(R.id.widget_window_buffer_line, View.VISIBLE)
+                views.setTextViewText(
+                    R.id.widget_window_buffer_line,
+                    "🕒 Window $windowLabel • $cushionOrBufferCue"
+                )
+                views.setTextColor(
+                    R.id.widget_window_buffer_line,
+                    if (stats.remainingDays == 0 || plannedCoversGap) GlassUiTheme.statusSuccessText(isDark)
+                    else if (stats.bufferDays <= 0) GlassUiTheme.statusDangerText(isDark)
+                    else textSecondary
+                )
+            } else {
+                views.setViewVisibility(R.id.widget_window_buffer_line, View.GONE)
             }
 
             val timeFormatted = nowTime.format(DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault()))
