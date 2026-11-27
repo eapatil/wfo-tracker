@@ -360,7 +360,32 @@ class MainActivity : AppCompatActivity() {
         outState.putBoolean(STATE_BACKUP_EXPANDED, isBackupSectionExpanded)
     }
 
-        override fun onCreate(savedInstanceState: Bundle?) {
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleInspectDateIntent(intent)
+    }
+
+    private fun handleInspectDateIntent(targetIntent: Intent?) {
+        val dateStr = targetIntent?.getStringExtra(WfoWidgetProvider.EXTRA_INSPECT_DATE) ?: return
+        val targetDate = runCatching { LocalDate.parse(dateStr) }.getOrNull() ?: return
+        targetIntent.removeExtra(WfoWidgetProvider.EXTRA_INSPECT_DATE)
+
+        selectedMonth = YearMonth.from(targetDate)
+        activeTab = ActiveTab.HOME
+
+        if (!store.isSetupComplete()) return
+        if (store.isFullAppLockEnabled() && !isAppAuthenticated) {
+            showAppLockScreen()
+            promptDeviceCredential(REQ_UNLOCK_APP, "Unlock OfficePace")
+            return
+        }
+
+        showDashboardMode(playEntrance = false)
+        window.decorView.post { showDayInspectorDialog(targetDate) }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = AttendanceStore(this)
 
@@ -394,6 +419,7 @@ class MainActivity : AppCompatActivity() {
             runCatching { LocalDate.parse(dateStr) }.getOrNull()?.also { targetDate ->
                 selectedMonth = YearMonth.from(targetDate)
                 activeTab = ActiveTab.HOME
+                intent?.removeExtra(WfoWidgetProvider.EXTRA_INSPECT_DATE)
             }
         }
 
