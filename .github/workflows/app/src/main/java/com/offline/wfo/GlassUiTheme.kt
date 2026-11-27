@@ -684,3 +684,115 @@ object GlassUiTheme {
     fun createDashEffect(intervals: FloatArray = floatArrayOf(18f, 12f)): DashPathEffect =
         DashPathEffect(intervals, 0f)
 }
+
+    // ==================== WIDGET GLASS HELPERS ====================
+
+    fun resolveWidgetIsDark(context: android.content.Context): Boolean {
+        val raw = context.getSharedPreferences("officepace_ui_prefs", android.content.Context.MODE_PRIVATE)
+            .getString("app_theme_mode", "SYSTEM") ?: "SYSTEM"
+        return when (raw) {
+            "LIGHT" -> false
+            "DARK" -> true
+            else -> (context.resources.configuration.uiMode and
+                android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                android.content.res.Configuration.UI_MODE_NIGHT_YES
+        }
+    }
+
+    fun widgetStatusPillTextColor(isDark: Boolean, kind: StatusKind?): Int {
+        return if (kind == null) textSecondaryColor(isDark)
+        else statusTextColor(isDark, kind)
+    }
+
+    fun widgetStatusPillDrawableRes(kind: StatusKind?): Int {
+        return when (kind) {
+            StatusKind.SUCCESS -> R.drawable.widget_pill_green
+            StatusKind.INFO -> R.drawable.widget_pill_indigo
+            StatusKind.WARNING -> R.drawable.widget_pill_amber
+            StatusKind.HOLIDAY -> R.drawable.widget_pill_purple
+            StatusKind.DANGER, null -> R.drawable.widget_pill_neutral
+        }
+    }
+
+    fun widgetDayTextColor(isDark: Boolean, type: DayType, isToday: Boolean): Int {
+        return when (type) {
+            DayType.OFFICE, DayType.LEAVE, DayType.HOLIDAY -> textOnAccent
+            DayType.PLANNED -> statusTextColor(isDark, StatusKind.INFO)
+            DayType.NONE -> if (isToday) textPrimaryColor(isDark) else textSecondaryColor(isDark)
+        }
+    }
+
+    fun widgetDayDrawableRes(type: DayType): Int {
+        return when (type) {
+            DayType.OFFICE -> R.drawable.widget_day_office
+            DayType.PLANNED -> R.drawable.widget_day_planned
+            DayType.LEAVE -> R.drawable.widget_day_leave
+            DayType.HOLIDAY -> R.drawable.widget_day_holiday
+            DayType.NONE -> R.drawable.widget_day_none
+        }
+    }
+
+    fun widgetProgressColor(
+        isDark: Boolean,
+        remainingDays: Int,
+        plannedCoversTarget: Boolean,
+        bufferDays: Int
+    ): Int = ringAccentColor(isDark, remainingDays, plannedCoversTarget, bufferDays)
+
+    fun createWidgetGlassBitmap(
+        widthPx: Int,
+        heightPx: Int,
+        isDark: Boolean,
+        radiusPx: Float = cardRadiusPx
+    ): android.graphics.Bitmap {
+        val w = widthPx.coerceAtLeast(160)
+        val h = heightPx.coerceAtLeast(96)
+        val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+
+        val rect = RectF(2f, 2f, w - 2f, h - 2f)
+        val topGlass = if (isDark) darkGlassSurfaceTop else lightGlassSurfaceTop
+        val botGlass = if (isDark) darkGlassSurfaceBottom else lightGlassSurfaceBottom
+
+        val basePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(0f, 0f, w.toFloat(), h.toFloat(), topGlass, botGlass, Shader.TileMode.CLAMP)
+        }
+        canvas.drawRoundRect(rect, radiusPx, radiusPx, basePaint)
+
+        val orbPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            maskFilter = BlurMaskFilter(95f, BlurMaskFilter.Blur.NORMAL)
+        }
+        val alphaPool = if (isDark) 52 else 38
+        fun poolColor(col: Int) = Color.argb(alphaPool, Color.red(col), Color.green(col), Color.blue(col))
+
+        orbPaint.color = poolColor(if (isDark) darkOrbOne else lightOrbOne)
+        canvas.drawCircle(w * 0.16f, h * 0.22f, minOf(w, h) * 0.55f, orbPaint)
+
+        orbPaint.color = poolColor(if (isDark) darkOrbTwo else lightOrbTwo)
+        canvas.drawCircle(w * 0.86f, h * 0.72f, minOf(w, h) * 0.50f, orbPaint)
+
+        orbPaint.color = poolColor(if (isDark) darkOrbThree else lightOrbThree)
+        canvas.drawCircle(w * 0.55f, h * 0.15f, minOf(w, h) * 0.44f, orbPaint)
+
+        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 2f
+            color = borderColor(isDark)
+        }
+        canvas.drawRoundRect(rect, radiusPx, radiusPx, borderPaint)
+
+        val sheenPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 2f
+            color = if (isDark) darkGlassHighlight else lightGlassHighlight
+        }
+        canvas.drawLine(
+            rect.left + radiusPx * 0.7f,
+            rect.top + 1.5f,
+            (rect.right - radiusPx * 0.7f).coerceAtLeast(rect.left + 12f),
+            rect.top + 1.5f,
+            sheenPaint
+        )
+        return bmp
+    }
+    
