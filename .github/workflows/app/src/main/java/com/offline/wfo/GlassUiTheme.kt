@@ -20,6 +20,7 @@ import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.view.Gravity
 import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.LinearInterpolator
@@ -53,18 +54,32 @@ object GlassUiTheme {
     private const val UI_PREFS_NAME = "officepace_ui_prefs"
     private const val KEY_THEME_MODE = "app_theme_mode"
 
-    // ==================== DEPTH, RADIUS, ALPHA & BLUR TOKENS ====================
+    // ==================== DEPTH, RADIUS, TOUCH & TYPOGRAPHY TOKENS ====================
 
     const val cardRadiusPx = 24f
     const val bannerRadiusPx = 18f
     const val subtleRadiusPx = 16f
-    const val buttonRadiusPx = 999f       // True capsule pill for primary actions
-    const val secondaryButtonRadiusPx = 16f // Soft squircle for compact utility buttons
+    const val buttonRadiusPx = 999f          // True capsule pill for primary actions
+    const val secondaryButtonRadiusPx = 16f    // Soft squircle for compact/paired actions
     const val chipRadiusPx = 14f
     const val cellRadiusPx = 16f
     const val navDockRadiusPx = 26f
     const val restoreBlurRadiusPx = 18f
     const val weekendDimAlpha = 0.66f
+
+    const val minPrimaryButtonHeightPx = 126
+    const val minThumbButtonHeightPx = 122
+    const val minChipHeightPx = 96
+    const val minModeChipHeightPx = 98
+    const val minNavTabHeightPx = 104
+
+    const val sectionTitleSp = 17f
+    const val cardBodySp = 14f
+    const val cardSubtextSp = 13f
+    const val pillButtonSp = 15f
+    const val tonalButtonSp = 14f
+    const val chipTextSp = 13f
+    const val footerTextSp = 12f
 
     // ==================== LIGHT THEME: FROSTED GLACIER & IRIS MIST ====================
 
@@ -579,7 +594,7 @@ object GlassUiTheme {
         }
     }
 
-    // ==================== LAYER 3: DUAL-COLOR ACCENT CAPSULES & TONAL UTILITY PILLS ====================
+    // ==================== LAYER 3: BUTTON STYLING & THEME CONTROLS ====================
 
     fun glassAccentButton(
         startColor: Int,
@@ -616,10 +631,6 @@ object GlassUiTheme {
         )
     }
 
-    /**
-     * Soft tonal ghost-glass squircle for secondary/utility buttons so they stay airy
-     * and never look like heavy stacked banner slabs.
-     */
     fun glassTonalButton(
         isDark: Boolean,
         role: AccentRole = AccentRole.PRIMARY,
@@ -650,6 +661,131 @@ object GlassUiTheme {
         }
     }
 
+    fun stylePrimaryPillButton(
+        tv: TextView,
+        bgHex: String,
+        textColor: Int,
+        isDark: Boolean,
+        minHeightPx: Int = minPrimaryButtonHeightPx
+    ) {
+        tv.textSize = pillButtonSp
+        tv.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+        tv.setTextColor(textColor)
+        tv.gravity = Gravity.CENTER
+        tv.minHeight = minHeightPx
+        tv.isClickable = true
+        tv.isFocusable = true
+        tv.setPadding(24, 20, 24, 20)
+        tv.background = glassAccentButtonHex(
+            bgHex,
+            bgHex,
+            buttonRadiusPx,
+            translucent = true,
+            isDark = isDark
+        )
+    }
+
+    fun styleTonalButton(
+        tv: TextView,
+        role: AccentRole,
+        isDark: Boolean,
+        minHeightPx: Int = minThumbButtonHeightPx
+    ) {
+        tv.textSize = tonalButtonSp
+        tv.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+        tv.setTextColor(glassTonalTextColor(isDark, role))
+        tv.gravity = Gravity.CENTER
+        tv.minHeight = minHeightPx
+        tv.maxLines = 2
+        tv.isClickable = true
+        tv.isFocusable = true
+        tv.setPadding(16, 18, 16, 18)
+        tv.background = glassTonalButton(isDark, role, secondaryButtonRadiusPx)
+    }
+
+    fun styleReadinessButton(
+        btn: TextView,
+        isDark: Boolean,
+        ready: Boolean,
+        readyLabel: String,
+        actionLabel: String,
+        readyRole: AccentRole
+    ) {
+        styleTonalButton(btn, readyRole, isDark, minThumbButtonHeightPx)
+        if (ready) {
+            btn.text = "✓ $readyLabel"
+            btn.setTextColor(glassTonalTextColor(isDark, readyRole))
+            btn.background = glassTonalButton(isDark, readyRole, secondaryButtonRadiusPx)
+        } else {
+            btn.text = "⚠️ $actionLabel"
+            btn.setTextColor(statusWarningText(isDark))
+            btn.background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = secondaryButtonRadiusPx
+                setColor(statusTintColor(isDark, StatusKind.WARNING))
+                setStroke(3, accentColors(isDark, AccentRole.WARNING).second)
+            }
+        }
+    }
+
+    fun styleSmallChip(tv: TextView, isDark: Boolean) {
+        tv.textSize = chipTextSp
+        tv.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+        tv.setTextColor(textPrimaryColor(isDark))
+        tv.gravity = Gravity.CENTER
+        tv.minHeight = minChipHeightPx
+        tv.isClickable = true
+        tv.isFocusable = true
+        tv.setPadding(20, 14, 20, 14)
+        tv.background = glassSubtleSurface(isDark, chipRadiusPx)
+    }
+
+    fun styleModeChip(chip: TextView, selected: Boolean, activeHex: String, isDark: Boolean) {
+        chip.textSize = chipTextSp
+        chip.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+        chip.gravity = Gravity.CENTER
+        chip.minHeight = minModeChipHeightPx
+        chip.isClickable = true
+        chip.isFocusable = true
+        chip.setPadding(8, 15, 8, 15)
+        if (selected) {
+            chip.setTextColor(textOnAccent)
+            chip.background = glassAccentButtonHex(
+                activeHex,
+                activeHex,
+                chipRadiusPx,
+                translucent = true,
+                isDark = isDark
+            )
+        } else {
+            chip.setTextColor(textSecondaryColor(isDark))
+            chip.background = glassSubtleSurface(isDark, chipRadiusPx)
+        }
+    }
+
+    fun styleNavTab(btn: TextView, selected: Boolean, isDark: Boolean) {
+        btn.textSize = tonalButtonSp
+        btn.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+        btn.gravity = Gravity.CENTER
+        btn.minHeight = minNavTabHeightPx
+        btn.isClickable = true
+        btn.isFocusable = true
+        btn.setPadding(12, 16, 12, 16)
+        if (selected) {
+            val (startCol, endCol) = accentColors(isDark, AccentRole.PRIMARY)
+            btn.setTextColor(textOnAccent)
+            btn.background = glassAccentButton(
+                startCol,
+                endCol,
+                buttonRadiusPx,
+                translucent = true
+            )
+        } else {
+            btn.setTextColor(textSecondaryColor(isDark))
+            btn.background = glassSubtleSurface(isDark, buttonRadiusPx)
+        }
+    }
+
     fun glassNavDock(isDark: Boolean): GradientDrawable {
         return GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
@@ -660,7 +796,7 @@ object GlassUiTheme {
     }
 
     fun styleGlassSectionHeader(tv: TextView, isDark: Boolean) {
-        tv.textSize = 16f
+        tv.textSize = sectionTitleSp
         tv.letterSpacing = 0.01f
         tv.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
         tv.setTextColor(textPrimaryColor(isDark))
