@@ -107,17 +107,10 @@ class WfoWidgetProvider : AppWidgetProvider() {
         }
 
         if ((mode == TrackingMode.LOCATION_ONLY || mode == TrackingMode.BOTH) && store.hasOfficeLocationConfigured()) {
-            val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-            val bestLoc = listOf(
-                LocationManager.GPS_PROVIDER,
-                LocationManager.NETWORK_PROVIDER,
-                LocationManager.PASSIVE_PROVIDER
-            ).mapNotNull { runCatching { lm.getLastKnownLocation(it) }.getOrNull() }
-                .maxByOrNull { it.time }
-
+            val bestLoc = readBestLastKnownLocation(context)
             if (bestLoc != null) {
-                store.setLastKnownLocation(bestLoc.latitude, bestLoc.longitude)
-                val dist = store.distanceToOfficeMeters(bestLoc.latitude, bestLoc.longitude)
+                store.setLastKnownLocation(bestLoc.first, bestLoc.second)
+                val dist = store.distanceToOfficeMeters(bestLoc.first, bestLoc.second)
                 if (dist != null && dist <= store.getGeofenceRadiusMeters()) {
                     val label = store.getOfficeLocationName().ifEmpty { "Office Geofence" }
                     val isNew = store.recordOfficePresence(label, today)
@@ -143,6 +136,50 @@ class WfoWidgetProvider : AppWidgetProvider() {
                 Intent(context, WifiMonitorService::class.java)
                     .setAction(WifiMonitorService.ACTION_REFRESH_STATUS)
             )
+        }
+    }
+
+    @Suppress("MissingPermission")
+    private fun readBestLastKnownLocation(context: Context): Pair<Double, Double>? {
+        val hasFine = ContextCompat.checkSelfPermission(
+            context, android.Manifest.permission.ACCESS_FINE_LOCATION
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val hasCoarse = ContextCompat.checkSelfPermission(
+            context, android.Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!hasFine && !hasCoarse) return null
+
+        val lm = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val best = listOf(
+            LocationManager.GPS_PROVIDER,
+            LocationManager.NETWORK_PROVIDER,
+            LocationManager.PASSIVE_PROVIDER
+        ).mapNotNull { runCatching { lm.getLastKnownLocation(it) }.getOrNull() }
+            .maxByOrNull { it.time }
+        return best?.let { it.latitude to it.longitude }
+    }
+
+    private fun resolveLiveGeofenceMetersText(context: Context, store: AttendanceStore): String {
+        val mode = store.getTrackingMode()
+        if (mode != TrackingMode.LOCATION_ONLY && mode != TrackingMode.BOTH) return ""
+        if (!store.hasOfficeLocationConfigured()) return ""
+
+        val radiusM = store.getGeofenceRadiusMeters()
+        val liveCoords = readBestLastKnownLocation(context)
+        if (liveCoords != null) {
+            store.setLastKnownLocation(liveCoords.first, liveCoords.second)
+        }
+
+        val lat = liveCoords?.first ?: if (store.hasLastKnownLocation()) store.getLastKnownLat() else null
+        val lng = liveCoords?.second ?: if (store.hasLastKnownLocation()) store.getLastKnownLng() else null
+        if (lat == null || lng == null) return " • 📍 ${radiusM}m zone"
+
+        val distM = store.distanceToOfficeMeters(lat, lng) ?: return " • 📍 ${radiusM}m zone"
+        val dRound = distM.roundToInt()
+        return if (dRound <= radiusM) {
+            " • 📍 ${dRound}m/${radiusM}m in"
+        } else {
+            " • 📍 ${dRound}m/${radiusM}m"
         }
     }
 
@@ -439,41 +476,24 @@ class WfoWidgetProvider : AppWidgetProvider() {
                 val windowLabel = rhythm.learnedArrivalWindowLabel
                 val cushionOrBufferCue = when {
                     stats.futurePlannedDays > 0 && plannedCoversGap && extraPlannedDays > 0 ->
-                        "🎯 +$extraPlannedDays planned cushion over target"
+                        "🎯 +$extraPlannedDays plan cushion"
                     stats.futurePlannedDays > 0 && plannedCoversGap ->
-                        "🎯 +${stats.futurePlannedDays} planned covers target"
+                        "🎯 +${stats.futurePlannedDays} plan covers"
                     stats.futurePlannedDays > 0 ->
-                        "📅 +${stats.futurePlannedDays} planned ($remainingAfterPlanned day gap)"
+                        "📅 +$remainingAfterPlanned plan gap"
                     stats.remainingDays == 0 ->
                         "✅ Mandate met"
                     stats.bufferDays <= 0 ->
-                        "🚨 0 WFH buffer left"
+                        "🚨 0 buf left"
                     else ->
-                        "${maxOf(0, stats.bufferDays)} WFH buffer left"
+                        "${maxOf(0, stats.bufferDays)} buf left"
                 }
-
-                val trackingMode = store.getTrackingMode()
-                val zoneDetail = if (
-                    (trackingMode == TrackingMode.LOCATION_ONLY || trackingMode == TrackingMode.BOTH) &&
-                    store.hasOfficeLocationConfigured() &&
-                    store.hasLastKnownLocation()
-                ) {
-                    val distM = store.distanceToOfficeMeters(store.getLastKnownLat(), store.getLastKnownLng())
-                    val radiusM = store.getGeofenceRadiusMeters()
-                    if (distM != null) {
-                        val dRound = distM.roundToInt()
-                        if (dRound <= radiusM) {
-                            " • 📍 Inside ${radiusM}m zone (${dRound}m)"
-                        } else {
-                            " • 📍 ${dRound}m (${radiusM}m zone)"
-                        }
-                    } else ""
-                } else ""
+                val zoneDetail = resolveLiveGeofenceMetersText(context, store)
 
                 views.setViewVisibility(R.id.widget_window_buffer_line, View.VISIBLE)
                 views.setTextViewText(
                     R.id.widget_window_buffer_line,
-                    "🕒 Window $windowLabel • $cushionOrBufferCue$zoneDetail"
+                    "🕒 $windowLabel • $cushionOrBufferCue$zoneDetail"
                 )
                 views.setTextColor(
                     R.id.widget_window_buffer_line,
