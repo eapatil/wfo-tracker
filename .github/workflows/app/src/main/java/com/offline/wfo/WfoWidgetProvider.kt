@@ -160,280 +160,253 @@ class WfoWidgetProvider : AppWidgetProvider() {
         options: Bundle?,
         syncing: Boolean
     ) {
-        val isDark = GlassUiTheme.resolveWidgetIsDark(context)
-        val store = AttendanceStore(context)
-        store.performDailyRolloverIfNeeded()
+        runCatching {
+            val isDark = GlassUiTheme.resolveWidgetIsDark(context)
+            val store = AttendanceStore(context)
+            store.performDailyRolloverIfNeeded()
 
-        val today = LocalDate.now()
-        val nowTime = LocalTime.now()
-        val ym = YearMonth.from(today)
-        val stats = store.getMonthStats(ym, today)
-        val rhythm = store.getRhythmStats(today)
+            val today = LocalDate.now()
+            val nowTime = LocalTime.now()
+            val ym = YearMonth.from(today)
+            val stats = store.getMonthStats(ym, today)
+            val rhythm = store.getRhythmStats(today)
 
-        val minWidthDp = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 260) ?: 260
-        val minHeightDp = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 140) ?: 140
-        val isCompact = minWidthDp < 245 || minHeightDp < 115
+            val minWidthDp = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 260) ?: 260
+            val minHeightDp = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 140) ?: 140
+            val isCompact = minWidthDp < 245 || minHeightDp < 115
 
-        val views = RemoteViews(context.packageName, R.layout.wfo_widget)
+            val views = RemoteViews(context.packageName, R.layout.wfo_widget)
 
-        val bmpW = ((minWidthDp.coerceIn(180, 520)) * context.resources.displayMetrics.density)
-            .roundToInt()
-            .coerceIn(160, GlassUiTheme.maxWidgetBitmapWidthPx)
-        val bmpH = ((minHeightDp.coerceIn(95, 260)) * context.resources.displayMetrics.density)
-            .roundToInt()
-            .coerceIn(96, GlassUiTheme.maxWidgetBitmapHeightPx)
-        views.setImageViewBitmap(
-            R.id.widget_bg_glass,
-            GlassUiTheme.createWidgetGlassBitmap(bmpW, bmpH, isDark)
-        )
+            val bmpW = ((minWidthDp.coerceIn(180, 480)) * context.resources.displayMetrics.density)
+                .roundToInt()
+                .coerceIn(160, GlassUiTheme.maxWidgetBitmapWidthPx)
+            val bmpH = ((minHeightDp.coerceIn(95, 220)) * context.resources.displayMetrics.density)
+                .roundToInt()
+                .coerceIn(96, GlassUiTheme.maxWidgetBitmapHeightPx)
+            views.setImageViewBitmap(
+                R.id.widget_bg_glass,
+                GlassUiTheme.createWidgetGlassBitmap(bmpW, bmpH, isDark)
+            )
 
-        val textPrimary = GlassUiTheme.textPrimaryColor(isDark)
-        val textSecondary = GlassUiTheme.textSecondaryColor(isDark)
+            val textPrimary = GlassUiTheme.textPrimaryColor(isDark)
+            val textSecondary = GlassUiTheme.textSecondaryColor(isDark)
 
-        val dateLabel = today.format(DateTimeFormatter.ofPattern("EEE, dd MMM", Locale.getDefault()))
-        views.setTextViewText(R.id.widget_header_date, if (isCompact) dateLabel else "OfficePace • $dateLabel")
-        views.setTextColor(R.id.widget_header_date, textPrimary)
+            val dateLabel = today.format(DateTimeFormatter.ofPattern("EEE, dd MMM", Locale.getDefault()))
+            views.setTextViewText(R.id.widget_header_date, if (isCompact) dateLabel else "OfficePace • $dateLabel")
+            views.setTextColor(R.id.widget_header_date, textPrimary)
 
-        val isConnected = store.wasConnectedToOfficeWifi()
-        val todayType = store.getDayType(today)
-        val (startMin, _) = store.getLearnedArrivalWindowMinutes()
-        val arrivalFormatted = String.format(Locale.US, "%02d:%02d", startMin / 60, startMin % 60)
-        val graceCheckFormatted = store.getPlannedNotArrivedCheckTime()
-            .format(DateTimeFormatter.ofPattern("HH:mm"))
+            val isConnected = store.wasConnectedToOfficeWifi()
+            val todayType = store.getDayType(today)
+            val (startMin, _) = store.getLearnedArrivalWindowMinutes()
+            val arrivalFormatted = String.format(Locale.US, "%02d:%02d", startMin / 60, startMin % 60)
+            val graceCheckFormatted = store.getPlannedNotArrivedCheckTime()
+                .format(DateTimeFormatter.ofPattern("HH:mm"))
 
-        val statusPrefs = context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
-        val statusLabel: String
-        val statusKind: GlassUiTheme.StatusKind?
+            val statusPrefs = context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
+            val statusLabel: String
+            val statusKind: GlassUiTheme.StatusKind?
 
-        if (isConnected) {
-            statusLabel = if (isCompact) "At Office" else "✓ At Office"
-            statusKind = GlassUiTheme.StatusKind.SUCCESS
-            val existingBase = statusPrefs.getLong(KEY_ARRIVAL_START_EPOCH_MS, 0L)
-            val baseElapsed = if (existingBase > 0L) {
-                existingBase
+            if (isConnected) {
+                statusLabel = if (isCompact) "At Office" else "✓ At Office"
+                statusKind = GlassUiTheme.StatusKind.SUCCESS
+                val existingBase = statusPrefs.getLong(KEY_ARRIVAL_START_EPOCH_MS, 0L)
+                val baseElapsed = if (existingBase > 0L) {
+                    existingBase
+                } else {
+                    val nowElapsed = SystemClock.elapsedRealtime()
+                    statusPrefs.edit().putLong(KEY_ARRIVAL_START_EPOCH_MS, nowElapsed).apply()
+                    nowElapsed
+                }
+                views.setViewVisibility(R.id.widget_office_chrono, View.VISIBLE)
+                views.setChronometer(R.id.widget_office_chrono, baseElapsed, null, true)
+                views.setTextColor(R.id.widget_office_chrono, GlassUiTheme.widgetStatusPillTextColor(isDark, statusKind))
             } else {
-                val nowElapsed = SystemClock.elapsedRealtime()
-                statusPrefs.edit().putLong(KEY_ARRIVAL_START_EPOCH_MS, nowElapsed).apply()
-                nowElapsed
-            }
-            views.setViewVisibility(R.id.widget_office_chrono, View.VISIBLE)
-            views.setChronometer(R.id.widget_office_chrono, baseElapsed, null, true)
-            views.setTextColor(R.id.widget_office_chrono, GlassUiTheme.widgetStatusPillTextColor(isDark, statusKind))
-        } else {
-            statusPrefs.edit().remove(KEY_ARRIVAL_START_EPOCH_MS).apply()
-            views.setViewVisibility(R.id.widget_office_chrono, View.GONE)
+                statusPrefs.edit().remove(KEY_ARRIVAL_START_EPOCH_MS).apply()
+                views.setViewVisibility(R.id.widget_office_chrono, View.GONE)
 
+                when {
+                    todayType == DayType.OFFICE -> {
+                        statusLabel = "✓ Office Logged"
+                        statusKind = GlassUiTheme.StatusKind.SUCCESS
+                    }
+                    todayType == DayType.HOLIDAY -> {
+                        statusLabel = "🎉 Holiday"
+                        statusKind = GlassUiTheme.StatusKind.HOLIDAY
+                    }
+                    todayType == DayType.LEAVE -> {
+                        statusLabel = "🌴 On Leave"
+                        statusKind = GlassUiTheme.StatusKind.WARNING
+                    }
+                    todayType == DayType.PLANNED && store.isInSmartCommuteWindow(nowTime, today) -> {
+                        statusLabel = "⏳ Grace till $graceCheckFormatted"
+                        statusKind = GlassUiTheme.StatusKind.INFO
+                    }
+                    todayType == DayType.PLANNED -> {
+                        statusLabel = "📅 Planned • $arrivalFormatted"
+                        statusKind = GlassUiTheme.StatusKind.INFO
+                    }
+                    store.isInSmartCommuteWindow(nowTime, today) -> {
+                        statusLabel = "🕒 Window $arrivalFormatted"
+                        statusKind = GlassUiTheme.StatusKind.INFO
+                    }
+                    else -> {
+                        statusLabel = "🏠 WFH"
+                        statusKind = null
+                    }
+                }
+            }
+
+            views.setTextViewText(R.id.widget_status_text, statusLabel)
+            views.setTextColor(
+                R.id.widget_status_text,
+                GlassUiTheme.widgetStatusPillTextColor(isDark, statusKind)
+            )
+
+            views.setTextViewText(
+                R.id.widget_hero_ratio,
+                "${stats.attendedDays} / ${stats.requiredDays} days (${stats.actualPercent}%)"
+            )
+            views.setTextColor(R.id.widget_hero_ratio, textPrimary)
+
+            val plannedCoversGap = stats.futurePlannedDays > 0 && stats.projectedAttendedDays >= stats.requiredDays
+            if (!isCompact && stats.futurePlannedDays > 0) {
+                views.setViewVisibility(R.id.widget_projected_badge, View.VISIBLE)
+                views.setTextViewText(
+                    R.id.widget_projected_badge,
+                    "→ ${stats.projectedAttendedDays}/${stats.requiredDays} proj."
+                )
+                views.setTextColor(
+                    R.id.widget_projected_badge,
+                    if (plannedCoversGap) GlassUiTheme.statusSuccessText(isDark)
+                    else GlassUiTheme.statusInfoText(isDark)
+                )
+            } else {
+                views.setViewVisibility(R.id.widget_projected_badge, View.GONE)
+            }
+
+            val nextPlannedDate = (1..ym.lengthOfMonth())
+                .map { ym.atDay(it) }
+                .firstOrNull { !it.isBefore(today) && store.getDayType(it) == DayType.PLANNED }
+
+            val paceText: String
+            val paceColor: Int
             when {
-                todayType == DayType.OFFICE -> {
-                    statusLabel = "✓ Office Logged"
-                    statusKind = GlassUiTheme.StatusKind.SUCCESS
+                stats.remainingDays == 0 -> {
+                    paceText = if (isCompact) "🎉 Met" else "🎉 Mandate met • WFH ok"
+                    paceColor = GlassUiTheme.statusSuccessText(isDark)
                 }
-                todayType == DayType.HOLIDAY -> {
-                    statusLabel = "🎉 Holiday"
-                    statusKind = GlassUiTheme.StatusKind.HOLIDAY
+                stats.bufferDays <= 0 -> {
+                    paceText = if (isCompact) {
+                        "🚨 0 buf • ${stats.remainingDays} left"
+                    } else {
+                        "🚨 0 buffer • attend all ${stats.remainingDays} left"
+                    }
+                    paceColor = GlassUiTheme.statusDangerText(isDark)
                 }
-                todayType == DayType.LEAVE -> {
-                    statusLabel = "🌴 On Leave"
-                    statusKind = GlassUiTheme.StatusKind.WARNING
+                rhythm.consecutiveWfhWeekdays >= 3 && !isCompact -> {
+                    paceText = "⚠️ ${rhythm.consecutiveWfhWeekdays} WFH days • ${stats.bufferDays} buf"
+                    paceColor = GlassUiTheme.statusWarningText(isDark)
                 }
-                todayType == DayType.PLANNED && store.isInSmartCommuteWindow(nowTime, today) -> {
-                    statusLabel = "⏳ Grace till $graceCheckFormatted"
-                    statusKind = GlassUiTheme.StatusKind.INFO
-                }
-                todayType == DayType.PLANNED -> {
-                    statusLabel = "📅 Planned • $arrivalFormatted"
-                    statusKind = GlassUiTheme.StatusKind.INFO
-                }
-                store.isInSmartCommuteWindow(nowTime, today) -> {
-                    statusLabel = "🕒 Window $arrivalFormatted"
-                    statusKind = GlassUiTheme.StatusKind.INFO
+                nextPlannedDate != null && !isCompact -> {
+                    val pLabel = nextPlannedDate.format(DateTimeFormatter.ofPattern("EEE, dd MMM", Locale.getDefault()))
+                    paceText = "📅 Next: $pLabel • ${stats.bufferDays} buf"
+                    paceColor = GlassUiTheme.statusInfoText(isDark)
                 }
                 else -> {
-                    statusLabel = "🏠 WFH"
-                    statusKind = null
+                    paceText = "${stats.bufferDays} buffer • ${stats.remainingDays} left"
+                    paceColor = if (stats.bufferDays == 1) {
+                        GlassUiTheme.statusWarningText(isDark)
+                    } else {
+                        textSecondary
+                    }
                 }
             }
-        }
+            views.setTextViewText(R.id.widget_pace_line, paceText)
+            views.setTextColor(R.id.widget_pace_line, paceColor)
 
-        val statusTextColor = GlassUiTheme.widgetStatusPillTextColor(isDark, statusKind)
-        val statusPillColor = if (statusKind != null) {
-            GlassUiTheme.statusTintColor(isDark, statusKind)
-        } else {
-            GlassUiTheme.glassSubtleSurfaceColor(isDark)
-        }
-        views.setTextViewText(R.id.widget_status_text, statusLabel)
-        views.setTextColor(R.id.widget_status_text, statusTextColor)
-        views.setImageViewBitmap(
-            R.id.widget_status_pill,
-            GlassUiTheme.renderWidgetSurfaceBitmap(
-                widthPx = 180,
-                heightPx = 56,
-                isDark = isDark,
-                customTint = statusPillColor,
-                radiusPx = GlassUiTheme.buttonRadiusPx
+            val denom = maxOf(1, stats.requiredDays)
+            val loggedPct = ((stats.attendedDays.toFloat() / denom) * 100f).roundToInt().coerceIn(0, 100)
+            val projectedPct = ((stats.projectedAttendedDays.toFloat() / denom) * 100f).roundToInt().coerceIn(loggedPct, 100)
+            views.setProgressBar(R.id.widget_progress_bar, 100, loggedPct, false)
+            views.setInt(R.id.widget_progress_bar, "setSecondaryProgress", projectedPct)
+
+            val monday = today.with(DayOfWeek.MONDAY)
+            val dayViews = listOf(
+                R.id.widget_day_mon to "M",
+                R.id.widget_day_tue to "T",
+                R.id.widget_day_wed to "W",
+                R.id.widget_day_thu to "T",
+                R.id.widget_day_fri to "F"
             )
-        )
+            dayViews.forEachIndexed { idx, (viewId, letter) ->
+                val d = monday.plusDays(idx.toLong())
+                val dType = store.getDayType(d)
+                val isToday = d == today
 
-        views.setTextViewText(
-            R.id.widget_hero_ratio,
-            "${stats.attendedDays} / ${stats.requiredDays} days (${stats.actualPercent}%)"
-        )
-        views.setTextColor(R.id.widget_hero_ratio, textPrimary)
+                val prefix = when (dType) {
+                    DayType.PLANNED -> "[$letter]"
+                    else -> letter
+                }
+                val label = if (isToday) {
+                    SpannableString(prefix).apply {
+                        setSpan(UnderlineSpan(), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    }
+                } else {
+                    SpannableString(prefix)
+                }
+                views.setTextViewText(viewId, label)
+                views.setTextColor(viewId, GlassUiTheme.widgetDayTextColor(isDark, dType, isToday))
 
-        val plannedCoversGap = stats.futurePlannedDays > 0 && stats.projectedAttendedDays >= stats.requiredDays
-        if (!isCompact && stats.futurePlannedDays > 0) {
-            views.setViewVisibility(R.id.widget_projected_badge, View.VISIBLE)
+                val inspectIntent = Intent(context, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    putExtra(EXTRA_INSPECT_DATE, d.toString())
+                }
+                val inspectPending = PendingIntent.getActivity(
+                    context,
+                    appWidgetId * 10 + idx + 1,
+                    inspectIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                views.setOnClickPendingIntent(viewId, inspectPending)
+            }
+
+            val timeFormatted = nowTime.format(DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault()))
             views.setTextViewText(
-                R.id.widget_projected_badge,
-                "→ ${stats.projectedAttendedDays}/${stats.requiredDays} proj."
+                R.id.widget_updated_time,
+                if (syncing) "Syncing…" else "Updated $timeFormatted"
             )
             views.setTextColor(
-                R.id.widget_projected_badge,
-                if (plannedCoversGap) GlassUiTheme.statusSuccessText(isDark)
-                else GlassUiTheme.statusInfoText(isDark)
+                R.id.widget_updated_time,
+                if (syncing) GlassUiTheme.statusInfoText(isDark) else textSecondary
             )
-        } else {
-            views.setViewVisibility(R.id.widget_projected_badge, View.GONE)
-        }
+            views.setTextColor(R.id.widget_refresh_btn, textPrimary)
 
-        val nextPlannedDate = (1..ym.lengthOfMonth())
-            .map { ym.atDay(it) }
-            .firstOrNull { !it.isBefore(today) && store.getDayType(it) == DayType.PLANNED }
-
-        val paceText: String
-        val paceColor: Int
-        when {
-            stats.remainingDays == 0 -> {
-                paceText = if (isCompact) "🎉 Met" else "🎉 Mandate met • WFH ok"
-                paceColor = GlassUiTheme.statusSuccessText(isDark)
-            }
-            stats.bufferDays <= 0 -> {
-                paceText = if (isCompact) {
-                    "🚨 0 buf • ${stats.remainingDays} left"
-                } else {
-                    "🚨 0 buffer • attend all ${stats.remainingDays} left"
-                }
-                paceColor = GlassUiTheme.statusDangerText(isDark)
-            }
-            rhythm.consecutiveWfhWeekdays >= 3 && !isCompact -> {
-                paceText = "⚠️ ${rhythm.consecutiveWfhWeekdays} WFH days • ${stats.bufferDays} buf"
-                paceColor = GlassUiTheme.statusWarningText(isDark)
-            }
-            nextPlannedDate != null && !isCompact -> {
-                val pLabel = nextPlannedDate.format(DateTimeFormatter.ofPattern("EEE, dd MMM", Locale.getDefault()))
-                paceText = "📅 Next: $pLabel • ${stats.bufferDays} buf"
-                paceColor = GlassUiTheme.statusInfoText(isDark)
-            }
-            else -> {
-                paceText = "${stats.bufferDays} buffer • ${stats.remainingDays} left"
-                paceColor = if (stats.bufferDays == 1) {
-                    GlassUiTheme.statusWarningText(isDark)
-                } else {
-                    textSecondary
-                }
-            }
-        }
-        views.setTextViewText(R.id.widget_pace_line, paceText)
-        views.setTextColor(R.id.widget_pace_line, paceColor)
-
-        val denom = maxOf(1, stats.requiredDays)
-        val loggedPct = ((stats.attendedDays.toFloat() / denom) * 100f).roundToInt().coerceIn(0, 100)
-        val projectedPct = ((stats.projectedAttendedDays.toFloat() / denom) * 100f).roundToInt().coerceIn(loggedPct, 100)
-        views.setProgressBar(R.id.widget_progress_bar, 100, loggedPct, false)
-        views.setInt(R.id.widget_progress_bar, "setSecondaryProgress", projectedPct)
-
-        val monday = today.with(DayOfWeek.MONDAY)
-        val dayViews = listOf(
-            R.id.widget_day_mon to "M",
-            R.id.widget_day_tue to "T",
-            R.id.widget_day_wed to "W",
-            R.id.widget_day_thu to "T",
-            R.id.widget_day_fri to "F"
-        )
-        dayViews.forEachIndexed { idx, (viewId, letter) ->
-            val d = monday.plusDays(idx.toLong())
-            val dType = store.getDayType(d)
-            val isToday = d == today
-
-            val label = if (isToday) {
-                SpannableString(letter).apply {
-                    setSpan(UnderlineSpan(), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                }
-            } else {
-                SpannableString(letter)
-            }
-            views.setTextViewText(viewId, label)
-
-            val bgCol = when (dType) {
-                DayType.OFFICE -> GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.SUCCESS).second
-                DayType.PLANNED -> GlassUiTheme.statusTintColor(isDark, GlassUiTheme.StatusKind.INFO)
-                DayType.LEAVE -> GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.WARNING).second
-                DayType.HOLIDAY -> GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.SPECIAL).second
-                DayType.NONE -> GlassUiTheme.glassSubtleSurfaceColor(isDark)
-            }
-            val fgCol = GlassUiTheme.widgetDayTextColor(isDark, dType, isToday)
-            views.setTextColor(viewId, fgCol)
-            views.setImageViewBitmap(
-                viewId,
-                GlassUiTheme.renderWidgetSurfaceBitmap(
-                    widthPx = 64,
-                    heightPx = 64,
-                    isDark = isDark,
-                    customTint = bgCol,
-                    radiusPx = GlassUiTheme.buttonRadiusPx,
-                    strokeColor = if (dType == DayType.PLANNED || isToday) fgCol else null
-                )
-            )
-
-            val inspectIntent = Intent(context, MainActivity::class.java).apply {
+            val openAppIntent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra(EXTRA_INSPECT_DATE, d.toString())
             }
-            val inspectPending = PendingIntent.getActivity(
+            val openPending = PendingIntent.getActivity(
                 context,
-                appWidgetId * 10 + idx + 1,
-                inspectIntent,
+                appWidgetId,
+                openAppIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            views.setOnClickPendingIntent(viewId, inspectPending)
-        }
+            views.setOnClickPendingIntent(R.id.widget_root, openPending)
 
-        val timeFormatted = nowTime.format(DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault()))
-        views.setTextViewText(
-            R.id.widget_updated_time,
-            if (syncing) "Syncing…" else "Updated $timeFormatted"
-        )
-        views.setTextColor(
-            R.id.widget_updated_time,
-            if (syncing) GlassUiTheme.statusInfoText(isDark) else textSecondary
-        )
-        views.setTextColor(R.id.widget_refresh_btn, textPrimary)
-
-        val openAppIntent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val openPending = PendingIntent.getActivity(
-            context,
-            appWidgetId,
-            openAppIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        views.setOnClickPendingIntent(R.id.widget_root, openPending)
-
-        val refreshIntent = Intent(context, WfoWidgetProvider::class.java).apply {
-            action = ACTION_WIDGET_REFRESH
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
-                addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+            val refreshIntent = Intent(context, WfoWidgetProvider::class.java).apply {
+                action = ACTION_WIDGET_REFRESH
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+                    addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+                }
             }
-        }
-        val refreshPending = PendingIntent.getBroadcast(
-            context,
-            appWidgetId + 5000,
-            refreshIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        views.setOnClickPendingIntent(R.id.widget_refresh_btn, refreshPending)
+            val refreshPending = PendingIntent.getBroadcast(
+                context,
+                appWidgetId + 5000,
+                refreshIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.widget_refresh_btn, refreshPending)
 
-        appWidgetManager.updateAppWidget(appWidgetId, views)
+            appWidgetManager.updateAppWidget(appWidgetId, views)
+        }
     }
 }
