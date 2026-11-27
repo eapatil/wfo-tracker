@@ -917,6 +917,44 @@ object GlassUiTheme {
         bufferDays: Int
     ): Int = ringAccentColor(isDark, remainingDays, plannedCoversTarget, bufferDays)
 
+    fun renderWidgetSurfaceBitmap(
+        widthPx: Int,
+        heightPx: Int,
+        isDark: Boolean,
+        customTint: Int? = null,
+        radiusPx: Float = cardRadiusPx,
+        strokeColor: Int? = null
+    ): Bitmap {
+        val w = widthPx.coerceIn(24, maxWidgetBitmapWidthPx)
+        val h = heightPx.coerceIn(24, maxWidgetBitmapHeightPx)
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val rect = RectF(1.5f, 1.5f, w - 1.5f, h - 1.5f)
+        val r = radiusPx.coerceAtMost(minOf(w, h) / 2f)
+
+        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = customTint ?: if (isDark) {
+                Color.argb(198, 24, 34, 52)
+            } else {
+                Color.argb(214, 255, 255, 255)
+            }
+        }
+        canvas.drawRoundRect(rect, r, r, fillPaint)
+
+        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = if (strokeColor != null) 2.5f else 1.5f
+            color = strokeColor ?: if (isDark) {
+                darkWidgetBorder
+            } else {
+                lightGlassBorder
+            }
+        }
+        canvas.drawRoundRect(rect, r, r, borderPaint)
+        return bmp
+    }
+
     fun createWidgetGlassBitmap(
         widthPx: Int,
         heightPx: Int,
