@@ -272,6 +272,14 @@ object GlassUiTheme {
     fun glassSubtleSurfaceColor(isDark: Boolean): Int =
         if (isDark) darkSubtleSurface else lightSubtleSurface
 
+    fun widgetBottomStripColor(isDark: Boolean): Int {
+        return if (isDark) {
+            Color.argb(175, 15, 23, 42)
+        } else {
+            Color.argb(205, 241, 245, 249)
+        }
+    }
+
     fun statusSuccessText(isDark: Boolean): Int = statusTextColor(isDark, StatusKind.SUCCESS)
     fun statusWarningText(isDark: Boolean): Int = statusTextColor(isDark, StatusKind.WARNING)
     fun statusDangerText(isDark: Boolean): Int = statusTextColor(isDark, StatusKind.DANGER)
