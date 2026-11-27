@@ -340,6 +340,21 @@ class WfoWidgetProvider : AppWidgetProvider() {
                 }
             }
 
+            val pillFill = if (statusKind != null) {
+                GlassUiTheme.statusTintColor(isDark, statusKind)
+            } else {
+                GlassUiTheme.widgetBottomStripColor(isDark)
+            }
+            views.setImageViewBitmap(
+                R.id.widget_status_pill_bg,
+                GlassUiTheme.renderWidgetSurfaceBitmap(
+                    widthPx = 220,
+                    heightPx = 56,
+                    isDark = isDark,
+                    customTint = pillFill,
+                    radiusPx = GlassUiTheme.buttonRadiusPx
+                )
+            )
             views.setTextViewText(R.id.widget_status_text, statusLabel)
             views.setTextColor(
                 R.id.widget_status_text,
@@ -514,19 +529,31 @@ class WfoWidgetProvider : AppWidgetProvider() {
                 }
                 val zoneDetail = resolveLiveGeofenceMetersText(context, store)
 
-                views.setViewVisibility(R.id.widget_window_buffer_line, View.VISIBLE)
+                views.setViewVisibility(R.id.widget_bottom_strip_container, View.VISIBLE)
+                views.setImageViewBitmap(
+                    R.id.widget_bottom_strip_bg,
+                    GlassUiTheme.renderWidgetSurfaceBitmap(
+                        widthPx = bmpW,
+                        heightPx = 56,
+                        isDark = isDark,
+                        customTint = GlassUiTheme.widgetBottomStripColor(isDark),
+                        radiusPx = GlassUiTheme.chipRadiusPx
+                    )
+                )
                 views.setTextViewText(
                     R.id.widget_window_buffer_line,
                     "🕒 $windowLabel • $cushionOrBufferCue$zoneDetail"
                 )
                 views.setTextColor(
                     R.id.widget_window_buffer_line,
-                    if (stats.remainingDays == 0 || plannedCoversGap) GlassUiTheme.statusSuccessText(isDark)
-                    else if (stats.bufferDays <= 0) GlassUiTheme.statusDangerText(isDark)
-                    else textSecondary
+                    when {
+                        stats.remainingDays == 0 || plannedCoversGap -> GlassUiTheme.statusSuccessText(isDark)
+                        stats.bufferDays <= 0 -> GlassUiTheme.statusDangerText(isDark)
+                        else -> textPrimary
+                    }
                 )
             } else {
-                views.setViewVisibility(R.id.widget_window_buffer_line, View.GONE)
+                views.setViewVisibility(R.id.widget_bottom_strip_container, View.GONE)
             }
 
             val timeFormatted = nowTime.format(DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault()))
