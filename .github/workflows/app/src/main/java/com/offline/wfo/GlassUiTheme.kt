@@ -713,30 +713,21 @@ object GlassUiTheme {
     }
 
     fun widgetStatusPillTextColor(isDark: Boolean, kind: StatusKind?): Int {
-        return if (isDark) {
-            when (kind) {
-                StatusKind.SUCCESS -> Color.parseColor("#A7F3D0")
-                StatusKind.WARNING -> Color.parseColor("#FDE68A")
-                StatusKind.DANGER -> Color.parseColor("#FECACA")
-                StatusKind.INFO -> Color.parseColor("#E0E7FF")
-                StatusKind.HOLIDAY -> Color.parseColor("#EDE9FE")
-                null -> Color.parseColor("#E2E8F0")
-            }
-        } else {
-            if (kind == null) Color.parseColor("#334155")
-            else statusTextColor(false, kind)
+        return when (kind) {
+            StatusKind.SUCCESS -> if (isDark) Color.parseColor("#A7F3D0") else Color.parseColor("#064E3B")
+            StatusKind.WARNING -> if (isDark) Color.parseColor("#FDE68A") else Color.parseColor("#78350F")
+            StatusKind.DANGER -> if (isDark) Color.parseColor("#FECACA") else Color.parseColor("#7F1D1D")
+            StatusKind.INFO -> Color.parseColor("#1E1B4B")
+            StatusKind.HOLIDAY -> if (isDark) Color.parseColor("#EDE9FE") else Color.parseColor("#4C1D95")
+            null -> Color.parseColor("#1E293B")
         }
     }
 
     fun widgetDayTextColor(isDark: Boolean, type: DayType, isToday: Boolean): Int {
         return when (type) {
             DayType.OFFICE, DayType.LEAVE, DayType.HOLIDAY -> textOnAccent
-            DayType.PLANNED -> if (isDark) Color.parseColor("#E0E7FF") else statusTextColor(false, StatusKind.INFO)
-            DayType.NONE -> if (isToday) {
-                if (isDark) Color.parseColor("#FFFFFF") else Color.parseColor("#0A101D")
-            } else {
-                if (isDark) Color.parseColor("#CBD5E1") else Color.parseColor("#475569")
-            }
+            DayType.PLANNED -> Color.parseColor("#1E1B4B")
+            DayType.NONE -> if (isToday) Color.parseColor("#0A101D") else Color.parseColor("#334155")
         }
     }
 
@@ -746,125 +737,6 @@ object GlassUiTheme {
         plannedCoversTarget: Boolean,
         bufferDays: Int
     ): Int = ringAccentColor(isDark, remainingDays, plannedCoversTarget, bufferDays)
-
-    fun createWidgetPillBitmap(
-        widthPx: Int,
-        heightPx: Int,
-        isDark: Boolean,
-        kind: StatusKind?,
-        radiusPx: Float = chipRadiusPx
-    ): Bitmap {
-        val w = widthPx.coerceAtLeast(48)
-        val h = heightPx.coerceAtLeast(28)
-        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bmp)
-        val rect = RectF(1.5f, 1.5f, w - 1.5f, h - 1.5f)
-
-        val (fillCol, strokeCol) = if (isDark) {
-            when (kind) {
-                StatusKind.SUCCESS -> Color.parseColor("#D9064E3B") to Color.parseColor("#9934D399")
-                StatusKind.WARNING -> Color.parseColor("#D978350F") to Color.parseColor("#99FBBF24")
-                StatusKind.DANGER -> Color.parseColor("#D97F1D1D") to Color.parseColor("#99F87171")
-                StatusKind.INFO -> Color.parseColor("#D9312E81") to Color.parseColor("#99A5B4FC")
-                StatusKind.HOLIDAY -> Color.parseColor("#D94C1D95") to Color.parseColor("#99C4B5FD")
-                null -> Color.parseColor("#D91E293B") to Color.parseColor("#7794A3B8")
-            }
-        } else {
-            when (kind) {
-                StatusKind.SUCCESS -> Color.parseColor("#E6D1FAE5") to Color.parseColor("#99059669")
-                StatusKind.WARNING -> Color.parseColor("#E6FEF3C7") to Color.parseColor("#99D97706")
-                StatusKind.DANGER -> Color.parseColor("#E6FEE2E2") to Color.parseColor("#99DC2626")
-                StatusKind.INFO -> Color.parseColor("#E6E0E7FF") to Color.parseColor("#994F46E5")
-                StatusKind.HOLIDAY -> Color.parseColor("#E6EDE9FE") to Color.parseColor("#997C3AED")
-                null -> Color.parseColor("#E6F1F5F9") to Color.parseColor("#9994A3B8")
-            }
-        }
-
-        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-            color = fillCol
-        }
-        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 1.6f
-            color = strokeCol
-        }
-        canvas.drawRoundRect(rect, radiusPx, radiusPx, fillPaint)
-        canvas.drawRoundRect(rect, radiusPx, radiusPx, strokePaint)
-        return bmp
-    }
-
-    fun createWidgetDayBitmap(
-        sizePx: Int,
-        isDark: Boolean,
-        type: DayType,
-        isToday: Boolean
-    ): Bitmap {
-        val s = sizePx.coerceAtLeast(36)
-        val bmp = Bitmap.createBitmap(s, s, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bmp)
-        val center = s / 2f
-        val radius = (s / 2f) - 2.5f
-
-        val (fillCol, strokeCol, strokeW) = when (type) {
-            DayType.OFFICE -> {
-                val c = accentColors(isDark, AccentRole.SUCCESS).second
-                Triple(
-                    Color.argb(225, Color.red(c), Color.green(c), Color.blue(c)),
-                    if (isToday) accentColors(isDark, AccentRole.SECONDARY).second else c,
-                    if (isToday) 3f else 1.5f
-                )
-            }
-            DayType.PLANNED -> {
-                val c = accentColors(isDark, AccentRole.PRIMARY).second
-                Triple(
-                    if (isDark) Color.parseColor("#CC312E81") else Color.parseColor("#E6E0E7FF"),
-                    c,
-                    if (isToday) 3f else 2f
-                )
-            }
-            DayType.LEAVE -> {
-                val c = accentColors(isDark, AccentRole.WARNING).second
-                Triple(
-                    Color.argb(225, Color.red(c), Color.green(c), Color.blue(c)),
-                    c,
-                    1.5f
-                )
-            }
-            DayType.HOLIDAY -> {
-                val c = accentColors(isDark, AccentRole.SPECIAL).second
-                Triple(
-                    Color.argb(225, Color.red(c), Color.green(c), Color.blue(c)),
-                    c,
-                    1.5f
-                )
-            }
-            DayType.NONE -> {
-                Triple(
-                    if (isDark) Color.parseColor("#CC1E293B") else Color.parseColor("#E6F1F5F9"),
-                    if (isToday) {
-                        accentColors(isDark, AccentRole.SECONDARY).second
-                    } else {
-                        if (isDark) Color.parseColor("#5594A3B8") else Color.parseColor("#99CBD5E1")
-                    },
-                    if (isToday) 3f else 1.5f
-                )
-            }
-        }
-
-        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-            color = fillCol
-        }
-        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = strokeW
-            color = strokeCol
-        }
-        canvas.drawCircle(center, center, radius, fillPaint)
-        canvas.drawCircle(center, center, radius, strokePaint)
-        return bmp
-    }
 
     fun createWidgetGlassBitmap(
         widthPx: Int,
