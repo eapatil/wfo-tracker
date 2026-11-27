@@ -37,6 +37,7 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
 import android.location.Address
 import android.location.Geocoder
 import android.location.Location
@@ -49,6 +50,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.text.SpannableString
 import android.text.Spanned
+import android.text.TextUtils
 import android.text.style.StyleSpan
 import android.view.GestureDetector
 import android.view.Gravity
@@ -767,7 +769,7 @@ class MainActivity : AppCompatActivity() {
 
             restoreOverlayDetailView = TextView(this@MainActivity).apply {
                 text = "Please wait while your backup data is applied."
-                textSize = GlassUiTheme.cardBodySp
+                textSize = 14f
                 setTextColor(cTextSecondary())
                 gravity = Gravity.CENTER
                 setPadding(0, 8, 0, 0)
@@ -823,7 +825,7 @@ class MainActivity : AppCompatActivity() {
 
         val closeBtn = TextView(this).apply {
             text = "✕ Close"
-            textSize = GlassUiTheme.tonalButtonSp
+            textSize = 14f
             setTypeface(null, Typeface.BOLD)
             setTextColor(GlassUiTheme.textOnAccent)
             background = GlassUiTheme.glassSubtleSurface(true, GlassUiTheme.bannerRadiusPx)
@@ -1481,7 +1483,7 @@ class MainActivity : AppCompatActivity() {
             topStatusLine.addView(lockStatusTitleView)
 
             lockStatusSummaryView = TextView(this@MainActivity).apply {
-                textSize = GlassUiTheme.cardSubtextSp + 0.5f
+                textSize = 13.5f
                 setTextColor(cTextSecondary())
                 setPadding(0, 8, 0, 0)
             }
@@ -1516,23 +1518,22 @@ class MainActivity : AppCompatActivity() {
         }
         val subtitle = TextView(this).apply {
             text = "1. Grant permissions → 2. Link backup folder → 3. Confirm profile → 4. Office & policy."
-            textSize = GlassUiTheme.cardBodySp
+            textSize = 14f
             setTextColor(cTextSecondary())
             setPadding(0, 6, 0, 16)
         }
         root.addView(title)
         root.addView(subtitle)
 
-        // Section 1: Permissions & Background Readiness
         val permCard = makeCardContainer()
         permCard.addView(makeSectionTitle("1. Permissions & Background Readiness"))
         addSpacer(permCard, 10)
 
-        setupPermStatusView = TextView(this).apply { textSize = GlassUiTheme.cardBodySp; setPadding(0, 3, 0, 3) }
-        setupBgLocStatusView = TextView(this).apply { textSize = GlassUiTheme.cardBodySp; setPadding(0, 3, 0, 3) }
-        setupGpsStatusView = TextView(this).apply { textSize = GlassUiTheme.cardBodySp; setPadding(0, 3, 0, 3) }
-        setupExactAlarmStatusView = TextView(this).apply { textSize = GlassUiTheme.cardBodySp; setPadding(0, 3, 0, 3) }
-        setupBatteryStatusView = TextView(this).apply { textSize = GlassUiTheme.cardBodySp; setPadding(0, 3, 0, 12) }
+        setupPermStatusView = TextView(this).apply { textSize = 14f; setPadding(0, 3, 0, 3) }
+        setupBgLocStatusView = TextView(this).apply { textSize = 14f; setPadding(0, 3, 0, 3) }
+        setupGpsStatusView = TextView(this).apply { textSize = 14f; setPadding(0, 3, 0, 3) }
+        setupExactAlarmStatusView = TextView(this).apply { textSize = 14f; setPadding(0, 3, 0, 3) }
+        setupBatteryStatusView = TextView(this).apply { textSize = 14f; setPadding(0, 3, 0, 12) }
 
         permCard.addView(setupPermStatusView)
         permCard.addView(setupBgLocStatusView)
@@ -1581,11 +1582,10 @@ class MainActivity : AppCompatActivity() {
         root.addView(permCard)
         addSpacer(root, 14)
 
-        // Section 2: Auto-Backup Folder
         val backupSetupCard = makeCardContainer()
         backupSetupCard.addView(makeSectionTitle("2. Auto-Backup Folder"))
         setupBackupFolderStatusView = TextView(this).apply {
-            textSize = GlassUiTheme.cardBodySp
+            textSize = 14f
             setTextColor(cTextSecondary())
             setPadding(0, 6, 0, 12)
         }
@@ -1597,7 +1597,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(backupSetupCard)
         addSpacer(root, 14)
 
-        // Section 3: Profile Photo, Name & Privacy
         val profileCard = makeCardContainer()
         profileCard.addView(makeSectionTitle("3. Profile Photo, Name & Privacy"))
         addSpacer(profileCard, 12)
@@ -1627,7 +1626,7 @@ class MainActivity : AppCompatActivity() {
         }
         val removePhotoBtn = TextView(this).apply {
             text = "Remove Photo"
-            textSize = GlassUiTheme.cardSubtextSp + 0.5f
+            textSize = 13.5f
             setTextColor(GlassUiTheme.statusDangerText(isDark))
             setPadding(10, 10, 10, 4)
             setOnClickListener {
@@ -1666,11 +1665,10 @@ class MainActivity : AppCompatActivity() {
         root.addView(profileCard)
         addSpacer(root, 14)
 
-        // Section 4: Office Wi-Fi & Geofence Location
         val trackingCard = makeCardContainer()
         trackingCard.addView(makeSectionTitle("4. Office Wi-Fi & Geofence Location"))
         setupLiveWifiView = TextView(this).apply {
-            textSize = GlassUiTheme.cardBodySp
+            textSize = 14f
             setTextColor(cTextSecondary())
             setPadding(0, 6, 0, 10)
         }
@@ -1699,7 +1697,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         setupLocationSummaryView = TextView(this).apply {
-            textSize = GlassUiTheme.cardBodySp
+            textSize = 14f
             setTextColor(cTextPrimary())
             setPadding(0, 12, 0, 10)
         }
@@ -1716,7 +1714,6 @@ class MainActivity : AppCompatActivity() {
         root.addView(trackingCard)
         addSpacer(root, 14)
 
-        // Section 5: Monthly Policy & Alert Settings
         val policyCard = makeCardContainer()
         policyCard.addView(makeSectionTitle("5. Monthly Policy & Alert Settings"))
 
@@ -1921,7 +1918,7 @@ class MainActivity : AppCompatActivity() {
             background = GlassUiTheme.roundedShape(okCol, okCol, 999f, 0)
         }
         dashServiceStatusView = TextView(this).apply {
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
         }
         statusRow.addView(heartbeatDotView)
@@ -1952,7 +1949,7 @@ class MainActivity : AppCompatActivity() {
         topHeaderBar.addView(profileHeader)
 
         todayLiveStripView = TextView(this).apply {
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             gravity = Gravity.CENTER
             setPadding(16, 11, 16, 11)
@@ -1975,14 +1972,14 @@ class MainActivity : AppCompatActivity() {
             ).apply { setMargins(0, 10, 0, 0) }
         }
         undoBannerText = TextView(this).apply {
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(cTextPrimary())
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         val undoActionBtn = TextView(this).apply {
             text = "UNDO"
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setTypeface(null, Typeface.BOLD)
             setTextColor(GlassUiTheme.statusInfoText(isDark))
             setPadding(16, 8, 12, 8)
@@ -1999,7 +1996,7 @@ class MainActivity : AppCompatActivity() {
         }
         val dismissUndoBtn = TextView(this).apply {
             text = "✕"
-            textSize = GlassUiTheme.cardBodySp
+            textSize = 14f
             setTextColor(cTextSecondary())
             setPadding(8, 8, 8, 8)
             setOnClickListener {
@@ -2116,7 +2113,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 6, 0, 0)
         }
         briefingRecoveryView = TextView(this).apply {
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setPadding(0, 6, 0, 0)
             setLineSpacing(3f, 1.0f)
             visibility = View.GONE
@@ -2143,7 +2140,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         heroSubView = TextView(this).apply {
-            textSize = GlassUiTheme.cardBodySp
+            textSize = 14f
             setTextColor(cTextSecondary())
             gravity = Gravity.CENTER
             setPadding(0, 6, 0, 4)
@@ -2188,7 +2185,9 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        val calTitle = makeSectionTitle("Attendance & Leave Calendar").apply {
+        val calTitle = makeSectionTitle("Attendance Calendar").apply {
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         clearPlanBtn = makeSmallChipButton("Clear Plan") {
@@ -2215,7 +2214,7 @@ class MainActivity : AppCompatActivity() {
 
         val calHint = TextView(this).apply {
             text = "Swipe left/right for months • Tap day to inspect or mark"
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setTextColor(cTextSecondary())
             setPadding(0, 4, 0, 10)
         }
@@ -2336,7 +2335,7 @@ class MainActivity : AppCompatActivity() {
 
         val legendView = TextView(this).apply {
             text = "🟢 Office  •  🔵 Planned  •  🟠 Leave  •  🟣 Holiday  •  Corner dot = Note"
-            textSize = GlassUiTheme.footerTextSp
+            textSize = 12f
             setTextColor(cTextSecondary())
             gravity = Gravity.CENTER
             setPadding(0, 10, 0, 0)
@@ -2348,24 +2347,40 @@ class MainActivity : AppCompatActivity() {
         val logCard = makeCardContainer().apply {
             setPadding(22, 18, 22, 18)
         }
-        logHeaderToggleView = TextView(this).apply {
-            text = "Monthly Log & Timestamps   ▼"
-            textSize = 16f
-            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
-            setTextColor(cTextPrimary())
+        val logHeaderRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
             isClickable = true
             isFocusable = true
             setPadding(0, 2, 0, 2)
-            setOnClickListener {
-                isMonthlyLogExpanded = !isMonthlyLogExpanded
-                logExpandBodyView.visibility = if (isMonthlyLogExpanded) View.VISIBLE else View.GONE
-                if (isMonthlyLogExpanded) {
-                    animateTabReveal(logExpandBodyView)
-                }
-                refreshAllViews(animateCharts = false)
-            }
         }
-        logCard.addView(logHeaderToggleView)
+        val logTitleTv = TextView(this).apply {
+            text = "Monthly Log & Timestamps"
+            textSize = 16f
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+            setTextColor(cTextPrimary())
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        logHeaderToggleView = TextView(this).apply {
+            text = "▼"
+            textSize = 15f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(cTextSecondary())
+            setPadding(12, 2, 4, 2)
+        }
+        logHeaderRow.addView(logTitleTv)
+        logHeaderRow.addView(logHeaderToggleView)
+        logHeaderRow.setOnClickListener {
+            isMonthlyLogExpanded = !isMonthlyLogExpanded
+            logExpandBodyView.visibility = if (isMonthlyLogExpanded) View.VISIBLE else View.GONE
+            if (isMonthlyLogExpanded) {
+                animateTabReveal(logExpandBodyView)
+            }
+            refreshAllViews(animateCharts = false)
+        }
+        logCard.addView(logHeaderRow)
 
         logExpandBodyView = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -2374,7 +2389,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         logSummaryBarView = TextView(this).apply {
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(cTextPrimary())
             gravity = Gravity.CENTER
@@ -2428,7 +2443,7 @@ class MainActivity : AppCompatActivity() {
         val trendCard = makeCardContainer()
         trendCard.addView(makeSectionTitle("6-Month Attendance Trend"))
         trendLegendView = TextView(this).apply {
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setTextColor(cTextSecondary())
             setPadding(0, 4, 0, 10)
         }
@@ -2466,12 +2481,12 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 8, 0, 6)
         }
         qtdLeaveHolView = TextView(this).apply {
-            textSize = GlassUiTheme.cardBodySp
+            textSize = 14f
             setTextColor(cTextSecondary())
             setPadding(0, 0, 0, 10)
         }
         rhythmView = TextView(this).apply {
-            textSize = GlassUiTheme.cardBodySp
+            textSize = 14f
             setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(GlassUiTheme.statusInfoText(isDark))
         }
@@ -2502,7 +2517,7 @@ class MainActivity : AppCompatActivity() {
 
         val simSub = TextView(this).apply {
             text = "Preview how upcoming leaves or holidays shift your required days:"
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setTextColor(cTextSecondary())
             setPadding(0, 6, 0, 12)
         }
@@ -2624,7 +2639,7 @@ class MainActivity : AppCompatActivity() {
         val themeCard = makeCardContainer()
         themeCard.addView(makeSectionTitle("Appearance & Theme"))
         activeThemeStatusView = TextView(this).apply {
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setTextColor(cTextSecondary())
             setPadding(0, 4, 0, 10)
         }
@@ -2683,7 +2698,7 @@ class MainActivity : AppCompatActivity() {
         modeCard.addView(modeSelectorRow)
 
         trackingModeHintView = TextView(this).apply {
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setTextColor(cTextSecondary())
             setPadding(0, 4, 0, 0)
         }
@@ -2700,7 +2715,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 8, 0, 4)
         }
         officeDistanceView = TextView(this).apply {
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setTextColor(cTextSecondary())
             setPadding(0, 0, 0, 12)
         }
@@ -2716,7 +2731,7 @@ class MainActivity : AppCompatActivity() {
 
         val radiusLabel = TextView(this).apply {
             text = "Geofence Radius:"
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(cTextSecondary())
             setPadding(0, 14, 0, 8)
@@ -2731,7 +2746,7 @@ class MainActivity : AppCompatActivity() {
         priorityCard.addView(makeSectionTitle("Auto-Plan Preferred Weekdays (Priority Order)"))
         val prioHint = TextView(this).apply {
             text = "Tap a weekday to assign/cycle its priority badge (1, 2, 3...) for ✨ Auto-Plan:"
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setTextColor(cTextSecondary())
             setPadding(0, 6, 0, 10)
         }
@@ -2833,7 +2848,7 @@ class MainActivity : AppCompatActivity() {
         }
         val notifTitleTv = makeSectionTitle("Notifications & Exact Alarm Status")
         notifSummaryTv = TextView(this).apply {
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setTextColor(cTextSecondary())
             setPadding(0, 2, 0, 0)
         }
@@ -2858,14 +2873,14 @@ class MainActivity : AppCompatActivity() {
         }
 
         settingsNotifPermStatusView = TextView(this).apply {
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setPadding(4, 0, 4, 8)
         }
         notifBodyView.addView(settingsNotifPermStatusView)
 
         settingsExactAlarmStatusView = TextView(this).apply {
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setPadding(16, 12, 16, 12)
         }
@@ -2933,7 +2948,7 @@ class MainActivity : AppCompatActivity() {
         }
         val holTitle = makeSectionTitle("Upcoming Holidays & Leaves")
         holidaySummaryTv = TextView(this).apply {
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setTextColor(cTextSecondary())
             setPadding(0, 2, 0, 0)
         }
@@ -2978,7 +2993,7 @@ class MainActivity : AppCompatActivity() {
         holidayBodyView.addView(clearUpcomingBtn)
 
         upcomingHolLeaveSummaryView = TextView(this).apply {
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setPadding(14, 10, 14, 10)
             layoutParams = LinearLayout.LayoutParams(
@@ -2996,7 +3011,7 @@ class MainActivity : AppCompatActivity() {
 
         val holHint = TextView(this).apply {
             text = "Import an .ics calendar file or CSV (YYYY-MM-DD,Holiday Name) to mark holidays across the year."
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setTextColor(cTextSecondary())
             setPadding(0, 2, 0, 10)
         }
@@ -3020,7 +3035,7 @@ class MainActivity : AppCompatActivity() {
         val backupCard = makeCardContainer()
         backupCard.addView(makeSectionTitle("Backup, Widget & Data Portability"))
         autoBackupStatusView = TextView(this).apply {
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setPadding(0, 6, 0, 12)
         }
         backupCard.addView(autoBackupStatusView)
@@ -3095,6 +3110,29 @@ class MainActivity : AppCompatActivity() {
         return scroll
     }
 
+    private fun styleReadinessActionButton(
+        btn: TextView,
+        ready: Boolean,
+        readyLabel: String,
+        actionLabel: String,
+        readyRole: GlassUiTheme.AccentRole
+    ) {
+        if (ready) {
+            btn.text = "✓ $readyLabel"
+            btn.setTextColor(GlassUiTheme.glassTonalTextColor(isDark, readyRole))
+            btn.background = GlassUiTheme.glassTonalButton(isDark, readyRole, GlassUiTheme.secondaryButtonRadiusPx)
+        } else {
+            btn.text = "⚠️ $actionLabel"
+            btn.setTextColor(GlassUiTheme.statusWarningText(isDark))
+            btn.background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = GlassUiTheme.secondaryButtonRadiusPx
+                setColor(GlassUiTheme.statusTintColor(isDark, GlassUiTheme.StatusKind.WARNING))
+                setStroke(3, GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.WARNING).second)
+            }
+        }
+    }
+
     private fun syncCollapsibleSections() {
         val items = store.getUpcomingHolidaysAndLeaves()
         val holCount = items.count { it.type == DayType.HOLIDAY }
@@ -3158,7 +3196,7 @@ class MainActivity : AppCompatActivity() {
         }
         val sheetSub = TextView(this).apply {
             text = "How auto-tracking, monthly rules, alerts & backups work"
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setTextColor(cTextSecondary())
             setPadding(0, 2, 0, 0)
         }
@@ -3221,7 +3259,7 @@ class MainActivity : AppCompatActivity() {
             val pTxt = if (permsReady) "Permissions OK" else "Location / Background Check Needed"
             val bTxt = if (backupHealthy) "Backup Synced" else "Auto-Backup Folder Not Linked"
             text = "$pTxt   •   $bTxt"
-            textSize = GlassUiTheme.cardSubtextSp
+            textSize = 13f
             setTextColor(cTextSecondary())
             setPadding(0, 4, 0, 0)
         }
@@ -3390,7 +3428,7 @@ class MainActivity : AppCompatActivity() {
 
             val arrowTv = TextView(this).apply {
                 text = if (isExpandedInitially) "▲" else "▼"
-                textSize = GlassUiTheme.tonalButtonSp
+                textSize = 14f
                 setTypeface(null, Typeface.BOLD)
                 setTextColor(cTextSecondary())
                 setPadding(12, 4, 2, 4)
@@ -3412,7 +3450,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 val dotTv = TextView(this).apply {
                     text = "•  "
-                    textSize = GlassUiTheme.tonalButtonSp
+                    textSize = 14f
                     setTypeface(null, Typeface.BOLD)
                     setTextColor(accentColor)
                 }
@@ -3561,7 +3599,7 @@ class MainActivity : AppCompatActivity() {
         if (items.isEmpty()) {
             val emptyTv = TextView(this).apply {
                 text = "No upcoming holidays or leaves marked."
-                textSize = GlassUiTheme.cardSubtextSp
+                textSize = 13f
                 setTextColor(cTextSecondary())
                 setPadding(4, 2, 4, 8)
             }
@@ -3584,7 +3622,7 @@ class MainActivity : AppCompatActivity() {
             val icon = if (entry.type == DayType.HOLIDAY) "🎉" else "🌴"
             val labelTv = TextView(this).apply {
                 text = "$icon ${entry.dateStr} (${entry.dayOfWeekShort}) • ${entry.detail}"
-                textSize = GlassUiTheme.cardSubtextSp
+                textSize = 13f
                 setTextColor(cTextPrimary())
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
@@ -3616,7 +3654,7 @@ class MainActivity : AppCompatActivity() {
         if (items.size > capped.size) {
             val moreTv = TextView(this).apply {
                 text = "+ ${items.size - capped.size} more upcoming entry(s) in calendar"
-                textSize = GlassUiTheme.footerTextSp
+                textSize = 12f
                 setTextColor(cTextSecondary())
                 setPadding(4, 2, 4, 6)
             }
@@ -3627,7 +3665,7 @@ class MainActivity : AppCompatActivity() {
     private fun makeSettingsSwitch(label: String, onToggle: (Boolean) -> Unit): Switch {
         return Switch(this).apply {
             text = label
-            textSize = GlassUiTheme.cardBodySp
+            textSize = 14f
             setTextColor(cTextPrimary())
             setPadding(0, 10, 0, 10)
             setOnCheckedChangeListener { view, checked ->
@@ -3816,7 +3854,7 @@ class MainActivity : AppCompatActivity() {
 
         val radiusHeader = TextView(this).apply {
             text = "Select Geofence Range:"
-            textSize = GlassUiTheme.cardBodySp
+            textSize = 14f
             setTypeface(null, Typeface.BOLD)
             setPadding(0, 0, 0, 8)
         }
@@ -4034,9 +4072,8 @@ class MainActivity : AppCompatActivity() {
             else GlassUiTheme.statusDangerText(isDark)
         )
         if (::btnGrantPermView.isInitialized) {
-            GlassUiTheme.styleReadinessButton(
+            styleReadinessActionButton(
                 btn = btnGrantPermView,
-                isDark = isDark,
                 ready = locOk && notifOk,
                 readyLabel = "Location & Alerts",
                 actionLabel = "Grant Loc/Alerts",
@@ -4054,9 +4091,8 @@ class MainActivity : AppCompatActivity() {
             else GlassUiTheme.statusDangerText(isDark)
         )
         if (::btnBgLocView.isInitialized) {
-            GlassUiTheme.styleReadinessButton(
+            styleReadinessActionButton(
                 btn = btnBgLocView,
-                isDark = isDark,
                 ready = bgLocOk,
                 readyLabel = "All-Time Loc",
                 actionLabel = "Set All-Time Loc",
@@ -4074,9 +4110,8 @@ class MainActivity : AppCompatActivity() {
             else GlassUiTheme.statusDangerText(isDark)
         )
         if (::btnGpsView.isInitialized) {
-            GlassUiTheme.styleReadinessButton(
+            styleReadinessActionButton(
                 btn = btnGpsView,
-                isDark = isDark,
                 ready = gpsOk,
                 readyLabel = "GPS Switch ON",
                 actionLabel = "Turn ON GPS",
@@ -4093,9 +4128,8 @@ class MainActivity : AppCompatActivity() {
         setupExactAlarmStatusView.text = alarmLabel
         setupExactAlarmStatusView.setTextColor(alarmColor)
         if (::btnExactAlarmView.isInitialized) {
-            GlassUiTheme.styleReadinessButton(
+            styleReadinessActionButton(
                 btn = btnExactAlarmView,
-                isDark = isDark,
                 ready = alarmOk,
                 readyLabel = "Exact Alarms",
                 actionLabel = "Enable Alarms",
@@ -4135,9 +4169,8 @@ class MainActivity : AppCompatActivity() {
             else GlassUiTheme.statusDangerText(isDark)
         )
         if (::btnBatteryView.isInitialized) {
-            GlassUiTheme.styleReadinessButton(
+            styleReadinessActionButton(
                 btn = btnBatteryView,
-                isDark = isDark,
                 ready = batOk,
                 readyLabel = "Unrestricted Battery",
                 actionLabel = "Allow Unrestricted Battery",
@@ -4423,7 +4456,7 @@ class MainActivity : AppCompatActivity() {
         renderCalendarGrid(s)
 
         val arrow = if (isMonthlyLogExpanded) "▲" else "▼"
-        logHeaderToggleView.text = "Monthly Log & Timestamps (${s.dayLogs.size} entries • ${s.attendedDays} Office)   $arrow"
+        logHeaderToggleView.text = "(${s.dayLogs.size})  $arrow"
         logExpandBodyView.visibility = if (isMonthlyLogExpanded) View.VISIBLE else View.GONE
 
         if (::logSummaryBarView.isInitialized) {
@@ -4628,7 +4661,7 @@ class MainActivity : AppCompatActivity() {
         listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun").forEach { dayName ->
             val tv = TextView(this).apply {
                 text = dayName
-                textSize = GlassUiTheme.cardSubtextSp
+                textSize = 13f
                 setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
                 setTextColor(cTextSecondary())
                 gravity = Gravity.CENTER
@@ -4667,7 +4700,7 @@ class MainActivity : AppCompatActivity() {
                     val dayNumTv = TextView(this).apply {
                         text = currentDay.toString()
                         gravity = Gravity.CENTER
-                        textSize = GlassUiTheme.cardBodySp
+                        textSize = 14f
                         layoutParams = FrameLayout.LayoutParams(
                             FrameLayout.LayoutParams.MATCH_PARENT,
                             FrameLayout.LayoutParams.MATCH_PARENT
@@ -4783,12 +4816,12 @@ class MainActivity : AppCompatActivity() {
         }
         val windowTv = TextView(this).apply {
             text = info.timeWindowLabel
-            textSize = GlassUiTheme.cardBodySp
+            textSize = 14f
             setPadding(0, 0, 0, 4)
         }
         val spanTv = TextView(this).apply {
             text = info.durationLabel
-            textSize = GlassUiTheme.cardBodySp
+            textSize = 14f
             setTypeface(null, Typeface.BOLD)
             setPadding(0, 0, 0, 14)
         }
@@ -4812,7 +4845,7 @@ class MainActivity : AppCompatActivity() {
 
             val switchLabel = TextView(this).apply {
                 text = "Quick Status Change:"
-                textSize = GlassUiTheme.cardSubtextSp
+                textSize = 13f
                 setTypeface(null, Typeface.BOLD)
                 setPadding(0, 4, 0, 6)
             }
@@ -5289,7 +5322,7 @@ class MainActivity : AppCompatActivity() {
     private fun makePersonalFooterView(): TextView {
         return TextView(this).apply {
             text = "Developed by Eleazer Patil • Local-First, Privacy-Focused"
-            textSize = GlassUiTheme.footerTextSp
+            textSize = 12f
             setTextColor(cTextSecondary())
             gravity = Gravity.CENTER
             setPadding(0, 6, 0, 14)
@@ -5308,7 +5341,10 @@ class MainActivity : AppCompatActivity() {
     private fun makeSectionTitle(textStr: String): TextView {
         return TextView(this).apply {
             text = textStr
-            GlassUiTheme.styleGlassSectionHeader(this, isDark)
+            textSize = 17f
+            letterSpacing = 0.01f
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+            setTextColor(cTextPrimary())
         }
     }
 
@@ -5320,7 +5356,21 @@ class MainActivity : AppCompatActivity() {
     ): TextView {
         return TextView(this).apply {
             text = label
-            GlassUiTheme.stylePrimaryPillButton(this, bgHex, textColor, isDark)
+            textSize = 15f
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+            setTextColor(textColor)
+            gravity = Gravity.CENTER
+            minHeight = 126
+            isClickable = true
+            isFocusable = true
+            setPadding(24, 20, 24, 20)
+            background = GlassUiTheme.glassAccentButtonHex(
+                bgHex,
+                bgHex,
+                GlassUiTheme.buttonRadiusPx,
+                translucent = true,
+                isDark = isDark
+            )
             setOnClickListener {
                 animateCellPop(it)
                 onClick()
@@ -5335,7 +5385,16 @@ class MainActivity : AppCompatActivity() {
     ): TextView {
         return TextView(this).apply {
             text = label
-            GlassUiTheme.styleTonalButton(this, role, isDark)
+            textSize = 14f
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+            setTextColor(GlassUiTheme.glassTonalTextColor(isDark, role))
+            gravity = Gravity.CENTER
+            minHeight = 122
+            maxLines = 2
+            isClickable = true
+            isFocusable = true
+            setPadding(16, 18, 16, 18)
+            background = GlassUiTheme.glassTonalButton(isDark, role, GlassUiTheme.secondaryButtonRadiusPx)
             setOnClickListener {
                 animateCellPop(it)
                 onClick()
@@ -5346,7 +5405,15 @@ class MainActivity : AppCompatActivity() {
     private fun makeSmallChipButton(label: String, onClick: () -> Unit): TextView {
         return TextView(this).apply {
             text = label
-            GlassUiTheme.styleSmallChip(this, isDark)
+            textSize = 13f
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+            setTextColor(cTextPrimary())
+            gravity = Gravity.CENTER
+            minHeight = 96
+            isClickable = true
+            isFocusable = true
+            setPadding(20, 14, 20, 14)
+            background = GlassUiTheme.glassSubtleSurface(isDark, GlassUiTheme.chipRadiusPx)
             setOnClickListener { onClick() }
         }
     }
@@ -5354,27 +5421,63 @@ class MainActivity : AppCompatActivity() {
     private fun makeNavTabButton(label: String, onClick: () -> Unit): TextView {
         return TextView(this).apply {
             text = label
-            GlassUiTheme.styleNavTab(this, selected = false, isDark = isDark)
+            textSize = 14f
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+            gravity = Gravity.CENTER
+            minHeight = 104
+            isClickable = true
+            isFocusable = true
+            setPadding(12, 16, 12, 16)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             setOnClickListener { onClick() }
         }
     }
 
     private fun styleNavTab(btn: TextView, selected: Boolean) {
-        GlassUiTheme.styleNavTab(btn, selected, isDark)
+        if (selected) {
+            val (startCol, endCol) = GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.PRIMARY)
+            btn.setTextColor(GlassUiTheme.textOnAccent)
+            btn.background = GlassUiTheme.glassAccentButton(
+                startCol,
+                endCol,
+                GlassUiTheme.buttonRadiusPx,
+                translucent = true
+            )
+        } else {
+            btn.setTextColor(cTextSecondary())
+            btn.background = GlassUiTheme.glassSubtleSurface(isDark, GlassUiTheme.buttonRadiusPx)
+        }
     }
 
     private fun makeModeChip(label: String, onClick: () -> Unit): TextView {
         return TextView(this).apply {
             text = label
-            GlassUiTheme.styleModeChip(this, selected = false, activeHex = "#4F46E5", isDark = isDark)
+            textSize = 13f
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+            gravity = Gravity.CENTER
+            minHeight = 98
+            isClickable = true
+            isFocusable = true
+            setPadding(8, 15, 8, 15)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             setOnClickListener { onClick() }
         }
     }
 
     private fun styleModeChip(chip: TextView, selected: Boolean, activeHex: String) {
-        GlassUiTheme.styleModeChip(chip, selected, activeHex, isDark)
+        if (selected) {
+            chip.setTextColor(GlassUiTheme.textOnAccent)
+            chip.background = GlassUiTheme.glassAccentButtonHex(
+                activeHex,
+                activeHex,
+                GlassUiTheme.chipRadiusPx,
+                translucent = true,
+                isDark = isDark
+            )
+        } else {
+            chip.setTextColor(cTextSecondary())
+            chip.background = GlassUiTheme.glassSubtleSurface(isDark, GlassUiTheme.chipRadiusPx)
+        }
     }
 
     private fun makeColorCodedKpiColumn(caption: String): Pair<LinearLayout, TextView> {
@@ -5391,7 +5494,7 @@ class MainActivity : AppCompatActivity() {
         }
         val labelTv = TextView(this).apply {
             text = caption
-            textSize = GlassUiTheme.footerTextSp + 0.5f
+            textSize = 12.5f
             setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(cTextSecondary())
             gravity = Gravity.CENTER
