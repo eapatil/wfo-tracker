@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.location.LocationManager
 import android.net.wifi.WifiManager
 import android.os.Build
@@ -359,14 +360,13 @@ class WfoWidgetProvider : AppWidgetProvider() {
                 remainingDays = stats.remainingDays,
                 bufferDays = stats.bufferDays
             )
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                views.setInt(R.id.widget_progress_bar, "setProgressTintList", null)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                views.setColorStateList(
+                    R.id.widget_progress_bar,
+                    "setProgressTintList",
+                    ColorStateList.valueOf(barTint)
+                )
             }
-            views.setColorStateListAttr(
-                R.id.widget_progress_bar,
-                "setProgressTintList",
-                android.content.res.ColorStateList.valueOf(barTint)
-            )
 
             val monday = today.with(DayOfWeek.MONDAY)
             val daySlots = listOf(
