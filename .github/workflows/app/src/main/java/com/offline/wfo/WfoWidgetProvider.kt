@@ -196,7 +196,7 @@ class WfoWidgetProvider : AppWidgetProvider() {
             val minWidthDp = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 260) ?: 260
             val minHeightDp = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 140) ?: 140
             val isCompact = minWidthDp < 245 || minHeightDp < 115
-            val showExtraBottomLine = !isCompact && minHeightDp >= 145
+            val showExtraBottomLine = !isCompact
 
             val views = RemoteViews(context.packageName, R.layout.wfo_widget)
 
@@ -451,10 +451,29 @@ class WfoWidgetProvider : AppWidgetProvider() {
                     else ->
                         "${maxOf(0, stats.bufferDays)} WFH buffer left"
                 }
+
+                val trackingMode = store.getTrackingMode()
+                val zoneDetail = if (
+                    (trackingMode == TrackingMode.LOCATION_ONLY || trackingMode == TrackingMode.BOTH) &&
+                    store.hasOfficeLocationConfigured() &&
+                    store.hasLastKnownLocation()
+                ) {
+                    val distM = store.distanceToOfficeMeters(store.getLastKnownLat(), store.getLastKnownLng())
+                    val radiusM = store.getGeofenceRadiusMeters()
+                    if (distM != null) {
+                        val dRound = distM.roundToInt()
+                        if (dRound <= radiusM) {
+                            " • 📍 Inside ${radiusM}m zone (${dRound}m)"
+                        } else {
+                            " • 📍 ${dRound}m (${radiusM}m zone)"
+                        }
+                    } else ""
+                } else ""
+
                 views.setViewVisibility(R.id.widget_window_buffer_line, View.VISIBLE)
                 views.setTextViewText(
                     R.id.widget_window_buffer_line,
-                    "🕒 Window $windowLabel • $cushionOrBufferCue"
+                    "🕒 Window $windowLabel • $cushionOrBufferCue$zoneDetail"
                 )
                 views.setTextColor(
                     R.id.widget_window_buffer_line,
