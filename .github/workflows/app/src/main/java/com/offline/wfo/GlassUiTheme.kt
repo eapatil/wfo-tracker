@@ -58,8 +58,9 @@ object GlassUiTheme {
     const val cardRadiusPx = 24f
     const val bannerRadiusPx = 18f
     const val subtleRadiusPx = 16f
-    const val buttonRadiusPx = 18f
-    const val chipRadiusPx = 15f
+    const val buttonRadiusPx = 999f       // True capsule pill for primary actions
+    const val secondaryButtonRadiusPx = 16f // Soft squircle for compact utility buttons
+    const val chipRadiusPx = 14f
     const val cellRadiusPx = 16f
     const val navDockRadiusPx = 26f
     const val restoreBlurRadiusPx = 18f
@@ -578,7 +579,7 @@ object GlassUiTheme {
         }
     }
 
-    // ==================== LAYER 3: DUAL-COLOR TRANSLUCENT ACCENT PILLS & DOCK ====================
+    // ==================== LAYER 3: DUAL-COLOR ACCENT CAPSULES & TONAL UTILITY PILLS ====================
 
     fun glassAccentButton(
         startColor: Int,
@@ -586,7 +587,7 @@ object GlassUiTheme {
         radiusPx: Float = buttonRadiusPx,
         translucent: Boolean = true
     ): GradientDrawable {
-        val alphaVal = if (translucent) 156 else 255
+        val alphaVal = if (translucent) 172 else 255
         val sGlass = Color.argb(alphaVal, Color.red(startColor), Color.green(startColor), Color.blue(startColor))
         val eGlass = Color.argb(alphaVal, Color.red(endColor), Color.green(endColor), Color.blue(endColor))
         return GradientDrawable(
@@ -613,6 +614,40 @@ object GlassUiTheme {
             radiusPx,
             translucent
         )
+    }
+
+    /**
+     * Soft tonal ghost-glass squircle for secondary/utility buttons so they stay airy
+     * and never look like heavy stacked banner slabs.
+     */
+    fun glassTonalButton(
+        isDark: Boolean,
+        role: AccentRole = AccentRole.PRIMARY,
+        radiusPx: Float = secondaryButtonRadiusPx
+    ): GradientDrawable {
+        val (_, accentEnd) = accentColors(isDark, role)
+        val fillAlpha = if (isDark) 46 else 36
+        val strokeAlpha = if (isDark) 115 else 95
+        val fill = Color.argb(fillAlpha, Color.red(accentEnd), Color.green(accentEnd), Color.blue(accentEnd))
+        val stroke = Color.argb(strokeAlpha, Color.red(accentEnd), Color.green(accentEnd), Color.blue(accentEnd))
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = radiusPx
+            setColor(fill)
+            setStroke(2, stroke)
+        }
+    }
+
+    fun glassTonalTextColor(isDark: Boolean, role: AccentRole = AccentRole.PRIMARY): Int {
+        return when (role) {
+            AccentRole.PRIMARY -> statusInfoText(isDark)
+            AccentRole.SECONDARY -> if (isDark) Color.parseColor("#67E8F9") else Color.parseColor("#0F766E")
+            AccentRole.SUCCESS -> statusSuccessText(isDark)
+            AccentRole.WARNING -> statusWarningText(isDark)
+            AccentRole.DANGER -> statusDangerText(isDark)
+            AccentRole.SPECIAL -> statusHolidayText(isDark)
+            AccentRole.NEUTRAL -> textPrimaryColor(isDark)
+        }
     }
 
     fun glassNavDock(isDark: Boolean): GradientDrawable {
