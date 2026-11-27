@@ -3,15 +3,9 @@ package com.offline.wfo
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.res.Configuration
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.RectF
-import android.graphics.Typeface
 import android.location.LocationManager
 import android.net.wifi.WifiManager
 import android.os.Build
@@ -36,13 +30,12 @@ class WfoWidgetProvider : AppWidgetProvider() {
     companion object {
         const val ACTION_WIDGET_REFRESH = "com.offline.wfo.ACTION_WIDGET_REFRESH"
         const val EXTRA_INSPECT_DATE = "com.offline.wfo.EXTRA_INSPECT_DATE"
-        private const val WIDGET_THEME_PREFS = "officepace_ui_prefs"
-        private const val KEY_THEME_MODE = "app_theme_mode"
+        private const val WIDGET_PREFS = "officepace_ui_prefs"
         private const val KEY_ARRIVAL_START_EPOCH_MS = "widget_arrival_start_epoch_ms"
 
         fun updateAllWidgets(context: Context, syncing: Boolean = false) {
             val awm = AppWidgetManager.getInstance(context)
-            val component = android.content.ComponentName(context, WfoWidgetProvider::class.java)
+            val component = ComponentName(context, WfoWidgetProvider::class.java)
             val ids = awm.getAppWidgetIds(component)
             if (ids.isNotEmpty()) {
                 val provider = WfoWidgetProvider()
@@ -51,21 +44,6 @@ class WfoWidgetProvider : AppWidgetProvider() {
                     provider.updateSingleWidget(context, awm, id, options, syncing = syncing)
                 }
             }
-        }
-    }
-
-    private enum class ThemeChoice { SYSTEM, LIGHT, DARK }
-
-    private fun resolveIsDark(context: Context): Boolean {
-        val raw = context.getSharedPreferences(WIDGET_THEME_PREFS, Context.MODE_PRIVATE)
-            .getString(KEY_THEME_MODE, ThemeChoice.SYSTEM.name) ?: ThemeChoice.SYSTEM.name
-        val choice = runCatching { ThemeChoice.valueOf(raw) }.getOrDefault(ThemeChoice.SYSTEM)
-        return when (choice) {
-            ThemeChoice.LIGHT -> false
-            ThemeChoice.DARK -> true
-            ThemeChoice.SYSTEM ->
-                (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
-                    Configuration.UI_MODE_NIGHT_YES
         }
     }
 
@@ -182,7 +160,7 @@ class WfoWidgetProvider : AppWidgetProvider() {
         options: Bundle?,
         syncing: Boolean
     ) {
-        val isDark = resolveIsDark(context)
+        val isDark = GlassUiTheme.resolveWidgetIsDark(context)
         val store = AttendanceStore(context)
         store.performDailyRolloverIfNeeded()
 
@@ -200,12 +178,14 @@ class WfoWidgetProvider : AppWidgetProvider() {
 
         val bmpW = ((minWidthDp.coerceIn(180, 520)) * context.resources.displayMetrics.density)
             .roundToInt()
-            .coerceIn(220, 720)
+            .coerceIn(160, GlassUiTheme.maxWidgetBitmapWidthPx)
         val bmpH = ((minHeightDp.coerceIn(95, 260)) * context.resources.displayMetrics.density)
             .roundToInt()
-            .coerceIn(120, 360)
-        val glassBmp = renderGlassCardBitmap(bmpW, bmpH, isDark)
-        views.setImageViewBitmap(R.id.widget_bg_glass, glassBmp)
+            .coerceIn(96, GlassUiTheme.maxWidgetBitmapHeightPx)
+        views.setImageViewBitmap(
+            R.id.widget_bg_glass,
+            GlassUiTheme.createWidgetGlassBitmap(bmpW, bmpH, isDark)
+        )
 
         val textPrimary = GlassUiTheme.textPrimaryColor(isDark)
         val textSecondary = GlassUiTheme.textSecondaryColor(isDark)
@@ -221,15 +201,13 @@ class WfoWidgetProvider : AppWidgetProvider() {
         val graceCheckFormatted = store.getPlannedNotArrivedCheckTime()
             .format(DateTimeFormatter.ofPattern("HH:mm"))
 
-        val statusPrefs = context.getSharedPreferences(WIDGET_THEME_PREFS, Context.MODE_PRIVATE)
+        val statusPrefs = context.getSharedPreferences(WIDGET_PREFS, Context.MODE_PRIVATE)
         val statusLabel: String
-        val statusTextColor: Int
-        val statusPillColor: Int
+        val statusKind: GlassUiTheme.StatusKind?
 
         if (isConnected) {
             statusLabel = if (isCompact) "At Office" else "✓ At Office"
-            statusTextColor = GlassUiTheme.statusSuccessText(isDark)
-            statusPillColor = GlassUiTheme.statusTintColor(isDark, GlassUiTheme.StatusKind.SUCCESS)
+            statusKind = GlassUiTheme.StatusKind.SUCCESS
             val existingBase = statusPrefs.getLong(KEY_ARRIVAL_START_EPOCH_MS, 0L)
             val baseElapsed = if (existingBase > 0L) {
                 existingBase
@@ -240,7 +218,7 @@ class WfoWidgetProvider : AppWidgetProvider() {
             }
             views.setViewVisibility(R.id.widget_office_chrono, View.VISIBLE)
             views.setChronometer(R.id.widget_office_chrono, baseElapsed, null, true)
-            views.setTextColor(R.id.widget_office_chrono, statusTextColor)
+            views.setTextColor(R.id.widget_office_chrono, GlassUiTheme.widgetStatusPillTextColor(isDark, statusKind))
         } else {
             statusPrefs.edit().remove(KEY_ARRIVAL_START_EPOCH_MS).apply()
             views.setViewVisibility(R.id.widget_office_chrono, View.GONE)
@@ -248,47 +226,52 @@ class WfoWidgetProvider : AppWidgetProvider() {
             when {
                 todayType == DayType.OFFICE -> {
                     statusLabel = "✓ Office Logged"
-                    statusTextColor = GlassUiTheme.statusSuccessText(isDark)
-                    statusPillColor = GlassUiTheme.statusTintColor(isDark, GlassUiTheme.StatusKind.SUCCESS)
+                    statusKind = GlassUiTheme.StatusKind.SUCCESS
                 }
                 todayType == DayType.HOLIDAY -> {
                     statusLabel = "🎉 Holiday"
-                    statusTextColor = GlassUiTheme.statusHolidayText(isDark)
-                    statusPillColor = GlassUiTheme.statusTintColor(isDark, GlassUiTheme.StatusKind.HOLIDAY)
+                    statusKind = GlassUiTheme.StatusKind.HOLIDAY
                 }
                 todayType == DayType.LEAVE -> {
                     statusLabel = "🌴 On Leave"
-                    statusTextColor = GlassUiTheme.statusWarningText(isDark)
-                    statusPillColor = GlassUiTheme.statusTintColor(isDark, GlassUiTheme.StatusKind.WARNING)
+                    statusKind = GlassUiTheme.StatusKind.WARNING
                 }
                 todayType == DayType.PLANNED && store.isInSmartCommuteWindow(nowTime, today) -> {
                     statusLabel = "⏳ Grace till $graceCheckFormatted"
-                    statusTextColor = GlassUiTheme.statusInfoText(isDark)
-                    statusPillColor = GlassUiTheme.statusTintColor(isDark, GlassUiTheme.StatusKind.INFO)
+                    statusKind = GlassUiTheme.StatusKind.INFO
                 }
                 todayType == DayType.PLANNED -> {
                     statusLabel = "📅 Planned • $arrivalFormatted"
-                    statusTextColor = GlassUiTheme.statusInfoText(isDark)
-                    statusPillColor = GlassUiTheme.statusTintColor(isDark, GlassUiTheme.StatusKind.INFO)
+                    statusKind = GlassUiTheme.StatusKind.INFO
                 }
                 store.isInSmartCommuteWindow(nowTime, today) -> {
                     statusLabel = "🕒 Window $arrivalFormatted"
-                    statusTextColor = GlassUiTheme.statusInfoText(isDark)
-                    statusPillColor = GlassUiTheme.statusTintColor(isDark, GlassUiTheme.StatusKind.INFO)
+                    statusKind = GlassUiTheme.StatusKind.INFO
                 }
                 else -> {
                     statusLabel = "🏠 WFH"
-                    statusTextColor = textSecondary
-                    statusPillColor = GlassUiTheme.glassSubtleSurfaceColor(isDark)
+                    statusKind = null
                 }
             }
         }
 
+        val statusTextColor = GlassUiTheme.widgetStatusPillTextColor(isDark, statusKind)
+        val statusPillColor = if (statusKind != null) {
+            GlassUiTheme.statusTintColor(isDark, statusKind)
+        } else {
+            GlassUiTheme.glassSubtleSurfaceColor(isDark)
+        }
         views.setTextViewText(R.id.widget_status_text, statusLabel)
         views.setTextColor(R.id.widget_status_text, statusTextColor)
         views.setImageViewBitmap(
             R.id.widget_status_pill,
-            renderGlassCardBitmap(180, 56, isDark, customTint = statusPillColor, radiusPx = 999f)
+            GlassUiTheme.renderWidgetSurfaceBitmap(
+                widthPx = 180,
+                heightPx = 56,
+                isDark = isDark,
+                customTint = statusPillColor,
+                radiusPx = GlassUiTheme.buttonRadiusPx
+            )
         )
 
         views.setTextViewText(
@@ -381,22 +364,23 @@ class WfoWidgetProvider : AppWidgetProvider() {
             }
             views.setTextViewText(viewId, label)
 
-            val (bgCol, fgCol) = when (dType) {
-                DayType.OFFICE -> GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.SUCCESS).second to GlassUiTheme.textOnAccent
-                DayType.PLANNED -> GlassUiTheme.statusTintColor(isDark, GlassUiTheme.StatusKind.INFO) to GlassUiTheme.statusInfoText(isDark)
-                DayType.LEAVE -> GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.WARNING).second to GlassUiTheme.textOnAccent
-                DayType.HOLIDAY -> GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.SPECIAL).second to GlassUiTheme.textOnAccent
-                DayType.NONE -> GlassUiTheme.glassSubtleSurfaceColor(isDark) to textSecondary
+            val bgCol = when (dType) {
+                DayType.OFFICE -> GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.SUCCESS).second
+                DayType.PLANNED -> GlassUiTheme.statusTintColor(isDark, GlassUiTheme.StatusKind.INFO)
+                DayType.LEAVE -> GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.WARNING).second
+                DayType.HOLIDAY -> GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.SPECIAL).second
+                DayType.NONE -> GlassUiTheme.glassSubtleSurfaceColor(isDark)
             }
+            val fgCol = GlassUiTheme.widgetDayTextColor(isDark, dType, isToday)
             views.setTextColor(viewId, fgCol)
             views.setImageViewBitmap(
                 viewId,
-                renderGlassCardBitmap(
+                GlassUiTheme.renderWidgetSurfaceBitmap(
                     widthPx = 64,
                     heightPx = 64,
                     isDark = isDark,
                     customTint = bgCol,
-                    radiusPx = 999f,
+                    radiusPx = GlassUiTheme.buttonRadiusPx,
                     strokeColor = if (dType == DayType.PLANNED || isToday) fgCol else null
                 )
             )
@@ -451,43 +435,5 @@ class WfoWidgetProvider : AppWidgetProvider() {
         views.setOnClickPendingIntent(R.id.widget_refresh_btn, refreshPending)
 
         appWidgetManager.updateAppWidget(appWidgetId, views)
-    }
-
-    private fun renderGlassCardBitmap(
-        widthPx: Int,
-        heightPx: Int,
-        isDark: Boolean,
-        customTint: Int? = null,
-        radiusPx: Float = GlassUiTheme.cardRadiusPx,
-        strokeColor: Int? = null
-    ): Bitmap {
-        val w = widthPx.coerceAtLeast(24)
-        val h = heightPx.coerceAtLeast(24)
-        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bmp)
-        val rect = RectF(1.5f, 1.5f, w - 1.5f, h - 1.5f)
-        val r = radiusPx.coerceAtMost(minOf(w, h) / 2f)
-
-        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-            color = customTint ?: if (isDark) {
-                Color.argb(198, 24, 34, 52)
-            } else {
-                Color.argb(214, 255, 255, 255)
-            }
-        }
-        canvas.drawRoundRect(rect, r, r, fillPaint)
-
-        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = if (strokeColor != null) 2.5f else 1.5f
-            color = strokeColor ?: if (isDark) {
-                Color.argb(95, 148, 163, 184)
-            } else {
-                Color.argb(145, 203, 213, 225)
-            }
-        }
-        canvas.drawRoundRect(rect, r, r, borderPaint)
-        return bmp
     }
 }
