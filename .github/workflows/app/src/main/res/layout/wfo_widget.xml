@@ -81,7 +81,7 @@
                 android:textSize="13sp" />
         </LinearLayout>
 
-        <!-- Row 2: Hero Attendance Ratio + Projected Target + Next-Action Cue -->
+        <!-- Row 2: Hero Attendance Ratio + Projected Target + Pacing Cue -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -95,16 +95,16 @@
                 android:layout_height="wrap_content"
                 android:maxLines="1"
                 android:text="0 / 0 days (0%)"
-                android:textSize="19sp"
+                android:textSize="18.5sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/widget_projected_badge"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="6dp"
                 android:maxLines="1"
-                android:textSize="11.5sp"
+                android:textSize="11sp"
                 android:textStyle="bold"
                 android:visibility="gone" />
 
@@ -112,12 +112,12 @@
                 android:id="@+id/widget_pace_line"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="6dp"
                 android:layout_weight="1"
                 android:ellipsize="end"
                 android:gravity="end"
                 android:maxLines="1"
-                android:textSize="12sp"
+                android:textSize="11.5sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
@@ -132,7 +132,7 @@
             android:progress="0"
             android:secondaryProgress="0" />
 
-        <!-- Row 4: Interactive Weekday Badges (M T W T F) + Timestamp -->
+        <!-- Row 4: Color-Coded Weekday Strip (M T W T F) + Week Summary + Timestamp -->
         <LinearLayout
             android:id="@+id/widget_footer_row"
             android:layout_width="match_parent"
@@ -141,67 +141,136 @@
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+            <!-- Mon -->
+            <FrameLayout
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginEnd="6dp">
+
+                <ImageView
+                    android:id="@+id/widget_day_mon_bg"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="@null"
+                    android:scaleType="fitXY" />
 
                 <TextView
                     android:id="@+id/widget_day_mon"
-                    android:layout_width="28dp"
-                    android:layout_height="28dp"
-                    android:layout_marginEnd="6dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
                     android:gravity="center"
                     android:text="M"
                     android:textSize="11.5sp"
                     android:textStyle="bold" />
+            </FrameLayout>
+
+            <!-- Tue -->
+            <FrameLayout
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginEnd="6dp">
+
+                <ImageView
+                    android:id="@+id/widget_day_tue_bg"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="@null"
+                    android:scaleType="fitXY" />
 
                 <TextView
                     android:id="@+id/widget_day_tue"
-                    android:layout_width="28dp"
-                    android:layout_height="28dp"
-                    android:layout_marginEnd="6dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
                     android:gravity="center"
                     android:text="T"
                     android:textSize="11.5sp"
                     android:textStyle="bold" />
+            </FrameLayout>
+
+            <!-- Wed -->
+            <FrameLayout
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginEnd="6dp">
+
+                <ImageView
+                    android:id="@+id/widget_day_wed_bg"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="@null"
+                    android:scaleType="fitXY" />
 
                 <TextView
                     android:id="@+id/widget_day_wed"
-                    android:layout_width="28dp"
-                    android:layout_height="28dp"
-                    android:layout_marginEnd="6dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
                     android:gravity="center"
                     android:text="W"
                     android:textSize="11.5sp"
                     android:textStyle="bold" />
+            </FrameLayout>
+
+            <!-- Thu -->
+            <FrameLayout
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginEnd="6dp">
+
+                <ImageView
+                    android:id="@+id/widget_day_thu_bg"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="@null"
+                    android:scaleType="fitXY" />
 
                 <TextView
                     android:id="@+id/widget_day_thu"
-                    android:layout_width="28dp"
-                    android:layout_height="28dp"
-                    android:layout_marginEnd="6dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
                     android:gravity="center"
                     android:text="T"
                     android:textSize="11.5sp"
                     android:textStyle="bold" />
+            </FrameLayout>
+
+            <!-- Fri -->
+            <FrameLayout
+                android:layout_width="28dp"
+                android:layout_height="28dp">
+
+                <ImageView
+                    android:id="@+id/widget_day_fri_bg"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="@null"
+                    android:scaleType="fitXY" />
 
                 <TextView
                     android:id="@+id/widget_day_fri"
-                    android:layout_width="28dp"
-                    android:layout_height="28dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
                     android:gravity="center"
                     android:text="F"
                     android:textSize="11.5sp"
                     android:textStyle="bold" />
-            </LinearLayout>
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/widget_week_summary"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textSize="11sp"
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/widget_updated_time"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
                 android:maxLines="1"
                 android:text="Updated --:--"
                 android:textSize="11sp" />
