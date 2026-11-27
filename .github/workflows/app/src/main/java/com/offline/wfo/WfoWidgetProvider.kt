@@ -72,17 +72,20 @@ class WfoWidgetProvider : AppWidgetProvider() {
 
             val views = RemoteViews(context.packageName, R.layout.wfo_widget)
 
+            // Frosted Glass Card Background (Light vs Dark)
             val options = manager.getAppWidgetOptions(appWidgetId)
-val minWidthDp = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 280) ?: 280
-val minHeightDp = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 110) ?: 110
-val density = context.resources.displayMetrics.density
-val glassBmp = GlassUiTheme.createWidgetGlassBitmap(
-    widthPx = (minWidthDp * density).toInt().coerceAtLeast(360),
-    heightPx = (minHeightDp * density).toInt().coerceAtLeast(160),
-    isDark = isDark,
-    radiusPx = GlassUiTheme.cardRadiusPx
-)
-views.setImageViewBitmap(R.id.widget_glass_bg, glassBmp)
+            val minWidthDp = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 280) ?: 280
+            val minHeightDp = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 110) ?: 110
+            val density = context.resources.displayMetrics.density
+            views.setImageViewBitmap(
+                R.id.widget_glass_bg,
+                GlassUiTheme.createWidgetGlassBitmap(
+                    widthPx = (minWidthDp * density).toInt().coerceAtLeast(360),
+                    heightPx = (minHeightDp * density).toInt().coerceAtLeast(160),
+                    isDark = isDark,
+                    radiusPx = GlassUiTheme.cardRadiusPx
+                )
+            )
 
             // Apply theme-aware typography colors
             views.setTextColor(R.id.widget_month_title, textPrimary)
@@ -140,15 +143,19 @@ views.setImageViewBitmap(R.id.widget_glass_bg, glassBmp)
             }
 
             views.setTextViewText(R.id.widget_status_pill, pillText)
-            views.setInt(
+            views.setTextColor(
                 R.id.widget_status_pill,
-                "setTextColor",
                 GlassUiTheme.widgetStatusPillTextColor(isDark, statusKind)
             )
-            views.setInt(
-                R.id.widget_status_pill,
-                "setBackgroundResource",
-                GlassUiTheme.widgetStatusPillDrawableRes(statusKind)
+            views.setImageViewBitmap(
+                R.id.widget_status_pill_bg,
+                GlassUiTheme.createWidgetPillBitmap(
+                    widthPx = (140 * density).toInt(),
+                    heightPx = (28 * density).toInt(),
+                    isDark = isDark,
+                    kind = statusKind,
+                    radiusPx = GlassUiTheme.chipRadiusPx
+                )
             )
 
             // Hero Progress Ratio & Bar
@@ -196,14 +203,15 @@ views.setImageViewBitmap(R.id.widget_glass_bg, glassBmp)
 
             // This Week 5-Day Mon–Fri Strip (with Today underlined)
             val monday = today.with(DayOfWeek.MONDAY)
-            val dayIds = listOf(
-                R.id.widget_day_mon to "M",
-                R.id.widget_day_tue to "T",
-                R.id.widget_day_wed to "W",
-                R.id.widget_day_thu to "T",
-                R.id.widget_day_fri to "F"
+            val dayRows = listOf(
+                Triple(R.id.widget_day_mon, R.id.widget_day_mon_bg, "M"),
+                Triple(R.id.widget_day_tue, R.id.widget_day_tue_bg, "T"),
+                Triple(R.id.widget_day_wed, R.id.widget_day_wed_bg, "W"),
+                Triple(R.id.widget_day_thu, R.id.widget_day_thu_bg, "T"),
+                Triple(R.id.widget_day_fri, R.id.widget_day_fri_bg, "F")
             )
-            dayIds.forEachIndexed { idx, (viewId, letter) ->
+            val daySizePx = (24 * density).toInt().coerceAtLeast(36)
+            dayRows.forEachIndexed { idx, (textViewId, bgViewId, letter) ->
                 val d = monday.plusDays(idx.toLong())
                 val t = store.getDayType(d)
                 val isToday = d == today
@@ -214,16 +222,19 @@ views.setImageViewBitmap(R.id.widget_glass_bg, glassBmp)
                 } else {
                     letter
                 }
-                views.setTextViewText(viewId, label)
-                views.setInt(
-                    viewId,
-                    "setTextColor",
+                views.setTextViewText(textViewId, label)
+                views.setTextColor(
+                    textViewId,
                     GlassUiTheme.widgetDayTextColor(isDark, t, isToday)
                 )
-                views.setInt(
-                    viewId,
-                    "setBackgroundResource",
-                    GlassUiTheme.widgetDayDrawableRes(t)
+                views.setImageViewBitmap(
+                    bgViewId,
+                    GlassUiTheme.createWidgetDayBitmap(
+                        sizePx = daySizePx,
+                        isDark = isDark,
+                        type = t,
+                        isToday = isToday
+                    )
                 )
             }
 
