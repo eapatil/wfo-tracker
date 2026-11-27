@@ -1470,7 +1470,7 @@ class MainActivity : AppCompatActivity() {
             lockStatusCardView.addView(topStatusLine)
             lockStatusCardView.addView(lockStatusSummaryView)
 
-            val unlockBtn = makePillButton("Unlock Now", "#4F46E5", GlassUiTheme.textOnAccent) {
+            val unlockBtn = makePillButton("🔓 Unlock Now", "#4F46E5", GlassUiTheme.textOnAccent) {
                 promptDeviceCredential(REQ_UNLOCK_APP, "Unlock OfficePace")
             }
 
@@ -1486,95 +1486,110 @@ class MainActivity : AppCompatActivity() {
         val scroll = ScrollView(this)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(32, 24, 32, 64)
+            setPadding(28, 22, 28, 56)
         }
         scroll.addView(root)
 
         val title = TextView(this).apply {
             text = "OfficePace Setup"
-            textSize = 24f
+            textSize = 23f
             setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(cTextPrimary())
         }
         val subtitle = TextView(this).apply {
-            text = "1. Grant permissions → 2. Link backup folder (auto-restores name, photo & logs) → 3. Confirm profile → 4. Office & policy."
-            textSize = 13f
+            text = "1. Grant permissions → 2. Link backup folder → 3. Confirm profile → 4. Office & policy."
+            textSize = 12.5f
             setTextColor(cTextSecondary())
-            setPadding(0, 6, 0, 18)
+            setPadding(0, 4, 0, 14)
         }
         root.addView(title)
         root.addView(subtitle)
 
+        // Section 1: Permissions & Background Readiness (Compact Status + Paired Tonal Actions)
         val permCard = makeCardContainer()
         permCard.addView(makeSectionTitle("1. Permissions & Background Readiness"))
-        addSpacer(permCard, 12)
+        addSpacer(permCard, 8)
 
-        setupPermStatusView = TextView(this).apply { textSize = 13f; setPadding(0, 0, 0, 6) }
-        val btnGrantPerm = makePillButton("Allow Location & Notifications", "#4F46E5", GlassUiTheme.textOnAccent) {
-            requestForegroundAndNotifPermissions()
-        }
+        setupPermStatusView = TextView(this).apply { textSize = 12.5f; setPadding(0, 2, 0, 2) }
+        setupBgLocStatusView = TextView(this).apply { textSize = 12.5f; setPadding(0, 2, 0, 2) }
+        setupGpsStatusView = TextView(this).apply { textSize = 12.5f; setPadding(0, 2, 0, 2) }
+        setupExactAlarmStatusView = TextView(this).apply { textSize = 12.5f; setPadding(0, 2, 0, 2) }
+        setupBatteryStatusView = TextView(this).apply { textSize = 12.5f; setPadding(0, 2, 0, 10) }
+
         permCard.addView(setupPermStatusView)
-        permCard.addView(btnGrantPerm)
-        addSpacer(permCard, 14)
-
-        setupBgLocStatusView = TextView(this).apply { textSize = 13f; setPadding(0, 0, 0, 6) }
-        val btnBgLoc = makePillButton("Set Location: \"Allow all the time\"", "#4F46E5", GlassUiTheme.textOnAccent) {
-            requestBackgroundLocation()
-        }
         permCard.addView(setupBgLocStatusView)
-        permCard.addView(btnBgLoc)
-        addSpacer(permCard, 14)
-
-        setupGpsStatusView = TextView(this).apply { textSize = 13f; setPadding(0, 0, 0, 6) }
-        val btnGps = makePillButton("Turn ON Phone Location (GPS)", "#0284C7", GlassUiTheme.textOnAccent) {
-            startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
-        }
         permCard.addView(setupGpsStatusView)
-        permCard.addView(btnGps)
-        addSpacer(permCard, 14)
-
-        setupExactAlarmStatusView = TextView(this).apply { textSize = 13f; setPadding(0, 0, 0, 6) }
-        val btnExactAlarm = makePillButton("Check / Enable Exact Alarms", "#0284C7", GlassUiTheme.textOnAccent) {
-            openExactAlarmSettings()
-        }
         permCard.addView(setupExactAlarmStatusView)
-        permCard.addView(btnExactAlarm)
-        addSpacer(permCard, 14)
+        permCard.addView(setupBatteryStatusView)
 
-        setupBatteryStatusView = TextView(this).apply { textSize = 13f; setPadding(0, 0, 0, 6) }
-        val btnBattery = makePillButton("Allow Unrestricted Battery", "#0284C7", GlassUiTheme.textOnAccent) {
+        val permActionRow1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val btnGrantPerm = makeTonalActionButton("📍 Location & Alerts", GlassUiTheme.AccentRole.PRIMARY) {
+            requestForegroundAndNotifPermissions()
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val btnBgLoc = makeTonalActionButton("🛡️ All-The-Time Loc", GlassUiTheme.AccentRole.PRIMARY) {
+            requestBackgroundLocation()
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        permActionRow1.addView(btnGrantPerm)
+        addHorizontalGap(permActionRow1, 8)
+        permActionRow1.addView(btnBgLoc)
+        permCard.addView(permActionRow1)
+        addSpacer(permCard, 8)
+
+        val permActionRow2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val btnGps = makeTonalActionButton("🛰️ GPS Switch", GlassUiTheme.AccentRole.SECONDARY) {
+            startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val btnExactAlarm = makeTonalActionButton("⏰ Exact Alarms", GlassUiTheme.AccentRole.SECONDARY) {
+            openExactAlarmSettings()
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        permActionRow2.addView(btnGps)
+        addHorizontalGap(permActionRow2, 8)
+        permActionRow2.addView(btnExactAlarm)
+        permCard.addView(permActionRow2)
+        addSpacer(permCard, 8)
+
+        val btnBattery = makeTonalActionButton("🔋 Unrestricted Battery", GlassUiTheme.AccentRole.SUCCESS) {
             requestUnrestrictedBattery()
         }
-        permCard.addView(setupBatteryStatusView)
         permCard.addView(btnBattery)
         root.addView(permCard)
-        addSpacer(root, 16)
+        addSpacer(root, 14)
 
+        // Section 2: Auto-Backup Folder
         val backupSetupCard = makeCardContainer()
-        backupSetupCard.addView(makeSectionTitle("2. Auto-Backup Folder (Auto-Restore Name & History)"))
+        backupSetupCard.addView(makeSectionTitle("2. Auto-Backup Folder"))
         setupBackupFolderStatusView = TextView(this).apply {
-            textSize = 13f
+            textSize = 12.5f
             setTextColor(cTextSecondary())
-            setPadding(0, 6, 0, 12)
+            setPadding(0, 4, 0, 10)
         }
-        val pickFolderBtn = makePillButton("📁 Choose Backup Folder (Auto-Imports CSV)", "#4F46E5", GlassUiTheme.textOnAccent) {
+        val pickFolderBtn = makeTonalActionButton("📁 Choose Backup Folder (Auto-Imports CSV)", GlassUiTheme.AccentRole.PRIMARY) {
             launchBackupFolderPicker()
         }
         backupSetupCard.addView(setupBackupFolderStatusView)
         backupSetupCard.addView(pickFolderBtn)
         root.addView(backupSetupCard)
-        addSpacer(root, 16)
+        addSpacer(root, 14)
 
+        // Section 3: Profile Photo, Name & Privacy
         val profileCard = makeCardContainer()
         profileCard.addView(makeSectionTitle("3. Profile Photo, Name & Privacy"))
-        addSpacer(profileCard, 14)
+        addSpacer(profileCard, 12)
 
         val avatarRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
         setupAvatarView = ImageView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(128, 128)
+            layoutParams = LinearLayout.LayoutParams(112, 112)
             scaleType = ImageView.ScaleType.CENTER_CROP
             isClickable = true
             isFocusable = true
@@ -1582,10 +1597,10 @@ class MainActivity : AppCompatActivity() {
         }
         val photoBtnCol = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(24, 0, 0, 0)
+            setPadding(20, 0, 0, 0)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
-        val pickPhotoBtn = makeSmallChipButton("📷 Choose Profile Photo") {
+        val pickPhotoBtn = makeTonalActionButton("📷 Choose Profile Photo", GlassUiTheme.AccentRole.SECONDARY) {
             val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
                 type = "image/*"
@@ -1596,7 +1611,7 @@ class MainActivity : AppCompatActivity() {
             text = "Remove Photo"
             textSize = 12f
             setTextColor(GlassUiTheme.statusDangerText(isDark))
-            setPadding(8, 10, 8, 4)
+            setPadding(8, 8, 8, 2)
             setOnClickListener {
                 store.deleteProfilePhoto()
                 refreshAllViews(animateCharts = false)
@@ -1608,38 +1623,39 @@ class MainActivity : AppCompatActivity() {
         avatarRow.addView(setupAvatarView)
         avatarRow.addView(photoBtnCol)
         profileCard.addView(avatarRow)
-        addSpacer(profileCard, 14)
+        addSpacer(profileCard, 12)
 
         setupNameInput = EditText(this).apply {
             hint = "Your Name"
             setText(store.getUserName())
             setTextColor(cTextPrimary())
             setHintTextColor(cTextSecondary())
-            setPadding(24, 20, 24, 20)
+            setPadding(22, 16, 22, 16)
             background = GlassUiTheme.glassSubtleSurface(isDark, GlassUiTheme.bannerRadiusPx)
         }
         profileCard.addView(setupNameInput)
-        addSpacer(profileCard, 12)
+        addSpacer(profileCard, 10)
 
         setupFullLockSwitch = Switch(this).apply {
             text = "Require Fingerprint/PIN to open app (Full Lock)"
-            textSize = 14f
+            textSize = 13.5f
             setTextColor(cTextPrimary())
             isChecked = store.isFullAppLockEnabled()
-            setPadding(0, 8, 0, 4)
+            setPadding(0, 6, 0, 2)
         }
         profileCard.addView(setupFullLockSwitch)
         root.addView(profileCard)
-        addSpacer(root, 16)
+        addSpacer(root, 14)
 
+        // Section 4: Office Wi-Fi & Geofence Location
         val trackingCard = makeCardContainer()
         trackingCard.addView(makeSectionTitle("4. Office Wi-Fi & Geofence Location"))
         setupLiveWifiView = TextView(this).apply {
-            textSize = 13f
+            textSize = 12.5f
             setTextColor(cTextSecondary())
-            setPadding(0, 6, 0, 10)
+            setPadding(0, 4, 0, 8)
         }
-        val btnAddLive = makePillButton("➕ Auto-Detect Connected Wi-Fi", "#4F46E5", GlassUiTheme.textOnAccent) {
+        val btnAddLive = makeTonalActionButton("➕ Auto-Detect Connected Wi-Fi", GlassUiTheme.AccentRole.PRIMARY) {
             val live = getConnectedWifiSsid()
             if (live.isEmpty()) {
                 showStatusPopup(false, "No connected Wi-Fi detected (check Wi-Fi & Location)")
@@ -1658,38 +1674,39 @@ class MainActivity : AppCompatActivity() {
             setText(store.getTargetSsids().joinToString(", "))
             setTextColor(cTextPrimary())
             setHintTextColor(cTextSecondary())
-            setPadding(24, 20, 24, 20)
+            setPadding(22, 16, 22, 16)
             background = GlassUiTheme.glassSubtleSurface(isDark, GlassUiTheme.bannerRadiusPx)
         }
 
         setupLocationSummaryView = TextView(this).apply {
-            textSize = 13f
+            textSize = 12.5f
             setTextColor(cTextPrimary())
-            setPadding(0, 14, 0, 8)
+            setPadding(0, 12, 0, 8)
         }
-        val btnSelectLocSetup = makePillButton("📍 Select Location (Search / GPS / Maps)", "#0284C7", GlassUiTheme.textOnAccent) {
+        val btnSelectLocSetup = makeTonalActionButton("📍 Select Location (Search / GPS / Maps)", GlassUiTheme.AccentRole.SECONDARY) {
             showSelectLocationDialog()
         }
 
         trackingCard.addView(setupLiveWifiView)
         trackingCard.addView(btnAddLive)
-        addSpacer(trackingCard, 10)
+        addSpacer(trackingCard, 8)
         trackingCard.addView(setupSsidInput)
         trackingCard.addView(setupLocationSummaryView)
         trackingCard.addView(btnSelectLocSetup)
         root.addView(trackingCard)
-        addSpacer(root, 16)
+        addSpacer(root, 14)
 
+        // Section 5: Monthly Policy & Alert Settings
         val policyCard = makeCardContainer()
         policyCard.addView(makeSectionTitle("5. Monthly Policy & Alert Settings"))
 
         val pctRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 14, 0, 10)
+            setPadding(0, 12, 0, 8)
         }
         setupTargetPctView = TextView(this).apply {
-            textSize = 15f
+            textSize = 14.5f
             setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
             setTextColor(cTextPrimary())
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
@@ -1706,72 +1723,72 @@ class MainActivity : AppCompatActivity() {
         }
         pctRow.addView(setupTargetPctView)
         pctRow.addView(minusBtn)
-        addHorizontalGap(pctRow, 10)
+        addHorizontalGap(pctRow, 8)
         pctRow.addView(plusBtn)
         policyCard.addView(pctRow)
 
         setupRoundUpSwitch = Switch(this).apply {
             text = "Round Up Fractional Days (e.g., 8.4 → 9 days)"
-            textSize = 14f
+            textSize = 13.5f
             setTextColor(cTextPrimary())
             isChecked = store.isRoundUpEnabled()
-            setPadding(0, 8, 0, 8)
+            setPadding(0, 6, 0, 6)
         }
         setupExclHolidaySwitch = Switch(this).apply {
             text = "Exclude Marked Holidays from Target"
-            textSize = 14f
+            textSize = 13.5f
             setTextColor(cTextPrimary())
             isChecked = store.isExcludeHolidaysEnabled()
-            setPadding(0, 8, 0, 8)
+            setPadding(0, 6, 0, 6)
         }
         setupExclLeaveSwitch = Switch(this).apply {
             text = "Exclude Marked Leaves from Target"
-            textSize = 14f
+            textSize = 13.5f
             setTextColor(cTextPrimary())
             isChecked = store.isExcludeLeavesEnabled()
-            setPadding(0, 8, 0, 8)
+            setPadding(0, 6, 0, 6)
         }
         setupConnectAlertSwitch = Switch(this).apply {
             text = "Office Connected Alert (Wi-Fi / Geofence Entry)"
-            textSize = 14f
+            textSize = 13.5f
             setTextColor(cTextPrimary())
             isChecked = store.isConnectAlertEnabled()
-            setPadding(0, 8, 0, 8)
+            setPadding(0, 6, 0, 6)
         }
         setupDisconnectAlertSwitch = Switch(this).apply {
             text = "Office Disconnected Alert (Wi-Fi / Geofence Exit)"
-            textSize = 14f
+            textSize = 13.5f
             setTextColor(cTextPrimary())
             isChecked = store.isDisconnectAlertEnabled()
-            setPadding(0, 8, 0, 8)
+            setPadding(0, 6, 0, 6)
         }
         setupPlanReminderSwitch = Switch(this).apply {
             text = "Planned Office Day Alerts (Eve, Morning, Missed)"
-            textSize = 14f
+            textSize = 13.5f
             setTextColor(cTextPrimary())
             isChecked = store.isPlannedRemindersEnabled()
-            setPadding(0, 8, 0, 8)
+            setPadding(0, 6, 0, 6)
         }
         setupMorningNudgeSwitch = Switch(this).apply {
             text = "Morning Pace Nudge on WFH Days"
-            textSize = 14f
+            textSize = 13.5f
             setTextColor(cTextPrimary())
             isChecked = store.isMorningNudgeEnabled()
-            setPadding(0, 8, 0, 8)
+            setPadding(0, 6, 0, 6)
         }
         setupTargetBufferAlertSwitch = Switch(this).apply {
             text = "Monthly Target Met & Zero Buffer Alerts"
-            textSize = 14f
+            textSize = 13.5f
             setTextColor(cTextPrimary())
             isChecked = store.isTargetBufferAlertEnabled()
-            setPadding(0, 8, 0, 8)
+            setPadding(0, 6, 0, 6)
         }
         setupQuarterAlertSwitch = Switch(this).apply {
             text = "Quarter-End Pace Alert"
-            textSize = 14f
+            textSize = 13.5f
             setTextColor(cTextPrimary())
             isChecked = store.isQuarterPaceAlertEnabled()
-            setPadding(0, 8, 0, 4)
+            setPadding(0, 6, 0, 2)
         }
 
         policyCard.addView(setupRoundUpSwitch)
@@ -1784,8 +1801,9 @@ class MainActivity : AppCompatActivity() {
         policyCard.addView(setupTargetBufferAlertSwitch)
         policyCard.addView(setupQuarterAlertSwitch)
         root.addView(policyCard)
-        addSpacer(root, 20)
+        addSpacer(root, 18)
 
+        // Primary Hero Capsule CTA
         val saveFinishBtn = makePillButton("✅ Save Settings & Start Auto-Tracker", "#10B981", GlassUiTheme.textOnAccent) {
             store.setUserName(setupNameInput.text.toString())
             store.setFullAppLockEnabled(setupFullLockSwitch.isChecked)
@@ -1808,19 +1826,27 @@ class MainActivity : AppCompatActivity() {
             showStatusPopup(true, "Settings saved & dashboard locked")
         }
         root.addView(saveFinishBtn)
-        addSpacer(root, 12)
+        addSpacer(root, 10)
 
-        val setupPinWidgetBtn = makePillButton("📌 Pin Home Screen Widget", "#334155", GlassUiTheme.textOnAccent) {
+        // Decluttered 2-Column Utility Row (Pin Widget + Guide)
+        val setupUtilityRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        val setupPinWidgetBtn = makeTonalActionButton("📌 Pin Widget", GlassUiTheme.AccentRole.NEUTRAL) {
             requestPinOfficePaceWidget()
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
-        root.addView(setupPinWidgetBtn)
-        addSpacer(root, 12)
-
-        val setupHelpBtn = makePillButton("📖 How It Works & Configuration Guide", "#0284C7", GlassUiTheme.textOnAccent) {
+        val setupHelpBtn = makeTonalActionButton("📖 Setup Guide", GlassUiTheme.AccentRole.SECONDARY) {
             showHelpGuideDialog()
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
-        root.addView(setupHelpBtn)
-        addSpacer(root, 16)
+        setupUtilityRow.addView(setupPinWidgetBtn)
+        addHorizontalGap(setupUtilityRow, 10)
+        setupUtilityRow.addView(setupHelpBtn)
+        root.addView(setupUtilityRow)
+        addSpacer(root, 14)
         root.addView(makePersonalFooterView())
 
         return scroll
@@ -2521,18 +2547,25 @@ class MainActivity : AppCompatActivity() {
         }
         simCard.addView(simResultView)
         root.addView(simCard)
-        addSpacer(root, 16)
+        addSpacer(root, 14)
 
+        // Decluttered Export & Share Card (1 Primary Capsule + 2-Column Tonal Share Row)
+        val exportCard = makeCardContainer().apply {
+            setPadding(22, 16, 22, 16)
+        }
         val copySnapshotBtn = makePillButton("📎 Copy Audit Snapshot", "#0284C7", GlassUiTheme.textOnAccent) {
             val snap = store.buildMonthlySummaryReport(selectedMonth)
             val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             cm.setPrimaryClip(ClipData.newPlainText("OfficePace Audit Snapshot", snap))
             showStatusPopup(true, "Audit snapshot copied to clipboard")
         }
-        root.addView(copySnapshotBtn)
-        addSpacer(root, 12)
+        exportCard.addView(copySnapshotBtn)
+        addSpacer(exportCard, 10)
 
-        val shareMonthBtn = makePillButton("📋 Share Monthly Summary Report", "#4F46E5", GlassUiTheme.textOnAccent) {
+        val shareRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        val shareMonthBtn = makeTonalActionButton("📋 Monthly Report", GlassUiTheme.AccentRole.PRIMARY) {
             val report = store.buildMonthlySummaryReport(selectedMonth)
             val intent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
@@ -2540,11 +2573,10 @@ class MainActivity : AppCompatActivity() {
                 putExtra(Intent.EXTRA_TEXT, report)
             }
             startActivity(Intent.createChooser(intent, "Share Monthly Summary"))
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
-        root.addView(shareMonthBtn)
-        addSpacer(root, 12)
-
-        val shareYearBtn = makePillButton("🏆 Share Annual Year-in-Review (${selectedMonth.year})", "#334155", GlassUiTheme.textOnAccent) {
+        val shareYearBtn = makeTonalActionButton("🏆 ${selectedMonth.year} Review", GlassUiTheme.AccentRole.NEUTRAL) {
             val report = store.buildAnnualSummaryReport(selectedMonth.year)
             val intent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
@@ -2552,8 +2584,14 @@ class MainActivity : AppCompatActivity() {
                 putExtra(Intent.EXTRA_TEXT, report)
             }
             startActivity(Intent.createChooser(intent, "Share Annual Summary"))
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
-        root.addView(shareYearBtn)
+        shareRow.addView(shareMonthBtn)
+        addHorizontalGap(shareRow, 10)
+        shareRow.addView(shareYearBtn)
+        exportCard.addView(shareRow)
+        root.addView(exportCard)
 
         return scroll
     }
@@ -2945,7 +2983,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(cTextSecondary())
             setPadding(0, 2, 0, 10)
         }
-        val importHolBtn = makePillButton("🎉 Import Holidays (.ics / CSV)", "#8B5CF6", GlassUiTheme.textOnAccent) {
+        val importHolBtn = makeTonalActionButton("🎉 Import Holidays (.ics / CSV)", GlassUiTheme.AccentRole.SPECIAL) {
             if (ensureEditUnlocked()) {
                 launchHolidayImport()
             }
@@ -2962,6 +3000,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(holidayCard)
         addSpacer(root, 14)
 
+        // Decluttered Backup, Widget & Data Portability Card (2x2 Compact Tonal Grid)
         val backupCard = makeCardContainer()
         backupCard.addView(makeSectionTitle("Backup, Widget & Data Portability"))
         autoBackupStatusView = TextView(this).apply {
@@ -2970,59 +3009,72 @@ class MainActivity : AppCompatActivity() {
         }
         backupCard.addView(autoBackupStatusView)
 
-        val pinWidgetBtn = makePillButton("📌 Pin Home Screen Widget", "#4F46E5", GlassUiTheme.textOnAccent) {
-            requestPinOfficePaceWidget()
+        val backupTopRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
         }
-        backupCard.addView(pinWidgetBtn)
-        addSpacer(backupCard, 10)
-
-        val autoFolderBtn = makePillButton("🔄 Configure Auto-Backup Folder (Reuses Existing File)", "#0284C7", GlassUiTheme.textOnAccent) {
+        val pinWidgetBtn = makeTonalActionButton("📌 Pin Widget", GlassUiTheme.AccentRole.PRIMARY) {
+            requestPinOfficePaceWidget()
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val autoFolderBtn = makeTonalActionButton("🔄 Backup Folder", GlassUiTheme.AccentRole.SECONDARY) {
             if (ensureEditUnlocked()) {
                 launchBackupFolderPicker()
             }
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
-        backupCard.addView(autoFolderBtn)
-        addSpacer(backupCard, 10)
+        backupTopRow.addView(pinWidgetBtn)
+        addHorizontalGap(backupTopRow, 10)
+        backupTopRow.addView(autoFolderBtn)
+        backupCard.addView(backupTopRow)
+        addSpacer(backupCard, 8)
 
         val backupRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
         }
-        val exportBtn = makePillButton("💾 Save CSV", "#334155", GlassUiTheme.textOnAccent).apply {
+        val exportBtn = makeTonalActionButton("💾 Save CSV", GlassUiTheme.AccentRole.NEUTRAL) {
+            launchCsvExport()
+        }.apply {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
-        exportBtn.setOnClickListener { launchCsvExport() }
-
-        val importBtn = makePillButton("📂 Restore CSV", "#4F46E5", GlassUiTheme.textOnAccent).apply {
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        }
-        importBtn.setOnClickListener {
+        val importBtn = makeTonalActionButton("📂 Restore CSV", GlassUiTheme.AccentRole.PRIMARY) {
             if (ensureEditUnlocked()) {
                 launchCsvImport()
             }
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
-
         backupRow.addView(exportBtn)
-        addHorizontalGap(backupRow, 12)
+        addHorizontalGap(backupRow, 10)
         backupRow.addView(importBtn)
         backupCard.addView(backupRow)
         root.addView(backupCard)
         addSpacer(root, 14)
 
-        val setupWizardBtn = makePillButton("🛠️ Edit Policy Rules, Profile & Permissions", "#4F46E5", GlassUiTheme.textOnAccent) {
+        // Decluttered 2-Column Bottom Utility Row (Policy/Profile + Guide)
+        val bottomActionsRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        val setupWizardBtn = makeTonalActionButton("🛠️ Policy & Profile", GlassUiTheme.AccentRole.PRIMARY) {
             if (isEditUnlocked) {
                 showSetupMode()
             } else {
                 promptDeviceCredential(REQ_UNLOCK_SETUP, "Unlock Policy & Profile Settings")
             }
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
-        root.addView(setupWizardBtn)
-        addSpacer(root, 12)
-
-        val helpGuideBtn = makePillButton("📖 How It Works & Configuration Guide", "#0284C7", GlassUiTheme.textOnAccent) {
+        val helpGuideBtn = makeTonalActionButton("📖 How It Works", GlassUiTheme.AccentRole.SECONDARY) {
             showHelpGuideDialog()
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
-        root.addView(helpGuideBtn)
-        addSpacer(root, 16)
+        bottomActionsRow.addView(setupWizardBtn)
+        addHorizontalGap(bottomActionsRow, 10)
+        bottomActionsRow.addView(helpGuideBtn)
+        root.addView(bottomActionsRow)
+        addSpacer(root, 14)
         root.addView(makePersonalFooterView())
 
         return scroll
@@ -5010,7 +5062,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun cTextPrimary(): Int = GlassUiTheme.textPrimaryColor(isDark)
     private fun cTextSecondary(): Int = GlassUiTheme.textSecondaryColor(isDark)
-    private fun cBorder(): String = GlassUiTheme.borderHex(isDark)
 
     private fun makePersonalFooterView(): TextView {
         return TextView(this).apply {
@@ -5040,6 +5091,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Primary capsule CTA button with dual-color translucent glass gradient.
+     */
     private fun makePillButton(
         label: String,
         bgHex: String,
@@ -5054,7 +5108,7 @@ class MainActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             isClickable = true
             isFocusable = true
-            setPadding(24, 18, 24, 18)
+            setPadding(24, 16, 24, 16)
             background = GlassUiTheme.glassAccentButtonHex(
                 bgHex,
                 bgHex,
@@ -5062,6 +5116,33 @@ class MainActivity : AppCompatActivity() {
                 translucent = true,
                 isDark = isDark
             )
+            setOnClickListener {
+                animateCellPop(it)
+                onClick()
+            }
+        }
+    }
+
+    /**
+     * Compact tonal ghost-glass button for secondary and utility actions so paired
+     * rows feel airy, distinct, and uncluttered.
+     */
+    private fun makeTonalActionButton(
+        label: String,
+        role: GlassUiTheme.AccentRole,
+        onClick: () -> Unit = {}
+    ): TextView {
+        return TextView(this).apply {
+            text = label
+            textSize = 13f
+            setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD))
+            setTextColor(GlassUiTheme.glassTonalTextColor(isDark, role))
+            gravity = Gravity.CENTER
+            maxLines = 1
+            isClickable = true
+            isFocusable = true
+            setPadding(16, 13, 16, 13)
+            background = GlassUiTheme.glassTonalButton(isDark, role, GlassUiTheme.secondaryButtonRadiusPx)
             setOnClickListener {
                 animateCellPop(it)
                 onClick()
@@ -5092,7 +5173,7 @@ class MainActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             isClickable = true
             isFocusable = true
-            setPadding(12, 16, 12, 16)
+            setPadding(12, 15, 12, 15)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             setOnClickListener { onClick() }
         }
