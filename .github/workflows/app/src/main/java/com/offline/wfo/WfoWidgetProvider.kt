@@ -169,6 +169,7 @@ class WfoWidgetProvider : AppWidgetProvider() {
             val nowTime = LocalTime.now()
             val ym = YearMonth.from(today)
             val stats = store.getMonthStats(ym, today)
+            val weekly = store.getWeeklyPaceStats(today)
             val rhythm = store.getRhythmStats(today)
 
             val minWidthDp = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 260) ?: 260
@@ -293,7 +294,7 @@ class WfoWidgetProvider : AppWidgetProvider() {
             val paceColor: Int
             when {
                 stats.remainingDays == 0 -> {
-                    paceText = if (isCompact) "🎉 Met" else "🎉 Mandate met • WFH ok"
+                    paceText = if (isCompact) "🎉 Met" else "🎉 Mandate met"
                     paceColor = GlassUiTheme.statusSuccessText(isDark)
                 }
                 stats.bufferDays <= 0 -> {
@@ -301,16 +302,16 @@ class WfoWidgetProvider : AppWidgetProvider() {
                     paceColor = GlassUiTheme.statusDangerText(isDark)
                 }
                 rhythm.consecutiveWfhWeekdays >= 3 && !isCompact -> {
-                    paceText = "⚠️ ${rhythm.consecutiveWfhWeekdays} WFH days • ${stats.bufferDays} buf"
+                    paceText = "⚠️ ${rhythm.consecutiveWfhWeekdays} WFH • ${stats.bufferDays} buf"
                     paceColor = GlassUiTheme.statusWarningText(isDark)
                 }
                 nextPlannedDate != null && !isCompact -> {
-                    val pLabel = nextPlannedDate.format(DateTimeFormatter.ofPattern("EEE, dd MMM", Locale.getDefault()))
-                    paceText = "📅 Next: $pLabel • ${stats.bufferDays} buf"
+                    val pLabel = nextPlannedDate.format(DateTimeFormatter.ofPattern("dd MMM", Locale.getDefault()))
+                    paceText = "📅 Next $pLabel • ${stats.bufferDays} buf"
                     paceColor = GlassUiTheme.statusInfoText(isDark)
                 }
                 else -> {
-                    paceText = "${stats.bufferDays} buffer • ${stats.remainingDays} left"
+                    paceText = "${stats.bufferDays} buf • ${stats.remainingDays} left"
                     paceColor = if (stats.bufferDays == 1) {
                         GlassUiTheme.statusWarningText(isDark)
                     } else {
@@ -328,31 +329,46 @@ class WfoWidgetProvider : AppWidgetProvider() {
             views.setInt(R.id.widget_progress_bar, "setSecondaryProgress", projectedPct)
 
             val monday = today.with(DayOfWeek.MONDAY)
-            val dayViews = listOf(
-                R.id.widget_day_mon to "M",
-                R.id.widget_day_tue to "T",
-                R.id.widget_day_wed to "W",
-                R.id.widget_day_thu to "T",
-                R.id.widget_day_fri to "F"
+            val daySlots = listOf(
+                Triple(R.id.widget_day_mon, R.id.widget_day_mon_bg, "M"),
+                Triple(R.id.widget_day_tue, R.id.widget_day_tue_bg, "T"),
+                Triple(R.id.widget_day_wed, R.id.widget_day_wed_bg, "W"),
+                Triple(R.id.widget_day_thu, R.id.widget_day_thu_bg, "T"),
+                Triple(R.id.widget_day_fri, R.id.widget_day_fri_bg, "F")
             )
-            dayViews.forEachIndexed { idx, (viewId, letter) ->
+            daySlots.forEachIndexed { idx, (textViewId, bgViewId, letter) ->
                 val d = monday.plusDays(idx.toLong())
                 val dType = store.getDayType(d)
                 val isToday = d == today
 
-                val prefix = when (dType) {
-                    DayType.PLANNED -> "[$letter]"
-                    else -> letter
-                }
                 val label = if (isToday) {
-                    SpannableString(prefix).apply {
+                    SpannableString(letter).apply {
                         setSpan(UnderlineSpan(), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                     }
                 } else {
-                    SpannableString(prefix)
+                    SpannableString(letter)
                 }
-                views.setTextViewText(viewId, label)
-                views.setTextColor(viewId, GlassUiTheme.widgetDayTextColor(isDark, dType, isToday))
+                views.setTextViewText(textViewId, label)
+
+                val (bgCol, fgCol) = when (dType) {
+                    DayType.OFFICE -> GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.SUCCESS).second to GlassUiTheme.textOnAccent
+                    DayType.PLANNED -> GlassUiTheme.statusTintColor(isDark, GlassUiTheme.StatusKind.INFO) to GlassUiTheme.statusInfoText(isDark)
+                    DayType.LEAVE -> GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.WARNING).second to GlassUiTheme.textOnAccent
+                    DayType.HOLIDAY -> GlassUiTheme.accentColors(isDark, GlassUiTheme.AccentRole.SPECIAL).second to GlassUiTheme.textOnAccent
+                    DayType.NONE -> GlassUiTheme.glassSubtleSurfaceColor(isDark) to textPrimary
+                }
+                views.setTextColor(textViewId, fgCol)
+                views.setImageViewBitmap(
+                    bgViewId,
+                    GlassUiTheme.renderWidgetSurfaceBitmap(
+                        widthPx = 64,
+                        heightPx = 64,
+                        isDark = isDark,
+                        customTint = bgCol,
+                        radiusPx = GlassUiTheme.buttonRadiusPx,
+                        strokeColor = if (isToday || dType == DayType.PLANNED) fgCol else null
+                    )
+                )
 
                 val inspectIntent = Intent(context, MainActivity::class.java).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -364,7 +380,19 @@ class WfoWidgetProvider : AppWidgetProvider() {
                     inspectIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
-                views.setOnClickPendingIntent(viewId, inspectPending)
+                views.setOnClickPendingIntent(textViewId, inspectPending)
+                views.setOnClickPendingIntent(bgViewId, inspectPending)
+            }
+
+            if (!isCompact) {
+                views.setViewVisibility(R.id.widget_week_summary, View.VISIBLE)
+                views.setTextViewText(
+                    R.id.widget_week_summary,
+                    "Wk ${weekly.attendedThisWeek}/${weekly.weeklyQuota}"
+                )
+                views.setTextColor(R.id.widget_week_summary, textSecondary)
+            } else {
+                views.setViewVisibility(R.id.widget_week_summary, View.GONE)
             }
 
             val timeFormatted = nowTime.format(DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault()))
