@@ -269,7 +269,8 @@ class WfoWidgetProvider : AppWidgetProvider() {
             views.setTextColor(R.id.widget_hero_ratio, textPrimary)
 
             val plannedCoversGap = stats.futurePlannedDays > 0 && stats.projectedAttendedDays >= stats.requiredDays
-            if (!isCompact && stats.futurePlannedDays > 0) {
+            val showProjectedBadge = !isCompact && minWidthDp >= 300 && stats.futurePlannedDays > 0
+            if (showProjectedBadge) {
                 views.setViewVisibility(R.id.widget_projected_badge, View.VISIBLE)
                 views.setTextViewText(
                     R.id.widget_projected_badge,
@@ -296,11 +297,7 @@ class WfoWidgetProvider : AppWidgetProvider() {
                     paceColor = GlassUiTheme.statusSuccessText(isDark)
                 }
                 stats.bufferDays <= 0 -> {
-                    paceText = if (isCompact) {
-                        "🚨 0 buf • ${stats.remainingDays} left"
-                    } else {
-                        "🚨 0 buffer • attend all ${stats.remainingDays} left"
-                    }
+                    paceText = "🚨 0 buf • ${stats.remainingDays} left"
                     paceColor = GlassUiTheme.statusDangerText(isDark)
                 }
                 rhythm.consecutiveWfhWeekdays >= 3 && !isCompact -> {
