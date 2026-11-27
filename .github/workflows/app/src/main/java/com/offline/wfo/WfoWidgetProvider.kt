@@ -24,6 +24,11 @@ import java.util.Locale
 
 class WfoWidgetProvider : AppWidgetProvider() {
 
+    private data class DaySlot(
+        val viewId: Int,
+        val letter: String
+    )
+
     companion object {
         const val ACTION_WIDGET_REFRESH = "com.offline.wfo.ACTION_WIDGET_REFRESH"
 
@@ -133,13 +138,13 @@ class WfoWidgetProvider : AppWidgetProvider() {
                 TrackingMode.BOTH -> "WFH Today"
             }
 
-            val (pillText, statusKind) = when {
-                isOnOffice -> "🟢 At Office" to GlassUiTheme.StatusKind.SUCCESS
-                todayType == DayType.OFFICE -> "✅ Office Logged" to GlassUiTheme.StatusKind.SUCCESS
-                todayType == DayType.PLANNED -> "📅 Planned Office" to GlassUiTheme.StatusKind.INFO
-                todayType == DayType.LEAVE -> "🌴 On Leave" to GlassUiTheme.StatusKind.WARNING
-                todayType == DayType.HOLIDAY -> "🎉 Holiday" to GlassUiTheme.StatusKind.HOLIDAY
-                else -> "🏠 $disconnectedHint" to null
+            val (pillText, statusKind, pillDrawableRes) = when {
+                isOnOffice -> Triple("🟢 At Office", GlassUiTheme.StatusKind.SUCCESS, R.drawable.widget_pill_green)
+                todayType == DayType.OFFICE -> Triple("✅ Office Logged", GlassUiTheme.StatusKind.SUCCESS, R.drawable.widget_pill_green)
+                todayType == DayType.PLANNED -> Triple("📅 Planned Office", GlassUiTheme.StatusKind.INFO, R.drawable.widget_pill_indigo)
+                todayType == DayType.LEAVE -> Triple("🌴 On Leave", GlassUiTheme.StatusKind.WARNING, R.drawable.widget_pill_amber)
+                todayType == DayType.HOLIDAY -> Triple("🎉 Holiday", GlassUiTheme.StatusKind.HOLIDAY, R.drawable.widget_pill_purple)
+                else -> Triple("🏠 $disconnectedHint", null, R.drawable.widget_pill_neutral)
             }
 
             views.setTextViewText(R.id.widget_status_pill, pillText)
@@ -147,16 +152,7 @@ class WfoWidgetProvider : AppWidgetProvider() {
                 R.id.widget_status_pill,
                 GlassUiTheme.widgetStatusPillTextColor(isDark, statusKind)
             )
-            views.setImageViewBitmap(
-                R.id.widget_status_pill_bg,
-                GlassUiTheme.createWidgetPillBitmap(
-                    widthPx = (140 * density).toInt(),
-                    heightPx = (28 * density).toInt(),
-                    isDark = isDark,
-                    kind = statusKind,
-                    radiusPx = GlassUiTheme.chipRadiusPx
-                )
-            )
+            views.setInt(R.id.widget_status_pill, "setBackgroundResource", pillDrawableRes)
 
             // Hero Progress Ratio & Bar
             views.setTextViewText(
@@ -203,39 +199,37 @@ class WfoWidgetProvider : AppWidgetProvider() {
 
             // This Week 5-Day Mon–Fri Strip (with Today underlined)
             val monday = today.with(DayOfWeek.MONDAY)
-            val dayRows = listOf(
-                Triple(R.id.widget_day_mon, R.id.widget_day_mon_bg, "M"),
-                Triple(R.id.widget_day_tue, R.id.widget_day_tue_bg, "T"),
-                Triple(R.id.widget_day_wed, R.id.widget_day_wed_bg, "W"),
-                Triple(R.id.widget_day_thu, R.id.widget_day_thu_bg, "T"),
-                Triple(R.id.widget_day_fri, R.id.widget_day_fri_bg, "F")
+            val daySlots = listOf(
+                DaySlot(R.id.widget_day_mon, "M"),
+                DaySlot(R.id.widget_day_tue, "T"),
+                DaySlot(R.id.widget_day_wed, "W"),
+                DaySlot(R.id.widget_day_thu, "T"),
+                DaySlot(R.id.widget_day_fri, "F")
             )
-            val daySizePx = (24 * density).toInt().coerceAtLeast(36)
-            dayRows.forEachIndexed { idx, (textViewId, bgViewId, letter) ->
+            daySlots.forEachIndexed { idx, slot ->
                 val d = monday.plusDays(idx.toLong())
                 val t = store.getDayType(d)
                 val isToday = d == today
                 val label: CharSequence = if (isToday) {
-                    SpannableString(letter).apply {
+                    SpannableString(slot.letter).apply {
                         setSpan(UnderlineSpan(), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                     }
                 } else {
-                    letter
+                    slot.letter
                 }
-                views.setTextViewText(textViewId, label)
+                val dayDrawableRes = when (t) {
+                    DayType.OFFICE -> R.drawable.widget_day_office
+                    DayType.PLANNED -> R.drawable.widget_day_planned
+                    DayType.LEAVE -> R.drawable.widget_day_leave
+                    DayType.HOLIDAY -> R.drawable.widget_day_holiday
+                    DayType.NONE -> R.drawable.widget_day_none
+                }
+                views.setTextViewText(slot.viewId, label)
                 views.setTextColor(
-                    textViewId,
+                    slot.viewId,
                     GlassUiTheme.widgetDayTextColor(isDark, t, isToday)
                 )
-                views.setImageViewBitmap(
-                    bgViewId,
-                    GlassUiTheme.createWidgetDayBitmap(
-                        sizePx = daySizePx,
-                        isDark = isDark,
-                        type = t,
-                        isToday = isToday
-                    )
-                )
+                views.setInt(slot.viewId, "setBackgroundResource", dayDrawableRes)
             }
 
             // Tap Card Body -> Open MainActivity
