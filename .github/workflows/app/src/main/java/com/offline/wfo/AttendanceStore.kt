@@ -1629,8 +1629,12 @@ class AttendanceStore(private val context: Context) {
             if (eqIdx <= 2) continue
             val key = line.substring(2, eqIdx).trim().lowercase(Locale.US)
             val rawVal = line.substring(eqIdx + 1).trim()
-            val parsedVal = parseCsvLine(rawVal).firstOrNull()?.trim().orEmpty()
-            metaEntries[key] = parsedVal
+            val unquoted = if (rawVal.length >= 2 && rawVal.startsWith("\"") && rawVal.endsWith("\"")) {
+                rawVal.substring(1, rawVal.length - 1).replace("\"\"", "\"")
+            } else {
+                rawVal
+            }
+            metaEntries[key] = unquoted
         }
         if (metaEntries.isEmpty()) return
 
@@ -1756,7 +1760,7 @@ class AttendanceStore(private val context: Context) {
         return raw
             .replace("\u00E2\u2014\u201A", "-")
             .replace("\u00E2\u2014\u20AC", "-")
-            .replace("â\u0094\u0080", "-")
+            .replace("â\u0094\u2080", "-")
             .replace("\u2013", "-")
             .replace("\u2014", "-")
             .replace("\u2212", "-")
