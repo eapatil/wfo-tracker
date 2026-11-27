@@ -72,6 +72,18 @@ class WfoWidgetProvider : AppWidgetProvider() {
 
             val views = RemoteViews(context.packageName, R.layout.wfo_widget)
 
+            val options = manager.getAppWidgetOptions(appWidgetId)
+val minWidthDp = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 280) ?: 280
+val minHeightDp = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 110) ?: 110
+val density = context.resources.displayMetrics.density
+val glassBmp = GlassUiTheme.createWidgetGlassBitmap(
+    widthPx = (minWidthDp * density).toInt().coerceAtLeast(360),
+    heightPx = (minHeightDp * density).toInt().coerceAtLeast(160),
+    isDark = isDark,
+    radiusPx = GlassUiTheme.cardRadiusPx
+)
+views.setImageViewBitmap(R.id.widget_glass_bg, glassBmp)
+
             // Apply theme-aware typography colors
             views.setTextColor(R.id.widget_month_title, textPrimary)
             views.setTextColor(R.id.widget_hero_ratio, textPrimary)
