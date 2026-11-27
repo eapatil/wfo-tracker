@@ -1,6 +1,9 @@
 package com.offline.wfo
 
 import android.animation.ValueAnimator
+import android.content.Context
+import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Color
@@ -683,19 +686,18 @@ object GlassUiTheme {
 
     fun createDashEffect(intervals: FloatArray = floatArrayOf(18f, 12f)): DashPathEffect =
         DashPathEffect(intervals, 0f)
-}
 
     // ==================== WIDGET GLASS HELPERS ====================
 
-    fun resolveWidgetIsDark(context: android.content.Context): Boolean {
-        val raw = context.getSharedPreferences("officepace_ui_prefs", android.content.Context.MODE_PRIVATE)
+    fun resolveWidgetIsDark(context: Context): Boolean {
+        val raw = context.getSharedPreferences("officepace_ui_prefs", Context.MODE_PRIVATE)
             .getString("app_theme_mode", "SYSTEM") ?: "SYSTEM"
         return when (raw) {
             "LIGHT" -> false
             "DARK" -> true
             else -> (context.resources.configuration.uiMode and
-                android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
-                android.content.res.Configuration.UI_MODE_NIGHT_YES
+                Configuration.UI_MODE_NIGHT_MASK) ==
+                Configuration.UI_MODE_NIGHT_YES
         }
     }
 
@@ -744,10 +746,10 @@ object GlassUiTheme {
         heightPx: Int,
         isDark: Boolean,
         radiusPx: Float = cardRadiusPx
-    ): android.graphics.Bitmap {
+    ): Bitmap {
         val w = widthPx.coerceAtLeast(160)
         val h = heightPx.coerceAtLeast(96)
-        val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
 
         val rect = RectF(2f, 2f, w - 2f, h - 2f)
@@ -795,4 +797,4 @@ object GlassUiTheme {
         )
         return bmp
     }
-    
+}
