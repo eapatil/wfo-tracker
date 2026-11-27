@@ -6,8 +6,9 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
+import android.content.res.ColorStateList
 import android.os.Build
+import android.os.Bundle
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.style.UnderlineSpan
@@ -45,6 +46,10 @@ class WfoWidgetProvider : AppWidgetProvider() {
             val store = AttendanceStore(context)
             store.performDailyRolloverIfNeeded()
 
+            val isDark = GlassUiTheme.resolveWidgetIsDark(context)
+            val textPrimary = GlassUiTheme.textPrimaryColor(isDark)
+            val textSecondary = GlassUiTheme.textSecondaryColor(isDark)
+
             val today = LocalDate.now()
             val ym = YearMonth.from(today)
             val stats = store.getMonthStats(ym, today)
@@ -67,6 +72,13 @@ class WfoWidgetProvider : AppWidgetProvider() {
 
             val views = RemoteViews(context.packageName, R.layout.wfo_widget)
 
+            // Apply theme-aware typography colors
+            views.setTextColor(R.id.widget_month_title, textPrimary)
+            views.setTextColor(R.id.widget_hero_ratio, textPrimary)
+            views.setTextColor(R.id.widget_pace_text, textSecondary)
+            views.setTextColor(R.id.widget_source_detail, textSecondary)
+            views.setTextColor(R.id.widget_updated_time, textSecondary)
+
             // Header: Current Day & Date + Sync Timestamp
             val todayStamp = today.format(DateTimeFormatter.ofPattern("EEE, dd MMM", Locale.getDefault()))
             val shortMonthYear = ym.format(DateTimeFormatter.ofPattern("MMM yyyy", Locale.getDefault()))
@@ -74,7 +86,7 @@ class WfoWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_month_title, "OfficePace • $todayStamp")
             views.setTextViewText(R.id.widget_updated_time, "Updated $nowTime")
 
-            // Dedicated Sub-Line: Shows in-radius zone & distance when inside geofence, or active office source
+            // Dedicated Sub-Line
             when {
                 isInsideRadius && distMeters != null -> {
                     views.setViewVisibility(R.id.widget_source_detail, View.VISIBLE)
@@ -106,38 +118,26 @@ class WfoWidgetProvider : AppWidgetProvider() {
                 TrackingMode.BOTH -> "WFH Today"
             }
 
-            when {
-                isOnOffice -> {
-                    views.setTextViewText(R.id.widget_status_pill, "🟢 At Office")
-                    views.setInt(R.id.widget_status_pill, "setTextColor", Color.parseColor("#065F46"))
-                    views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_green)
-                }
-                todayType == DayType.OFFICE -> {
-                    views.setTextViewText(R.id.widget_status_pill, "✅ Office Logged")
-                    views.setInt(R.id.widget_status_pill, "setTextColor", Color.parseColor("#065F46"))
-                    views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_green)
-                }
-                todayType == DayType.PLANNED -> {
-                    views.setTextViewText(R.id.widget_status_pill, "📅 Planned Office")
-                    views.setInt(R.id.widget_status_pill, "setTextColor", Color.parseColor("#3730A3"))
-                    views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_indigo)
-                }
-                todayType == DayType.LEAVE -> {
-                    views.setTextViewText(R.id.widget_status_pill, "🌴 On Leave")
-                    views.setInt(R.id.widget_status_pill, "setTextColor", Color.parseColor("#92400E"))
-                    views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_amber)
-                }
-                todayType == DayType.HOLIDAY -> {
-                    views.setTextViewText(R.id.widget_status_pill, "🎉 Holiday")
-                    views.setInt(R.id.widget_status_pill, "setTextColor", Color.parseColor("#5B21B6"))
-                    views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_purple)
-                }
-                else -> {
-                    views.setTextViewText(R.id.widget_status_pill, "🏠 $disconnectedHint")
-                    views.setInt(R.id.widget_status_pill, "setTextColor", Color.parseColor("#475569"))
-                    views.setInt(R.id.widget_status_pill, "setBackgroundResource", R.drawable.widget_pill_neutral)
-                }
+            val (pillText, statusKind) = when {
+                isOnOffice -> "🟢 At Office" to GlassUiTheme.StatusKind.SUCCESS
+                todayType == DayType.OFFICE -> "✅ Office Logged" to GlassUiTheme.StatusKind.SUCCESS
+                todayType == DayType.PLANNED -> "📅 Planned Office" to GlassUiTheme.StatusKind.INFO
+                todayType == DayType.LEAVE -> "🌴 On Leave" to GlassUiTheme.StatusKind.WARNING
+                todayType == DayType.HOLIDAY -> "🎉 Holiday" to GlassUiTheme.StatusKind.HOLIDAY
+                else -> "🏠 $disconnectedHint" to null
             }
+
+            views.setTextViewText(R.id.widget_status_pill, pillText)
+            views.setInt(
+                R.id.widget_status_pill,
+                "setTextColor",
+                GlassUiTheme.widgetStatusPillTextColor(isDark, statusKind)
+            )
+            views.setInt(
+                R.id.widget_status_pill,
+                "setBackgroundResource",
+                GlassUiTheme.widgetStatusPillDrawableRes(statusKind)
+            )
 
             // Hero Progress Ratio & Bar
             views.setTextViewText(
@@ -147,6 +147,27 @@ class WfoWidgetProvider : AppWidgetProvider() {
             val progressMax = maxOf(1, stats.requiredDays)
             val progressVal = stats.attendedDays.coerceIn(0, progressMax)
             views.setProgressBar(R.id.widget_progress_bar, progressMax, progressVal, false)
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val plannedCoversTarget = stats.futurePlannedDays > 0 &&
+                    stats.projectedAttendedDays >= stats.requiredDays
+                val progressTint = GlassUiTheme.widgetProgressColor(
+                    isDark = isDark,
+                    remainingDays = stats.remainingDays,
+                    plannedCoversTarget = plannedCoversTarget,
+                    bufferDays = stats.bufferDays
+                )
+                views.setColorStateList(
+                    R.id.widget_progress_bar,
+                    "setProgressTintList",
+                    ColorStateList.valueOf(progressTint)
+                )
+                views.setColorStateList(
+                    R.id.widget_progress_bar,
+                    "setProgressBackgroundTintList",
+                    ColorStateList.valueOf(GlassUiTheme.ringTrackColor(isDark))
+                )
+            }
 
             // Pace & Buffer Line
             val paceText = when {
@@ -173,7 +194,8 @@ class WfoWidgetProvider : AppWidgetProvider() {
             dayIds.forEachIndexed { idx, (viewId, letter) ->
                 val d = monday.plusDays(idx.toLong())
                 val t = store.getDayType(d)
-                val label: CharSequence = if (d == today) {
+                val isToday = d == today
+                val label: CharSequence = if (isToday) {
                     SpannableString(letter).apply {
                         setSpan(UnderlineSpan(), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                     }
@@ -181,32 +203,16 @@ class WfoWidgetProvider : AppWidgetProvider() {
                     letter
                 }
                 views.setTextViewText(viewId, label)
-                when (t) {
-                    DayType.OFFICE -> {
-                        views.setInt(viewId, "setTextColor", Color.WHITE)
-                        views.setInt(viewId, "setBackgroundResource", R.drawable.widget_day_office)
-                    }
-                    DayType.PLANNED -> {
-                        views.setInt(viewId, "setTextColor", Color.parseColor("#3730A3"))
-                        views.setInt(viewId, "setBackgroundResource", R.drawable.widget_day_planned)
-                    }
-                    DayType.LEAVE -> {
-                        views.setInt(viewId, "setTextColor", Color.WHITE)
-                        views.setInt(viewId, "setBackgroundResource", R.drawable.widget_day_leave)
-                    }
-                    DayType.HOLIDAY -> {
-                        views.setInt(viewId, "setTextColor", Color.WHITE)
-                        views.setInt(viewId, "setBackgroundResource", R.drawable.widget_day_holiday)
-                    }
-                    DayType.NONE -> {
-                        views.setInt(
-                            viewId,
-                            "setTextColor",
-                            if (d == today) Color.parseColor("#0F172A") else Color.parseColor("#64748B")
-                        )
-                        views.setInt(viewId, "setBackgroundResource", R.drawable.widget_day_none)
-                    }
-                }
+                views.setInt(
+                    viewId,
+                    "setTextColor",
+                    GlassUiTheme.widgetDayTextColor(isDark, t, isToday)
+                )
+                views.setInt(
+                    viewId,
+                    "setBackgroundResource",
+                    GlassUiTheme.widgetDayDrawableRes(t)
+                )
             }
 
             // Tap Card Body -> Open MainActivity
@@ -247,6 +253,16 @@ class WfoWidgetProvider : AppWidgetProvider() {
         }
     }
 
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle
+    ) {
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+        updateSingleWidget(context, appWidgetManager, appWidgetId)
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         when (intent.action) {
@@ -267,7 +283,8 @@ class WfoWidgetProvider : AppWidgetProvider() {
             Intent.ACTION_TIME_CHANGED,
             Intent.ACTION_TIMEZONE_CHANGED,
             Intent.ACTION_BOOT_COMPLETED,
-            Intent.ACTION_MY_PACKAGE_REPLACED -> updateAllWidgets(context)
+            Intent.ACTION_MY_PACKAGE_REPLACED,
+            Intent.ACTION_CONFIGURATION_CHANGED -> updateAllWidgets(context)
         }
     }
 }
