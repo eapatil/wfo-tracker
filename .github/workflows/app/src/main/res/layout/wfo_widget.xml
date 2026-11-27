@@ -81,7 +81,7 @@
                 android:textSize="13sp" />
         </LinearLayout>
 
-        <!-- Row 2: Hero Attendance Ratio + Projected Target + Pacing Cue -->
+        <!-- Row 2: Hero Attendance Ratio + Planned Gap Cue + Pacing Cue -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -121,7 +121,7 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- Row 3: Dual-Layer Progress Bar (Actual + Projected Planned Fill) -->
+        <!-- Row 3: Percentage-Driven Progress Bar -->
         <ProgressBar
             android:id="@+id/widget_progress_bar"
             style="?android:attr/progressBarStyleHorizontal"
@@ -129,8 +129,7 @@
             android:layout_height="7dp"
             android:layout_marginTop="8dp"
             android:max="100"
-            android:progress="0"
-            android:secondaryProgress="0" />
+            android:progress="0" />
 
         <!-- Row 4: Color-Coded Weekday Strip (M T W T F) + Week Summary + Timestamp -->
         <LinearLayout
@@ -141,7 +140,6 @@
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <!-- Mon -->
             <FrameLayout
                 android:layout_width="28dp"
                 android:layout_height="28dp"
@@ -164,7 +162,6 @@
                     android:textStyle="bold" />
             </FrameLayout>
 
-            <!-- Tue -->
             <FrameLayout
                 android:layout_width="28dp"
                 android:layout_height="28dp"
@@ -187,7 +184,6 @@
                     android:textStyle="bold" />
             </FrameLayout>
 
-            <!-- Wed -->
             <FrameLayout
                 android:layout_width="28dp"
                 android:layout_height="28dp"
@@ -210,7 +206,6 @@
                     android:textStyle="bold" />
             </FrameLayout>
 
-            <!-- Thu -->
             <FrameLayout
                 android:layout_width="28dp"
                 android:layout_height="28dp"
@@ -233,7 +228,6 @@
                     android:textStyle="bold" />
             </FrameLayout>
 
-            <!-- Fri -->
             <FrameLayout
                 android:layout_width="28dp"
                 android:layout_height="28dp">
@@ -275,5 +269,17 @@
                 android:text="Updated --:--"
                 android:textSize="11sp" />
         </LinearLayout>
+
+        <!-- Row 5: Learned Arrival Window & Buffer/Cushion Cue -->
+        <TextView
+            android:id="@+id/widget_window_buffer_line"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textSize="11.5sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
     </LinearLayout>
 </FrameLayout>
