@@ -67,6 +67,9 @@ object GlassUiTheme {
     const val restoreBlurRadiusPx = 18f
     const val weekendDimAlpha = 0.66f
 
+    const val maxWidgetBitmapWidthPx = 720
+    const val maxWidgetBitmapHeightPx = 360
+
     const val minPrimaryButtonHeightPx = 126
     const val minThumbButtonHeightPx = 122
     const val minChipHeightPx = 96
@@ -265,6 +268,9 @@ object GlassUiTheme {
             }
         }
     }
+
+    fun glassSubtleSurfaceColor(isDark: Boolean): Int =
+        if (isDark) darkSubtleSurface else lightSubtleSurface
 
     fun statusSuccessText(isDark: Boolean): Int = statusTextColor(isDark, StatusKind.SUCCESS)
     fun statusWarningText(isDark: Boolean): Int = statusTextColor(isDark, StatusKind.WARNING)
@@ -888,17 +894,17 @@ object GlassUiTheme {
             StatusKind.SUCCESS -> if (isDark) Color.parseColor("#A7F3D0") else Color.parseColor("#064E3B")
             StatusKind.WARNING -> if (isDark) Color.parseColor("#FDE68A") else Color.parseColor("#78350F")
             StatusKind.DANGER -> if (isDark) Color.parseColor("#FECACA") else Color.parseColor("#7F1D1D")
-            StatusKind.INFO -> Color.parseColor("#1E1B4B")
+            StatusKind.INFO -> if (isDark) Color.parseColor("#C7D2FE") else Color.parseColor("#1E1B4B")
             StatusKind.HOLIDAY -> if (isDark) Color.parseColor("#EDE9FE") else Color.parseColor("#4C1D95")
-            null -> Color.parseColor("#1E293B")
+            null -> textSecondaryColor(isDark)
         }
     }
 
     fun widgetDayTextColor(isDark: Boolean, type: DayType, isToday: Boolean): Int {
         return when (type) {
             DayType.OFFICE, DayType.LEAVE, DayType.HOLIDAY -> textOnAccent
-            DayType.PLANNED -> Color.parseColor("#1E1B4B")
-            DayType.NONE -> if (isToday) Color.parseColor("#0A101D") else Color.parseColor("#334155")
+            DayType.PLANNED -> statusInfoText(isDark)
+            DayType.NONE -> if (isToday) textPrimaryColor(isDark) else textSecondaryColor(isDark)
         }
     }
 
@@ -909,14 +915,52 @@ object GlassUiTheme {
         bufferDays: Int
     ): Int = ringAccentColor(isDark, remainingDays, plannedCoversTarget, bufferDays)
 
+    fun renderWidgetSurfaceBitmap(
+        widthPx: Int,
+        heightPx: Int,
+        isDark: Boolean,
+        customTint: Int? = null,
+        radiusPx: Float = cardRadiusPx,
+        strokeColor: Int? = null
+    ): Bitmap {
+        val w = widthPx.coerceIn(24, maxWidgetBitmapWidthPx)
+        val h = heightPx.coerceIn(24, maxWidgetBitmapHeightPx)
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val rect = RectF(1.5f, 1.5f, w - 1.5f, h - 1.5f)
+        val r = radiusPx.coerceAtMost(minOf(w, h) / 2f)
+
+        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = customTint ?: if (isDark) {
+                Color.argb(198, 24, 34, 52)
+            } else {
+                Color.argb(214, 255, 255, 255)
+            }
+        }
+        canvas.drawRoundRect(rect, r, r, fillPaint)
+
+        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = if (strokeColor != null) 2.5f else 1.5f
+            color = strokeColor ?: if (isDark) {
+                darkWidgetBorder
+            } else {
+                lightGlassBorder
+            }
+        }
+        canvas.drawRoundRect(rect, r, r, borderPaint)
+        return bmp
+    }
+
     fun createWidgetGlassBitmap(
         widthPx: Int,
         heightPx: Int,
         isDark: Boolean,
         radiusPx: Float = cardRadiusPx
     ): Bitmap {
-        val w = widthPx.coerceAtLeast(160)
-        val h = heightPx.coerceAtLeast(96)
+        val w = widthPx.coerceIn(160, maxWidgetBitmapWidthPx)
+        val h = heightPx.coerceIn(96, maxWidgetBitmapHeightPx)
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
 
