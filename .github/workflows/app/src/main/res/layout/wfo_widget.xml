@@ -22,7 +22,7 @@
         android:paddingEnd="16dp"
         android:paddingBottom="12dp">
 
-        <!-- Row 1: Brand + Date + Adaptive Status Pill + Refresh Button -->
+        <!-- Row 1: Brand + Date + Layered Adaptive Status Pill + Refresh Button -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -40,36 +40,48 @@
                 android:textSize="14sp"
                 android:textStyle="bold" />
 
-            <LinearLayout
+            <FrameLayout
                 android:id="@+id/widget_status_pill"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingStart="10dp"
-                android:paddingTop="4dp"
-                android:paddingEnd="10dp"
-                android:paddingBottom="4dp">
+                android:layout_height="wrap_content">
 
-                <TextView
-                    android:id="@+id/widget_status_text"
+                <ImageView
+                    android:id="@+id/widget_status_pill_bg"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="@null"
+                    android:scaleType="fitXY" />
+
+                <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:text="WFH"
-                    android:textSize="12.5sp"
-                    android:textStyle="bold" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="11dp"
+                    android:paddingTop="4dp"
+                    android:paddingEnd="11dp"
+                    android:paddingBottom="4dp">
 
-                <Chronometer
-                    android:id="@+id/widget_office_chrono"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:textSize="12.5sp"
-                    android:textStyle="bold"
-                    android:visibility="gone" />
-            </LinearLayout>
+                    <TextView
+                        android:id="@+id/widget_status_text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:text="WFH"
+                        android:textSize="12.5sp"
+                        android:textStyle="bold" />
+
+                    <Chronometer
+                        android:id="@+id/widget_office_chrono"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:textSize="12.5sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
+                </LinearLayout>
+            </FrameLayout>
 
             <TextView
                 android:id="@+id/widget_refresh_btn"
@@ -267,19 +279,38 @@
                 android:layout_marginStart="6dp"
                 android:maxLines="1"
                 android:text="Updated --:--"
-                android:textSize="11.5sp" />
+                android:textSize="12sp"
+                android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- Row 5: Learned Arrival Window, Buffer/Cushion & Live Geofence Meter Details -->
-        <TextView
-            android:id="@+id/widget_window_buffer_line"
+        <!-- Row 5: Layered Frosted Strip for Arrival Window, Buffer/Cushion & Geofence Meters -->
+        <FrameLayout
+            android:id="@+id/widget_bottom_strip_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="7dp"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textSize="12sp"
-            android:textStyle="bold"
-            android:visibility="gone" />
+            android:layout_marginTop="9dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/widget_bottom_strip_bg"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@null"
+                android:scaleType="fitXY" />
+
+            <TextView
+                android:id="@+id/widget_window_buffer_line"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:gravity="center_vertical"
+                android:maxLines="1"
+                android:paddingStart="10dp"
+                android:paddingTop="5dp"
+                android:paddingEnd="10dp"
+                android:paddingBottom="5dp"
+                android:textSize="12.5sp"
+                android:textStyle="bold" />
+        </FrameLayout>
     </LinearLayout>
 </FrameLayout>
