@@ -312,5 +312,19 @@
                 android:textSize="12.5sp"
                 android:textStyle="bold" />
         </FrameLayout>
+
+        <!-- Row 6: Streak & Next Planned / Avg Hours Context -->
+        <TextView
+            android:id="@+id/widget_extra_context_line"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
     </LinearLayout>
 </FrameLayout>
