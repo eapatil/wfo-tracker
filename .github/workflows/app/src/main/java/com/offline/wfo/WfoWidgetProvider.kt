@@ -190,10 +190,11 @@ class WfoWidgetProvider : AppWidgetProvider() {
         return nowElapsed
     }
 
-    private fun resolveLiveGeofenceMetersText(context: Context, store: AttendanceStore): String {
+        private fun resolveLiveGeofenceMetersText(context: Context, store: AttendanceStore): String {
         val mode = store.getTrackingMode()
         if (mode != TrackingMode.LOCATION_ONLY && mode != TrackingMode.BOTH) return ""
         if (!store.hasOfficeLocationConfigured()) return ""
+        if (!store.wasConnectedToOfficeWifi()) return ""
 
         val radiusM = store.getGeofenceRadiusMeters()
         val liveCoords = readBestLastKnownLocation(context)
@@ -203,14 +204,14 @@ class WfoWidgetProvider : AppWidgetProvider() {
 
         val lat = liveCoords?.first ?: if (store.hasLastKnownLocation()) store.getLastKnownLat() else null
         val lng = liveCoords?.second ?: if (store.hasLastKnownLocation()) store.getLastKnownLng() else null
-        if (lat == null || lng == null) return " • 📍 ${radiusM}m zone"
+        if (lat == null || lng == null) return ""
 
-        val distM = store.distanceToOfficeMeters(lat, lng) ?: return " • 📍 ${radiusM}m zone"
+        val distM = store.distanceToOfficeMeters(lat, lng) ?: return ""
         val dRound = distM.roundToInt()
         return if (dRound <= radiusM) {
             " • 📍 ${dRound}m/${radiusM}m in"
         } else {
-            " • 📍 ${dRound}m/${radiusM}m"
+            ""
         }
     }
 
