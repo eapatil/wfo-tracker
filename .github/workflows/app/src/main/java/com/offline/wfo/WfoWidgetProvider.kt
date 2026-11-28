@@ -24,6 +24,8 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -411,7 +413,7 @@ class WfoWidgetProvider : AppWidgetProvider() {
                     paceColor = GlassUiTheme.statusWarningText(isDark)
                 }
                 nextPlannedDate != null && !isCompact -> {
-                    val pLabel = nextPlannedDate.format(DateTimeFormatter.ofPattern("dd MMM", Locale.getDefault()))
+                    val pLabel = nextPlannedDate.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))
                     paceText = "📅 Next $pLabel • ${stats.bufferDays} buf"
                     paceColor = GlassUiTheme.statusInfoText(isDark)
                 }
@@ -536,9 +538,22 @@ class WfoWidgetProvider : AppWidgetProvider() {
                 }
 
                 val awayContextSuffix = if (!isConnected && minWidthDp >= 300) {
+                    val upcomingPlanned = (1..14)
+                        .map { today.plusDays(it.toLong()) }
+                        .firstOrNull { store.getDayType(it) == DayType.PLANNED }
                     when {
-                        nextPlannedDate != null ->
-                            " • 📅 Next ${nextPlannedDate.format(DateTimeFormatter.ofPattern("EEE, dd MMM", Locale.getDefault()))}"
+                        upcomingPlanned != null && stats.remainingDays > 0 -> {
+                            val daysAway = ChronoUnit.DAYS.between(today, upcomingPlanned)
+                            val shortDay = upcomingPlanned.dayOfWeek.getDisplayName(
+                                TextStyle.SHORT,
+                                Locale.getDefault()
+                            )
+                            val shortDate = upcomingPlanned.format(
+                                DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())
+                            )
+                            if (daysAway == 1L) " • Plan Tmrw ($shortDate)"
+                            else " • Plan $shortDay $shortDate"
+                        }
                         rhythm.weeklyStreak > 0 ->
                             " • 🔥 ${rhythm.weeklyStreak}wk streak"
                         else -> ""
