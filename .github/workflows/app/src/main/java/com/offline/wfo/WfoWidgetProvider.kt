@@ -528,7 +528,22 @@ class WfoWidgetProvider : AppWidgetProvider() {
                     else ->
                         "${maxOf(0, stats.bufferDays)} buf left"
                 }
-                val zoneDetail = resolveLiveGeofenceMetersText(context, store)
+
+                val officeSuffix = if (isConnected) {
+                    resolveLiveGeofenceMetersText(context, store)
+                } else {
+                    ""
+                }
+
+                val awayContextSuffix = if (!isConnected && minWidthDp >= 300) {
+                    when {
+                        nextPlannedDate != null ->
+                            " • 📅 Next ${nextPlannedDate.format(DateTimeFormatter.ofPattern("EEE, dd MMM", Locale.getDefault()))}"
+                        rhythm.weeklyStreak > 0 ->
+                            " • 🔥 ${rhythm.weeklyStreak}wk streak"
+                        else -> ""
+                    }
+                } else ""
 
                 views.setViewVisibility(R.id.widget_bottom_strip_container, View.VISIBLE)
                 views.setImageViewBitmap(
@@ -543,7 +558,7 @@ class WfoWidgetProvider : AppWidgetProvider() {
                 )
                 views.setTextViewText(
                     R.id.widget_window_buffer_line,
-                    "🕒 $windowLabel • $cushionOrBufferCue$zoneDetail"
+                    "🕒 $windowLabel • $cushionOrBufferCue$officeSuffix$awayContextSuffix"
                 )
                 views.setTextColor(
                     R.id.widget_window_buffer_line,
@@ -555,28 +570,6 @@ class WfoWidgetProvider : AppWidgetProvider() {
                 )
             } else {
                 views.setViewVisibility(R.id.widget_bottom_strip_container, View.GONE)
-            }
-
-            val showRowSix = !isCompact && minHeightDp >= 165
-            if (showRowSix) {
-                val extraLine = buildList {
-                    if (rhythm.weeklyStreak > 0) add("🔥 ${rhythm.weeklyStreak}wk streak")
-                    if (nextPlannedDate != null) {
-                        add("📅 Next ${nextPlannedDate.format(DateTimeFormatter.ofPattern("EEE, dd MMM", Locale.getDefault()))}")
-                    } else if (stats.avgOfficeHours > 0.0) {
-                        add("⏱️ Avg ${String.format(Locale.US, "%.1f", stats.avgOfficeHours)}h")
-                    }
-                }.joinToString(" • ")
-
-                if (extraLine.isNotEmpty()) {
-                    views.setViewVisibility(R.id.widget_extra_context_line, View.VISIBLE)
-                    views.setTextViewText(R.id.widget_extra_context_line, extraLine)
-                    views.setTextColor(R.id.widget_extra_context_line, textSecondary)
-                } else {
-                    views.setViewVisibility(R.id.widget_extra_context_line, View.GONE)
-                }
-            } else {
-                views.setViewVisibility(R.id.widget_extra_context_line, View.GONE)
             }
 
             val timeFormatted = nowTime.format(DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault()))
