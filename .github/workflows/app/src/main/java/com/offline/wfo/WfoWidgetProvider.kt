@@ -190,7 +190,7 @@ class WfoWidgetProvider : AppWidgetProvider() {
         return nowElapsed
     }
 
-        private fun resolveLiveGeofenceMetersText(context: Context, store: AttendanceStore): String {
+    private fun resolveLiveGeofenceMetersText(context: Context, store: AttendanceStore): String {
         val mode = store.getTrackingMode()
         if (mode != TrackingMode.LOCATION_ONLY && mode != TrackingMode.BOTH) return ""
         if (!store.hasOfficeLocationConfigured()) return ""
@@ -555,6 +555,28 @@ class WfoWidgetProvider : AppWidgetProvider() {
                 )
             } else {
                 views.setViewVisibility(R.id.widget_bottom_strip_container, View.GONE)
+            }
+
+            val showRowSix = !isCompact && minHeightDp >= 165
+            if (showRowSix) {
+                val extraLine = buildList {
+                    if (rhythm.weeklyStreak > 0) add("🔥 ${rhythm.weeklyStreak}wk streak")
+                    if (nextPlannedDate != null) {
+                        add("📅 Next ${nextPlannedDate.format(DateTimeFormatter.ofPattern("EEE, dd MMM", Locale.getDefault()))}")
+                    } else if (stats.avgOfficeHours > 0.0) {
+                        add("⏱️ Avg ${String.format(Locale.US, "%.1f", stats.avgOfficeHours)}h")
+                    }
+                }.joinToString(" • ")
+
+                if (extraLine.isNotEmpty()) {
+                    views.setViewVisibility(R.id.widget_extra_context_line, View.VISIBLE)
+                    views.setTextViewText(R.id.widget_extra_context_line, extraLine)
+                    views.setTextColor(R.id.widget_extra_context_line, textSecondary)
+                } else {
+                    views.setViewVisibility(R.id.widget_extra_context_line, View.GONE)
+                }
+            } else {
+                views.setViewVisibility(R.id.widget_extra_context_line, View.GONE)
             }
 
             val timeFormatted = nowTime.format(DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault()))
